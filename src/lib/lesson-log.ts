@@ -65,11 +65,65 @@ export async function addLessonLogEntry(input: {
   return { ok: true, data: undefined };
 }
 
+export async function updateLessonLogEntry(
+  id: string,
+  input: {
+    entryDate: string;
+    lessonName: string;
+    durationMinutes: number;
+    headcount: number;
+    note?: string;
+  },
+): Promise<ActionResult> {
+  const staff = await getStaffUser();
+  if (!staff) return { ok: false, error: "スタッフとしてログインしてください。" };
+
+  if (!input.lessonName.trim()) return { ok: false, error: "レッスン名を入力してください。" };
+  if (input.durationMinutes <= 0) return { ok: false, error: "時間は1分以上で入力してください。" };
+  if (input.headcount <= 0) return { ok: false, error: "参加人数は1人以上で入力してください。" };
+
+  const admin = createAdminClient();
+  const { data: existing } = await admin
+    .from("lesson_log_entries")
+    .select("approved")
+    .eq("id", id)
+    .eq("staff_id", staff.id)
+    .maybeSingle();
+  if (!existing) return { ok: false, error: "実績が見つかりません。" };
+  if (existing.approved) return { ok: false, error: "承認済みの実績は変更できません。管理者に取り消しを依頼してください。" };
+
+  const { error } = await admin
+    .from("lesson_log_entries")
+    .update({
+      entry_date: input.entryDate,
+      lesson_name: input.lessonName.trim(),
+      duration_minutes: input.durationMinutes,
+      headcount: input.headcount,
+      note: input.note || null,
+    })
+    .eq("id", id)
+    .eq("staff_id", staff.id);
+
+  if (error) return { ok: false, error: "実績の更新に失敗しました。" };
+
+  revalidatePath("/staff/mypage");
+  return { ok: true, data: undefined };
+}
+
 export async function deleteLessonLogEntry(id: string): Promise<ActionResult> {
   const staff = await getStaffUser();
   if (!staff) return { ok: false, error: "スタッフとしてログインしてください。" };
 
   const admin = createAdminClient();
+  const { data: existing } = await admin
+    .from("lesson_log_entries")
+    .select("approved")
+    .eq("id", id)
+    .eq("staff_id", staff.id)
+    .maybeSingle();
+  if (!existing) return { ok: false, error: "実績が見つかりません。" };
+  if (existing.approved) return { ok: false, error: "承認済みの実績は削除できません。管理者に取り消しを依頼してください。" };
+
   const { error } = await admin.from("lesson_log_entries").delete().eq("id", id).eq("staff_id", staff.id);
   if (error) return { ok: false, error: "削除に失敗しました。" };
 

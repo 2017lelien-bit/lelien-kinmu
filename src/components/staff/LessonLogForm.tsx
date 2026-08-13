@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { addLessonLogEntry, deleteLessonLogEntry } from "@/lib/lesson-log";
+import { addLessonLogEntry, deleteLessonLogEntry, updateLessonLogEntry } from "@/lib/lesson-log";
 import { todayJstDateString } from "@/lib/date";
 import { LESSON_NAMES, type LessonLogEntry } from "@/lib/types";
 
 export default function LessonLogForm({ entries }: { entries: LessonLogEntry[] }) {
   const router = useRouter();
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [entryDate, setEntryDate] = useState(todayJstDateString());
   const [lessonName, setLessonName] = useState<string>(LESSON_NAMES[0]);
   const [durationMinutes, setDurationMinutes] = useState(60);
@@ -17,22 +18,36 @@ export default function LessonLogForm({ entries }: { entries: LessonLogEntry[] }
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  async function handleAdd() {
+  function resetForm() {
+    setEditingId(null);
+    setEntryDate(todayJstDateString());
+    setLessonName(LESSON_NAMES[0]);
+    setDurationMinutes(60);
+    setHeadcount(1);
+    setNote("");
+  }
+
+  function startEdit(entry: LessonLogEntry) {
+    setError(null);
+    setEditingId(entry.id);
+    setEntryDate(entry.entry_date);
+    setLessonName(entry.lesson_name);
+    setDurationMinutes(entry.duration_minutes);
+    setHeadcount(entry.headcount);
+    setNote(entry.note ?? "");
+  }
+
+  async function handleSubmit() {
     setSubmitting(true);
     setError(null);
-    const result = await addLessonLogEntry({
-      entryDate,
-      lessonName,
-      durationMinutes,
-      headcount,
-      note: note || undefined,
-    });
+    const input = { entryDate, lessonName, durationMinutes, headcount, note: note || undefined };
+    const result = editingId ? await updateLessonLogEntry(editingId, input) : await addLessonLogEntry(input);
     setSubmitting(false);
     if (!result.ok) {
       setError(result.error);
       return;
     }
-    setNote("");
+    resetForm();
     router.refresh();
   }
 
@@ -44,12 +59,13 @@ export default function LessonLogForm({ entries }: { entries: LessonLogEntry[] }
       setError(result.error);
       return;
     }
+    if (editingId === id) resetForm();
     router.refresh();
   }
 
   return (
     <div className="flex flex-col gap-4 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
-      <h3 className="text-sm font-semibold">レッスン実績の登録</h3>
+      <h3 className="text-sm font-semibold">{editingId ? "レッスン実績の編集" : "レッスン実績の登録"}</h3>
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="flex flex-wrap gap-3">
@@ -107,13 +123,20 @@ export default function LessonLogForm({ entries }: { entries: LessonLogEntry[] }
         />
       </label>
 
-      <button
-        onClick={handleAdd}
-        disabled={submitting}
-        className="self-start rounded-lg bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-40 dark:bg-white dark:text-black"
-      >
-        {submitting ? "登録中..." : "登録する"}
-      </button>
+      <div className="flex gap-3">
+        <button
+          onClick={handleSubmit}
+          disabled={submitting}
+          className="self-start rounded-lg bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-40 dark:bg-white dark:text-black"
+        >
+          {submitting ? "保存中..." : editingId ? "更新する" : "登録する"}
+        </button>
+        {editingId && (
+          <button onClick={resetForm} className="self-start rounded-lg border border-neutral-300 px-4 py-2 text-sm dark:border-neutral-700">
+            キャンセル
+          </button>
+        )}
+      </div>
 
       <div className="flex flex-col gap-2 border-t border-neutral-100 pt-4 dark:border-neutral-900">
         {entries.length === 0 ? (
@@ -127,13 +150,22 @@ export default function LessonLogForm({ entries }: { entries: LessonLogEntry[] }
                 <span>{e.duration_minutes}分</span>
                 <span>{e.headcount}人</span>
                 {e.note && <span className="text-neutral-400">{e.note}</span>}
-                <button
-                  onClick={() => handleDelete(e.id)}
-                  disabled={deletingId === e.id}
-                  className="text-red-600 underline disabled:opacity-40"
-                >
-                  {deletingId === e.id ? "削除中..." : "削除"}
-                </button>
+                {e.approved ? (
+                  <span className="text-neutral-400">承認済み(変更不可)</span>
+                ) : (
+                  <>
+                    <button onClick={() => startEdit(e)} className="underline">
+                      編集
+                    </button>
+                    <button
+                      onClick={() => handleDelete(e.id)}
+                      disabled={deletingId === e.id}
+                      className="text-red-600 underline disabled:opacity-40"
+                    >
+                      {deletingId === e.id ? "削除中..." : "削除"}
+                    </button>
+                  </>
+                )}
               </li>
             ))}
           </ul>
