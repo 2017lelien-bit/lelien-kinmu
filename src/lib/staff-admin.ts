@@ -89,11 +89,13 @@ export async function setStaffActive(staffId: string, isActive: boolean): Promis
 
 // Supabase Authの招待メール(パスワード設定リンク)を送信し、staff_profilesにレコードを作成する。
 // パスワード自体はこの経路では一切扱わず、本人がメール内リンクから/staff/set-passwordで設定する。
+// メールでの招待は届かないことがあるため、URLを直接発行してLINEなどで共有できるようにする
+// (Supabaseからの自動送信は行わない)。
 export async function inviteStaff(input: {
   email: string;
   name: string;
   role: "staff" | "admin";
-}): Promise<ActionResult<{ id: string }>> {
+}): Promise<ActionResult<{ id: string; inviteLink: string }>> {
   const staff = await getStaffUser();
   if (!staff || staff.role !== "admin") return { ok: false, error: "管理者としてログインしてください。" };
 
@@ -103,16 +105,18 @@ export async function inviteStaff(input: {
   }
 
   const admin = createAdminClient();
-  const { data: invited, error: inviteError } = await admin.auth.admin.inviteUserByEmail(input.email, {
-    redirectTo: `${siteUrl()}/staff/set-password`,
+  const { data: linkData, error: inviteError } = await admin.auth.admin.generateLink({
+    type: "invite",
+    email: input.email,
+    options: { redirectTo: `${siteUrl()}/staff/set-password` },
   });
 
-  if (inviteError || !invited.user) {
-    return { ok: false, error: "招待メールの送信に失敗しました。既に登録済みのメールアドレスの可能性があります。" };
+  if (inviteError || !linkData.user) {
+    return { ok: false, error: "招待の発行に失敗しました。既に登録済みのメールアドレスの可能性があります。" };
   }
 
   const { error: profileError } = await admin.from("staff_profiles").insert({
-    id: invited.user.id,
+    id: linkData.user.id,
     name: input.name.trim(),
     role: input.role,
   });
@@ -122,5 +126,5 @@ export async function inviteStaff(input: {
   }
 
   revalidatePath("/staff/admin/staff");
-  return { ok: true, data: { id: invited.user.id } };
+  return { ok: true, data: { id: linkData.user.id, inviteLink: linkData.properties.action_link } };
 }

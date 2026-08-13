@@ -29,7 +29,7 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  const PUBLIC_STAFF_ROUTES = ["/staff/login", "/staff/set-password"];
+  const PUBLIC_STAFF_ROUTES = ["/staff/login", "/staff/set-password", "/staff/register"];
   // set-passwordは招待・パスワード再設定リンクからの遷移直後(まだセッション未確立)に
   // クライアント側でトークンを処理してセッションを張る画面のため、ここでは保護しない。
   const isProtectedStaffRoute = pathname.startsWith("/staff") && !PUBLIC_STAFF_ROUTES.includes(pathname);

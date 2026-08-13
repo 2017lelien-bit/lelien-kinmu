@@ -1,28 +1,53 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { inviteStaff } from "@/lib/staff-admin";
 
 export default function InviteStaffForm() {
-  const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"staff" | "admin">("staff");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState<{ id: string; inviteLink: string; name: string } | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
-    const result = await inviteStaff({ name, email, role });
+    const res = await inviteStaff({ name, email, role });
     setSubmitting(false);
-    if (!result.ok) {
-      setError(result.error);
+    if (!res.ok) {
+      setError(res.error);
       return;
     }
-    router.push(`/staff/admin/staff/${result.data.id}`);
+    setResult({ id: res.data.id, inviteLink: res.data.inviteLink, name });
+  }
+
+  if (result) {
+    return (
+      <div className="flex max-w-md flex-col gap-3 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
+        <p className="text-sm font-semibold">{result.name} さんの招待を発行しました。</p>
+        <p className="text-xs text-neutral-500">
+          以下のURLをLINEなどでご本人に送ってください。開いてパスワードを設定すると使い始められます。
+        </p>
+        <input
+          readOnly
+          value={result.inviteLink}
+          onFocus={(e) => e.currentTarget.select()}
+          className="rounded-lg border border-neutral-200 px-3 py-2 text-xs dark:border-neutral-800"
+        />
+        <div className="flex gap-4 text-sm">
+          <button onClick={() => setResult(null)} className="underline">
+            続けて別のスタッフを招待する
+          </button>
+          <Link href={`/staff/admin/staff/${result.id}`} className="underline">
+            このスタッフの詳細へ
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -40,7 +65,7 @@ export default function InviteStaffForm() {
       </label>
 
       <label className="flex flex-col gap-1 text-sm">
-        メールアドレス(招待メールの送付先)
+        メールアドレス(ログインIDとして使います)
         <input
           type="email"
           required
@@ -67,7 +92,7 @@ export default function InviteStaffForm() {
         disabled={submitting}
         className="self-start rounded-lg bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-40 dark:bg-white dark:text-black"
       >
-        {submitting ? "招待中..." : "招待メールを送信する"}
+        {submitting ? "発行中..." : "招待URLを発行する"}
       </button>
     </form>
   );
