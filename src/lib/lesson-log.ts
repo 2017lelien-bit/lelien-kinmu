@@ -1,0 +1,78 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getStaffUser } from "@/lib/auth";
+import type { ActionResult, LessonLogEntry } from "@/lib/types";
+
+// 単価ルールの中身(単価・人数条件)はスタッフに見せないが、
+// 「レッスン実績を入力する意味があるか(=ルールが1件でも設定されているか)」だけを判定するために使う。
+export async function getOwnHasPayRateRules(): Promise<boolean> {
+  const staff = await getStaffUser();
+  if (!staff) return false;
+
+  const admin = createAdminClient();
+  const { count } = await admin
+    .from("pay_rate_rules")
+    .select("id", { count: "exact", head: true })
+    .eq("staff_id", staff.id);
+  return (count ?? 0) > 0;
+}
+
+export async function getOwnLessonLogEntries(periodStart: string, periodEnd: string): Promise<LessonLogEntry[]> {
+  const staff = await getStaffUser();
+  if (!staff) return [];
+
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("lesson_log_entries")
+    .select("*")
+    .eq("staff_id", staff.id)
+    .gte("entry_date", periodStart)
+    .lte("entry_date", periodEnd)
+    .order("entry_date", { ascending: false });
+
+  return (data ?? []) as LessonLogEntry[];
+}
+
+export async function addLessonLogEntry(input: {
+  entryDate: string;
+  lessonName: string;
+  durationMinutes: number;
+  headcount: number;
+  note?: string;
+}): Promise<ActionResult> {
+  const staff = await getStaffUser();
+  if (!staff) return { ok: false, error: "スタッフとしてログインしてください。" };
+
+  if (!input.lessonName.trim()) return { ok: false, error: "レッスン名を入力してください。" };
+  if (input.durationMinutes <= 0) return { ok: false, error: "時間は1分以上で入力してください。" };
+  if (input.headcount <= 0) return { ok: false, error: "参加人数は1人以上で入力してください。" };
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("lesson_log_entries").insert({
+    staff_id: staff.id,
+    entry_date: input.entryDate,
+    lesson_name: input.lessonName.trim(),
+    duration_minutes: input.durationMinutes,
+    headcount: input.headcount,
+    note: input.note || null,
+  });
+
+  if (error) return { ok: false, error: "実績の登録に失敗しました。" };
+
+  revalidatePath("/staff/mypage");
+  return { ok: true, data: undefined };
+}
+
+export async function deleteLessonLogEntry(id: string): Promise<ActionResult> {
+  const staff = await getStaffUser();
+  if (!staff) return { ok: false, error: "スタッフとしてログインしてください。" };
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("lesson_log_entries").delete().eq("id", id).eq("staff_id", staff.id);
+  if (error) return { ok: false, error: "削除に失敗しました。" };
+
+  revalidatePath("/staff/mypage");
+  return { ok: true, data: undefined };
+}

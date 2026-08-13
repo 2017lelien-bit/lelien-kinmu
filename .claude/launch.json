@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "lelien-dev",
+      "runtimeExecutable": "C:\\Users\\2017l\\OneDrive\\デスクトップ\\lelien-yoyaku\\.claude\\dev-with-path.cmd",
+      "runtimeArgs": [],
+      "port": 3000
+    }
+  ]
+}
