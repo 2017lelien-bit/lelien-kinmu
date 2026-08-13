@@ -23,8 +23,18 @@ export interface StaffProfile {
   is_active: boolean;
   dependent_count: number;
   has_spouse_deduction: boolean;
+  commute_type: CommuteType;
+  commute_amount: number;
   created_at: string;
 }
+
+export type CommuteType = "none" | "fixed" | "per_day";
+
+export const COMMUTE_TYPE_LABEL: Record<CommuteType, string> = {
+  none: "都度手入力",
+  fixed: "定額(毎月同じ金額)",
+  per_day: "1日あたり(出勤日数×単価)",
+};
 
 export type PayUnitType = "hourly" | "per_lesson";
 

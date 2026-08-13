@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStaffUser } from "@/lib/auth";
-import type { ActionResult, LessonLogEntry, PayCategory, PayRateRule, StaffProfile } from "@/lib/types";
+import type { ActionResult, CommuteType, LessonLogEntry, PayCategory, PayRateRule, StaffProfile } from "@/lib/types";
 
 function siteUrl(): string {
   return process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -71,6 +71,26 @@ export async function setLessonLogEntryApproval(id: string, approved: boolean): 
   if (error || !data) return { ok: false, error: "更新に失敗しました。" };
 
   revalidatePath(`/staff/admin/staff/${data.staff_id}`);
+  return { ok: true, data: undefined };
+}
+
+export async function updateCommuteSettings(
+  staffId: string,
+  input: { commuteType: CommuteType; commuteAmount: number },
+): Promise<ActionResult> {
+  const staff = await getStaffUser();
+  if (!staff || staff.role !== "admin") return { ok: false, error: "管理者としてログインしてください。" };
+
+  if (input.commuteAmount < 0) return { ok: false, error: "金額は0以上で入力してください。" };
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("staff_profiles")
+    .update({ commute_type: input.commuteType, commute_amount: input.commuteAmount })
+    .eq("id", staffId);
+  if (error) return { ok: false, error: "設定の更新に失敗しました。" };
+
+  revalidatePath(`/staff/admin/staff/${staffId}`);
   return { ok: true, data: undefined };
 }
 

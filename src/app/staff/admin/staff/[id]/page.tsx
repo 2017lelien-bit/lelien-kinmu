@@ -3,6 +3,7 @@ import { getStaffUser } from "@/lib/auth";
 import { getLessonLogEntriesForStaff, getStaffDetail } from "@/lib/staff-admin";
 import { getPayslipsForStaff } from "@/lib/payroll";
 import TaxSettingsForm from "@/components/staff/TaxSettingsForm";
+import CommuteSettingsForm from "@/components/staff/CommuteSettingsForm";
 import PayCategoryManager from "@/components/staff/PayCategoryManager";
 import PayRateRuleManager from "@/components/staff/PayRateRuleManager";
 import PayrollPanel from "@/components/staff/PayrollPanel";
@@ -44,13 +45,24 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
         isActive={profile.is_active}
       />
 
+      <CommuteSettingsForm
+        staffId={profile.id}
+        commuteType={profile.commute_type}
+        commuteAmount={profile.commute_amount}
+      />
+
       <PayCategoryManager staffId={profile.id} payCategories={payCategories} />
 
       <PayRateRuleManager staffId={profile.id} payRateRules={payRateRules} />
 
       {payRateRules.length > 0 && <LessonLogApprovalPanel entries={lessonLogEntries} />}
 
-      <PayrollPanel staffId={profile.id} payslips={payslips} />
+      <PayrollPanel
+        staffId={profile.id}
+        payslips={payslips}
+        commuteType={profile.commute_type}
+        commuteAmount={profile.commute_amount}
+      />
     </div>
   );
 }

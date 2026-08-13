@@ -4,14 +4,24 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { calculatePayroll, generatePayslip, sendPayslipEmail, type PayrollResult } from "@/lib/payroll";
 import { todayJstDateString } from "@/lib/date";
-import type { StaffPayslip } from "@/lib/types";
+import type { CommuteType, StaffPayslip } from "@/lib/types";
 
 function currentMonthStart(): string {
   const [y, m] = todayJstDateString().split("-").map(Number);
   return `${y}-${String(m).padStart(2, "0")}-01`;
 }
 
-export default function PayrollPanel({ staffId, payslips }: { staffId: string; payslips: StaffPayslip[] }) {
+export default function PayrollPanel({
+  staffId,
+  payslips,
+  commuteType,
+  commuteAmount,
+}: {
+  staffId: string;
+  payslips: StaffPayslip[];
+  commuteType: CommuteType;
+  commuteAmount: number;
+}) {
   const router = useRouter();
   const [periodStart, setPeriodStart] = useState(currentMonthStart());
   const [preview, setPreview] = useState<PayrollResult | null>(null);
@@ -34,6 +44,13 @@ export default function PayrollPanel({ staffId, payslips }: { staffId: string; p
       return;
     }
     setPreview(result.data);
+    if (commuteType === "fixed") setCommuteAllowance(commuteAmount);
+    else if (commuteType === "per_day") setCommuteAllowance(commuteAmount * daysWorked);
+  }
+
+  function handleDaysWorkedChange(value: number) {
+    setDaysWorked(value);
+    if (commuteType === "per_day") setCommuteAllowance(commuteAmount * value);
   }
 
   async function handleCreate() {
@@ -138,7 +155,7 @@ export default function PayrollPanel({ staffId, payslips }: { staffId: string; p
                 type="number"
                 min={0}
                 value={daysWorked}
-                onChange={(e) => setDaysWorked(Number(e.target.value))}
+                onChange={(e) => handleDaysWorkedChange(Number(e.target.value))}
                 className="w-24 rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
               />
             </label>
