@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStaffUser } from "@/lib/auth";
-import type { ActionResult, PayCategory, PayRateRule, StaffProfile } from "@/lib/types";
+import type { ActionResult, LessonLogEntry, PayCategory, PayRateRule, StaffProfile } from "@/lib/types";
 
 function siteUrl(): string {
   return process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -43,30 +43,34 @@ export async function getStaffDetail(id: string): Promise<StaffDetail | null> {
   };
 }
 
-export async function updateStaffTaxSettings(
-  staffId: string,
-  input: {
-    dependentCount: number;
-    hasSpouseDeduction: boolean;
-  },
-): Promise<ActionResult> {
+export async function getLessonLogEntriesForStaff(staffId: string): Promise<LessonLogEntry[]> {
+  const staff = await getStaffUser();
+  if (!staff || staff.role !== "admin") return [];
+
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("lesson_log_entries")
+    .select("*")
+    .eq("staff_id", staffId)
+    .order("entry_date", { ascending: false });
+
+  return (data ?? []) as LessonLogEntry[];
+}
+
+export async function setLessonLogEntryApproval(id: string, approved: boolean): Promise<ActionResult> {
   const staff = await getStaffUser();
   if (!staff || staff.role !== "admin") return { ok: false, error: "管理者としてログインしてください。" };
 
-  if (input.dependentCount < 0) return { ok: false, error: "扶養人数は0以上で入力してください。" };
-
   const admin = createAdminClient();
-  const { error } = await admin
-    .from("staff_profiles")
-    .update({
-      dependent_count: input.dependentCount,
-      has_spouse_deduction: input.hasSpouseDeduction,
-    })
-    .eq("id", staffId);
-  if (error) return { ok: false, error: "設定の更新に失敗しました。" };
+  const { data, error } = await admin
+    .from("lesson_log_entries")
+    .update({ approved })
+    .eq("id", id)
+    .select("staff_id")
+    .maybeSingle();
+  if (error || !data) return { ok: false, error: "更新に失敗しました。" };
 
-  revalidatePath(`/staff/admin/staff/${staffId}`);
-  revalidatePath("/staff/admin/staff");
+  revalidatePath(`/staff/admin/staff/${data.staff_id}`);
   return { ok: true, data: undefined };
 }
 

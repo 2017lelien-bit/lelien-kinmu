@@ -9,6 +9,9 @@ export default function MyStaffProfileForm({ profile }: { profile: StaffProfile 
   const router = useRouter();
   const [phone, setPhone] = useState(profile.phone ?? "");
   const [contactEmail, setContactEmail] = useState(profile.contact_email ?? "");
+  const [address, setAddress] = useState(profile.address ?? "");
+  const [dependentCount, setDependentCount] = useState(profile.dependent_count);
+  const [hasSpouseDeduction, setHasSpouseDeduction] = useState(profile.has_spouse_deduction);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -20,6 +23,9 @@ export default function MyStaffProfileForm({ profile }: { profile: StaffProfile 
     const result = await updateOwnStaffProfile({
       phone: phone || undefined,
       contactEmail: contactEmail || undefined,
+      address: address || undefined,
+      dependentCount,
+      hasSpouseDeduction,
     });
     setSubmitting(false);
     if (!result.ok) {
@@ -32,6 +38,7 @@ export default function MyStaffProfileForm({ profile }: { profile: StaffProfile 
 
   return (
     <div className="flex flex-col gap-4 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
+      <h2 className="text-sm font-semibold">基本情報</h2>
       {error && <p className="text-sm text-red-600">{error}</p>}
       {saved && <p className="text-sm text-green-600">保存しました。</p>}
 
@@ -53,6 +60,39 @@ export default function MyStaffProfileForm({ profile }: { profile: StaffProfile 
           className="rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
         />
       </label>
+
+      <label className="flex flex-col gap-1 text-sm">
+        住所
+        <input
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+          className="rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
+        />
+      </label>
+
+      <div className="flex flex-col gap-2 border-t border-neutral-100 pt-3 dark:border-neutral-900">
+        <p className="text-xs text-neutral-400">
+          以下は所得税(源泉徴収)の計算に使われます。扶養控除等申告書の内容に合わせて入力してください。
+        </p>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={hasSpouseDeduction}
+            onChange={(e) => setHasSpouseDeduction(e.target.checked)}
+          />
+          源泉控除対象配偶者がいる
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          扶養親族等の人数
+          <input
+            type="number"
+            min={0}
+            value={dependentCount}
+            onChange={(e) => setDependentCount(Number(e.target.value))}
+            className="w-24 rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
+          />
+        </label>
+      </div>
 
       <button
         onClick={handleSave}

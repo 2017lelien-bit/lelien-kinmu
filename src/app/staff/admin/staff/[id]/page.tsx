@@ -1,18 +1,23 @@
 import { notFound } from "next/navigation";
 import { getStaffUser } from "@/lib/auth";
-import { getStaffDetail } from "@/lib/staff-admin";
+import { getLessonLogEntriesForStaff, getStaffDetail } from "@/lib/staff-admin";
 import { getPayslipsForStaff } from "@/lib/payroll";
 import TaxSettingsForm from "@/components/staff/TaxSettingsForm";
 import PayCategoryManager from "@/components/staff/PayCategoryManager";
 import PayRateRuleManager from "@/components/staff/PayRateRuleManager";
 import PayrollPanel from "@/components/staff/PayrollPanel";
+import LessonLogApprovalPanel from "@/components/staff/LessonLogApprovalPanel";
 
 export default async function StaffAdminDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const staff = await getStaffUser();
   if (!staff || staff.role !== "admin") notFound();
 
-  const [detail, payslips] = await Promise.all([getStaffDetail(id), getPayslipsForStaff(id)]);
+  const [detail, payslips, lessonLogEntries] = await Promise.all([
+    getStaffDetail(id),
+    getPayslipsForStaff(id),
+    getLessonLogEntriesForStaff(id),
+  ]);
   if (!detail) notFound();
 
   const { profile, payCategories, payRateRules } = detail;
@@ -28,6 +33,8 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
         <dd>{profile.phone ?? "-"}</dd>
         <dt className="text-neutral-500">連絡先メール</dt>
         <dd>{profile.contact_email ?? "-"}</dd>
+        <dt className="text-neutral-500">住所</dt>
+        <dd>{profile.address ?? "-"}</dd>
       </dl>
 
       <TaxSettingsForm
@@ -40,6 +47,8 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
       <PayCategoryManager staffId={profile.id} payCategories={payCategories} />
 
       <PayRateRuleManager staffId={profile.id} payRateRules={payRateRules} />
+
+      {payRateRules.length > 0 && <LessonLogApprovalPanel entries={lessonLogEntries} />}
 
       <PayrollPanel staffId={profile.id} payslips={payslips} />
     </div>

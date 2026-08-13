@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStaffUser } from "@/lib/auth";
-import type { ActionResult, PayEntry, StaffProfile } from "@/lib/types";
+import type { ActionResult, PayEntry, StaffPayslip, StaffProfile } from "@/lib/types";
 
 export async function getOwnStaffProfile(): Promise<StaffProfile | null> {
   const staff = await getStaffUser();
@@ -17,6 +17,9 @@ export async function getOwnStaffProfile(): Promise<StaffProfile | null> {
 export async function updateOwnStaffProfile(input: {
   phone?: string;
   contactEmail?: string;
+  address?: string;
+  dependentCount: number;
+  hasSpouseDeduction: boolean;
 }): Promise<ActionResult> {
   const staff = await getStaffUser();
   if (!staff) return { ok: false, error: "スタッフとしてログインしてください。" };
@@ -24,6 +27,7 @@ export async function updateOwnStaffProfile(input: {
   if (input.contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.contactEmail)) {
     return { ok: false, error: "メールアドレスの形式が正しくありません。" };
   }
+  if (input.dependentCount < 0) return { ok: false, error: "扶養人数は0以上で入力してください。" };
 
   const admin = createAdminClient();
   const { error } = await admin
@@ -31,6 +35,9 @@ export async function updateOwnStaffProfile(input: {
     .update({
       phone: input.phone || null,
       contact_email: input.contactEmail || null,
+      address: input.address || null,
+      dependent_count: input.dependentCount,
+      has_spouse_deduction: input.hasSpouseDeduction,
     })
     .eq("id", staff.id);
 
@@ -83,4 +90,18 @@ export async function upsertPayEntry(input: {
 
   revalidatePath("/staff/mypage");
   return { ok: true, data: undefined };
+}
+
+export async function getOwnPayslips(): Promise<StaffPayslip[]> {
+  const staff = await getStaffUser();
+  if (!staff) return [];
+
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("staff_payslips")
+    .select("*")
+    .eq("staff_id", staff.id)
+    .order("period_start", { ascending: false });
+
+  return (data ?? []) as StaffPayslip[];
 }

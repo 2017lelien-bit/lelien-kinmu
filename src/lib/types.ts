@@ -19,6 +19,7 @@ export interface StaffProfile {
   role: string; // 'staff' | 'admin'
   phone: string | null;
   contact_email: string | null;
+  address: string | null;
   is_active: boolean;
   dependent_count: number;
   has_spouse_deduction: boolean;
@@ -80,6 +81,7 @@ export interface LessonLogEntry {
   duration_minutes: number;
   headcount: number;
   note: string | null;
+  approved: boolean;
 }
 
 export interface PayrollBreakdownLessonLine {

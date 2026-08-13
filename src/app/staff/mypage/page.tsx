@@ -1,11 +1,12 @@
 import { notFound } from "next/navigation";
 import { getOwnPayCategories } from "@/lib/pay-categories";
 import { getOwnHasPayRateRules, getOwnLessonLogEntries } from "@/lib/lesson-log";
-import { getOwnPayEntries, getOwnStaffProfile } from "@/lib/staff-self";
+import { getOwnPayEntries, getOwnPayslips, getOwnStaffProfile } from "@/lib/staff-self";
 import { todayJstDateString } from "@/lib/date";
 import MyStaffProfileForm from "@/components/staff/MyStaffProfileForm";
 import PayEntryForm from "@/components/staff/PayEntryForm";
 import LessonLogForm from "@/components/staff/LessonLogForm";
+import MyPayslipList from "@/components/staff/MyPayslipList";
 
 function currentMonthRange(): { periodStart: string; periodEnd: string } {
   const [y, m] = todayJstDateString().split("-").map(Number);
@@ -20,11 +21,12 @@ export default async function StaffMyPage() {
   if (!profile) notFound();
 
   const { periodStart, periodEnd } = currentMonthRange();
-  const [payCategories, payEntries, hasPayRateRules, lessonLogEntries] = await Promise.all([
+  const [payCategories, payEntries, hasPayRateRules, lessonLogEntries, payslips] = await Promise.all([
     getOwnPayCategories(),
     getOwnPayEntries(periodStart),
     getOwnHasPayRateRules(),
     getOwnLessonLogEntries(periodStart, periodEnd),
+    getOwnPayslips(),
   ]);
 
   return (
@@ -46,6 +48,11 @@ export default async function StaffMyPage() {
           <LessonLogForm entries={lessonLogEntries} />
         </section>
       )}
+
+      <section className="flex flex-col gap-2">
+        <h2 className="text-lg font-semibold">給与明細</h2>
+        <MyPayslipList payslips={payslips} />
+      </section>
     </div>
   );
 }
