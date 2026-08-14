@@ -57,7 +57,7 @@ export interface PayEntry {
   id: string;
   staff_id: string;
   pay_category_id: string;
-  period_start: string; // "YYYY-MM-DD" (対象月の1日)
+  period_start: string; // "YYYY-MM-DD" (締め期間の開始日。16日で固定)
   quantity: number;
   note: string | null;
 }

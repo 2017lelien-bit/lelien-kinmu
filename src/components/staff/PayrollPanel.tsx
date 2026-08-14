@@ -3,13 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { calculatePayroll, generatePayslip, sendPayslipEmail, type PayrollResult } from "@/lib/payroll";
-import { todayJstDateString } from "@/lib/date";
+import { currentPayPeriod } from "@/lib/date";
 import type { CommuteType, StaffPayslip } from "@/lib/types";
-
-function currentMonthStart(): string {
-  const [y, m] = todayJstDateString().split("-").map(Number);
-  return `${y}-${String(m).padStart(2, "0")}-01`;
-}
 
 export default function PayrollPanel({
   staffId,
@@ -23,7 +18,7 @@ export default function PayrollPanel({
   commuteAmount: number;
 }) {
   const router = useRouter();
-  const [periodStart, setPeriodStart] = useState(currentMonthStart());
+  const [periodStart, setPeriodStart] = useState(currentPayPeriod().periodStart);
   const [preview, setPreview] = useState<PayrollResult | null>(null);
   const [commuteAllowance, setCommuteAllowance] = useState(0);
   const [residentTax, setResidentTax] = useState(0);
@@ -85,7 +80,7 @@ export default function PayrollPanel({
 
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1 text-sm">
-          対象月(1日)
+          対象期間の開始日(16日で締め)
           <input
             type="date"
             value={periodStart}

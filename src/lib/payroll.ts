@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getStaffUser } from "@/lib/auth";
 import { sendStaffPayslipEmail } from "@/lib/notifications";
 import { calculateContractorWithholding, calculateEmployeeWithholding } from "@/lib/tax";
+import { payPeriodEnd } from "@/lib/date";
 import type {
   ActionResult,
   EmploymentType,
@@ -19,11 +20,6 @@ async function requireAdmin(): Promise<{ ok: false; error: string } | null> {
   const staff = await getStaffUser();
   if (!staff || staff.role !== "admin") return { ok: false, error: "管理者としてログインしてください。" };
   return null;
-}
-
-function periodEndFor(periodStart: string): string {
-  const start = new Date(`${periodStart}T00:00:00Z`);
-  return new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
 }
 
 // レッスン実績(日付・レッスン名・時間・人数)に対して、最も条件の合う単価ルールを1件選ぶ。
@@ -63,7 +59,7 @@ export async function calculatePayroll(staffId: string, periodStart: string): Pr
   if (adminCheck) return adminCheck;
 
   const admin = createAdminClient();
-  const periodEnd = periodEndFor(periodStart);
+  const periodEnd = payPeriodEnd(periodStart);
 
   const [{ data: categories }, { data: entries }, { data: rules }, { data: logEntries }] = await Promise.all([
     admin.from("pay_categories").select("*").eq("staff_id", staffId).order("sort_order", { ascending: true }),
@@ -161,7 +157,7 @@ export async function generatePayslip(
     categoryGross > 0 && lessonGross > 0 ? "mixed" : lessonGross > 0 ? "contract" : "hourly";
 
   const netAmount = totalGross - incomeTax - input.residentTax;
-  const periodEnd = periodEndFor(periodStart);
+  const periodEnd = payPeriodEnd(periodStart);
 
   const { data: inserted, error } = await admin
     .from("staff_payslips")

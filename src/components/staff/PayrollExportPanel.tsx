@@ -2,15 +2,10 @@
 
 import { useState } from "react";
 import { exportPayrollCsv } from "@/lib/payroll";
-import { todayJstDateString } from "@/lib/date";
-
-function currentMonthStart(): string {
-  const [y, m] = todayJstDateString().split("-").map(Number);
-  return `${y}-${String(m).padStart(2, "0")}-01`;
-}
+import { currentPayPeriod } from "@/lib/date";
 
 export default function PayrollExportPanel() {
-  const [periodStart, setPeriodStart] = useState(currentMonthStart());
+  const [periodStart, setPeriodStart] = useState(currentPayPeriod().periodStart);
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
 
@@ -38,7 +33,7 @@ export default function PayrollExportPanel() {
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <label className="flex flex-col gap-1 text-sm">
-        対象月(1日)
+        対象期間の開始日(16日で締め)
         <input
           type="date"
           value={periodStart}

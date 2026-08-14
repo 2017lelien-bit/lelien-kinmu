@@ -19,6 +19,20 @@ export function formatDateJp(dateStr: string): string {
   });
 }
 
+// 給与の締めは毎月16日〜翌15日。period_startは常にその期間の16日を表す。
+export function payPeriodEnd(periodStart: string): string {
+  const [y, m] = periodStart.split("-").map(Number);
+  const end = new Date(Date.UTC(y, m, 15)); // m(1-12)をUTCの月indexとして渡すと翌月15日になる
+  return end.toISOString().slice(0, 10);
+}
+
+export function currentPayPeriod(): { periodStart: string; periodEnd: string } {
+  const [y, m, d] = todayJstDateString().split("-").map(Number);
+  const start = d >= 16 ? new Date(Date.UTC(y, m - 1, 16)) : new Date(Date.UTC(y, m - 2, 16));
+  const periodStart = start.toISOString().slice(0, 10);
+  return { periodStart, periodEnd: payPeriodEnd(periodStart) };
+}
+
 export function jstDateStringFromIso(iso: string): string {
   return new Date(iso).toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
 }
