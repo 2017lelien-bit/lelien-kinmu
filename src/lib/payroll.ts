@@ -13,6 +13,7 @@ import type {
   PayrollBreakdownLessonLine,
   StaffPayslip,
 } from "@/lib/types";
+import { EMPLOYMENT_TYPE_LABEL } from "@/lib/types";
 
 async function requireAdmin(): Promise<{ ok: false; error: string } | null> {
   const staff = await getStaffUser();
@@ -199,6 +200,59 @@ export async function getPayslipsForStaff(staffId: string): Promise<StaffPayslip
     .eq("staff_id", staffId)
     .order("period_start", { ascending: false });
   return (data ?? []) as StaffPayslip[];
+}
+
+const CSV_HEADERS = [
+  "氏名",
+  "対象期間",
+  "雇用形態",
+  "支給額計",
+  "通勤費",
+  "総支給額",
+  "課税対象額",
+  "所得税",
+  "住民税",
+  "差引支給額",
+  "出勤日数",
+];
+
+function csvField(value: string | number): string {
+  const s = String(value);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+// 税理士など外部への共有用に、対象月の全スタッフ分の明細をCSVでまとめる(メール送信はドメイン未設定のため使えないので、
+// 管理者がダウンロードしていつも通りのメール/LINEで送る想定)。
+export async function exportPayrollCsv(periodStart: string): Promise<ActionResult<string>> {
+  const adminCheck = await requireAdmin();
+  if (adminCheck) return adminCheck;
+
+  const admin = createAdminClient();
+  const { data: payslips } = await admin
+    .from("staff_payslips")
+    .select("*, staff_profiles(name)")
+    .eq("period_start", periodStart)
+    .order("staff_id");
+
+  const rows = (payslips ?? []).map((p) => {
+    const name = (p as unknown as { staff_profiles: { name: string } | null }).staff_profiles?.name ?? "";
+    return [
+      csvField(name),
+      csvField(`${p.period_start}〜${p.period_end}`),
+      csvField(EMPLOYMENT_TYPE_LABEL[p.employment_type as EmploymentType]),
+      csvField(p.gross_amount),
+      csvField(p.commute_allowance),
+      csvField(p.total_gross),
+      csvField(p.taxable_amount),
+      csvField(p.income_tax),
+      csvField(p.resident_tax),
+      csvField(p.net_amount),
+      csvField(p.days_worked),
+    ].join(",");
+  });
+
+  const csv = [CSV_HEADERS.join(","), ...rows].join("\n");
+  return { ok: true, data: `﻿${csv}` };
 }
 
 export async function sendPayslipEmail(payslipId: string): Promise<ActionResult> {

@@ -18,6 +18,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
           <nav className="flex flex-wrap gap-4 text-sm">
             <Link href="/staff/mypage">マイページ</Link>
             {staff.role === "admin" && <Link href="/staff/admin/staff">スタッフ管理</Link>}
+            {staff.role === "admin" && <Link href="/staff/admin/export">給与データ出力</Link>}
           </nav>
         </div>
         <div className="flex items-center gap-3 text-sm text-neutral-500">
