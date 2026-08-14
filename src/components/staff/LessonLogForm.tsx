@@ -6,7 +6,7 @@ import { addLessonLogEntry, deleteLessonLogEntry, updateLessonLogEntry } from "@
 import { todayJstDateString } from "@/lib/date";
 import { LESSON_NAMES, type LessonLogEntry } from "@/lib/types";
 
-export default function LessonLogForm({ entries }: { entries: LessonLogEntry[] }) {
+export default function LessonLogForm({ entries, staffId }: { entries: LessonLogEntry[]; staffId?: string }) {
   const router = useRouter();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [entryDate, setEntryDate] = useState(todayJstDateString());
@@ -41,7 +41,9 @@ export default function LessonLogForm({ entries }: { entries: LessonLogEntry[] }
     setSubmitting(true);
     setError(null);
     const input = { entryDate, lessonName, durationMinutes, headcount, note: note || undefined };
-    const result = editingId ? await updateLessonLogEntry(editingId, input) : await addLessonLogEntry(input);
+    const result = editingId
+      ? await updateLessonLogEntry(editingId, input, staffId)
+      : await addLessonLogEntry(input, staffId);
     setSubmitting(false);
     if (!result.ok) {
       setError(result.error);
@@ -53,7 +55,7 @@ export default function LessonLogForm({ entries }: { entries: LessonLogEntry[] }
 
   async function handleDelete(id: string) {
     setDeletingId(id);
-    const result = await deleteLessonLogEntry(id);
+    const result = await deleteLessonLogEntry(id, staffId);
     setDeletingId(null);
     if (!result.ok) {
       setError(result.error);

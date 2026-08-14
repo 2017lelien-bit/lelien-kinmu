@@ -2,22 +2,30 @@ import { notFound } from "next/navigation";
 import { getStaffUser } from "@/lib/auth";
 import { getLessonLogEntriesForStaff, getStaffDetail } from "@/lib/staff-admin";
 import { getPayslipsForStaff } from "@/lib/payroll";
+import { getOwnPayEntries } from "@/lib/staff-self";
+import { getOwnLessonLogEntries } from "@/lib/lesson-log";
+import { currentPayPeriod } from "@/lib/date";
 import TaxSettingsForm from "@/components/staff/TaxSettingsForm";
 import CommuteSettingsForm from "@/components/staff/CommuteSettingsForm";
 import PayCategoryManager from "@/components/staff/PayCategoryManager";
 import PayRateRuleManager from "@/components/staff/PayRateRuleManager";
 import PayrollPanel from "@/components/staff/PayrollPanel";
 import LessonLogApprovalPanel from "@/components/staff/LessonLogApprovalPanel";
+import PayEntryForm from "@/components/staff/PayEntryForm";
+import LessonLogForm from "@/components/staff/LessonLogForm";
 
 export default async function StaffAdminDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const staff = await getStaffUser();
   if (!staff || staff.role !== "admin") notFound();
 
-  const [detail, payslips, lessonLogEntries] = await Promise.all([
+  const { periodStart, periodEnd } = currentPayPeriod();
+  const [detail, payslips, lessonLogEntries, currentPayEntries, currentLessonLogEntries] = await Promise.all([
     getStaffDetail(id),
     getPayslipsForStaff(id),
     getLessonLogEntriesForStaff(id),
+    getOwnPayEntries(periodStart, id),
+    getOwnLessonLogEntries(periodStart, periodEnd, id),
   ]);
   if (!detail) notFound();
 
@@ -56,6 +64,23 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
       <PayRateRuleManager staffId={profile.id} payRateRules={payRateRules} />
 
       {payRateRules.length > 0 && <LessonLogApprovalPanel entries={lessonLogEntries} />}
+
+      {(payCategories.length > 0 || payRateRules.length > 0) && (
+        <section className="flex flex-col gap-4">
+          <h2 className="text-lg font-semibold">
+            実績の代理入力(本人がアプリを開けない場合。今期: {periodStart}〜{periodEnd})
+          </h2>
+          {payCategories.length > 0 && (
+            <PayEntryForm
+              payCategories={payCategories}
+              payEntries={currentPayEntries}
+              periodStart={periodStart}
+              staffId={profile.id}
+            />
+          )}
+          {payRateRules.length > 0 && <LessonLogForm entries={currentLessonLogEntries} staffId={profile.id} />}
+        </section>
+      )}
 
       <PayrollPanel
         staffId={profile.id}

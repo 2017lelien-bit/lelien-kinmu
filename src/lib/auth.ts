@@ -33,3 +33,16 @@ export async function getStaffUser(): Promise<StaffUser | null> {
     role: profile.role,
   };
 }
+
+// 実績入力(pay_entries/lesson_log_entries)は、本人が自分の分を入力するのが基本だが、
+// 本人がアプリを開けない場合などのために管理者が代理入力できるようにする。
+// targetStaffIdを省略、または自分自身のIDと同じ場合は本人入力として扱う。
+export async function resolveActingStaffId(
+  targetStaffId?: string,
+): Promise<{ id: string } | { error: string }> {
+  const staff = await getStaffUser();
+  if (!staff) return { error: "ログインしてください。" };
+  if (!targetStaffId || targetStaffId === staff.id) return { id: staff.id };
+  if (staff.role !== "admin") return { error: "権限がありません。" };
+  return { id: targetStaffId };
+}

@@ -9,10 +9,12 @@ export default function PayEntryForm({
   payCategories,
   payEntries,
   periodStart,
+  staffId,
 }: {
   payCategories: PayCategory[];
   payEntries: PayEntry[];
   periodStart: string;
+  staffId?: string;
 }) {
   const router = useRouter();
   const entryByCategory = new Map(payEntries.map((e) => [e.pay_category_id, e.quantity]));
@@ -31,11 +33,14 @@ export default function PayEntryForm({
     setSaved(false);
 
     for (const c of payCategories) {
-      const result = await upsertPayEntry({
-        payCategoryId: c.id,
-        periodStart,
-        quantity: quantities[c.id] ?? 0,
-      });
+      const result = await upsertPayEntry(
+        {
+          payCategoryId: c.id,
+          periodStart,
+          quantity: quantities[c.id] ?? 0,
+        },
+        staffId,
+      );
       if (!result.ok) {
         setSubmitting(false);
         setError(result.error);

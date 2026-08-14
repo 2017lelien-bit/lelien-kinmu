@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getStaffUser } from "@/lib/auth";
+import { getStaffUser, resolveActingStaffId } from "@/lib/auth";
 import type { ActionResult, PayEntry, StaffPayslip, StaffProfile } from "@/lib/types";
 
 export async function getOwnStaffProfile(): Promise<StaffProfile | null> {
@@ -47,28 +47,31 @@ export async function updateOwnStaffProfile(input: {
   return { ok: true, data: undefined };
 }
 
-export async function getOwnPayEntries(periodStart: string): Promise<PayEntry[]> {
-  const staff = await getStaffUser();
-  if (!staff) return [];
+export async function getOwnPayEntries(periodStart: string, staffId?: string): Promise<PayEntry[]> {
+  const acting = await resolveActingStaffId(staffId);
+  if ("error" in acting) return [];
 
   const admin = createAdminClient();
   const { data } = await admin
     .from("pay_entries")
     .select("*")
-    .eq("staff_id", staff.id)
+    .eq("staff_id", acting.id)
     .eq("period_start", periodStart);
 
   return (data ?? []) as PayEntry[];
 }
 
-export async function upsertPayEntry(input: {
-  payCategoryId: string;
-  periodStart: string;
-  quantity: number;
-  note?: string;
-}): Promise<ActionResult> {
-  const staff = await getStaffUser();
-  if (!staff) return { ok: false, error: "スタッフとしてログインしてください。" };
+export async function upsertPayEntry(
+  input: {
+    payCategoryId: string;
+    periodStart: string;
+    quantity: number;
+    note?: string;
+  },
+  staffId?: string,
+): Promise<ActionResult> {
+  const acting = await resolveActingStaffId(staffId);
+  if ("error" in acting) return { ok: false, error: acting.error };
 
   if (input.quantity < 0) {
     return { ok: false, error: "数量は0以上で入力してください。" };
@@ -77,7 +80,7 @@ export async function upsertPayEntry(input: {
   const admin = createAdminClient();
   const { error } = await admin.from("pay_entries").upsert(
     {
-      staff_id: staff.id,
+      staff_id: acting.id,
       pay_category_id: input.payCategoryId,
       period_start: input.periodStart,
       quantity: input.quantity,
@@ -89,6 +92,7 @@ export async function upsertPayEntry(input: {
   if (error) return { ok: false, error: "実績の登録に失敗しました。" };
 
   revalidatePath("/staff/mypage");
+  revalidatePath(`/staff/admin/staff/${acting.id}`);
   return { ok: true, data: undefined };
 }
 
