@@ -9,6 +9,73 @@ function siteUrl(): string {
   return process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 }
 
+export async function getPendingSubmissionCount(): Promise<number> {
+  const staff = await getStaffUser();
+  if (!staff || staff.role !== "admin") return 0;
+
+  const admin = createAdminClient();
+  const { count } = await admin
+    .from("period_submissions")
+    .select("id", { count: "exact", head: true })
+    .is("acknowledged_at", null);
+
+  return count ?? 0;
+}
+
+export interface SubmissionStatus {
+  submittedAt: string | null;
+  acknowledgedAt: string | null;
+}
+
+export async function getSubmissionStatus(staffId: string, periodStart: string): Promise<SubmissionStatus> {
+  const staff = await getStaffUser();
+  if (!staff || staff.role !== "admin") return { submittedAt: null, acknowledgedAt: null };
+
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("period_submissions")
+    .select("submitted_at, acknowledged_at")
+    .eq("staff_id", staffId)
+    .eq("period_start", periodStart)
+    .maybeSingle();
+
+  return { submittedAt: data?.submitted_at ?? null, acknowledgedAt: data?.acknowledged_at ?? null };
+}
+
+export async function getSubmissionStatusMap(periodStart: string): Promise<Record<string, SubmissionStatus>> {
+  const staff = await getStaffUser();
+  if (!staff || staff.role !== "admin") return {};
+
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("period_submissions")
+    .select("staff_id, submitted_at, acknowledged_at")
+    .eq("period_start", periodStart);
+
+  const map: Record<string, SubmissionStatus> = {};
+  for (const row of data ?? []) {
+    map[row.staff_id] = { submittedAt: row.submitted_at, acknowledgedAt: row.acknowledged_at };
+  }
+  return map;
+}
+
+export async function acknowledgeSubmission(staffId: string, periodStart: string): Promise<ActionResult> {
+  const staff = await getStaffUser();
+  if (!staff || staff.role !== "admin") return { ok: false, error: "管理者としてログインしてください。" };
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("period_submissions")
+    .update({ acknowledged_at: new Date().toISOString() })
+    .eq("staff_id", staffId)
+    .eq("period_start", periodStart);
+  if (error) return { ok: false, error: "更新に失敗しました。" };
+
+  revalidatePath(`/staff/admin/staff/${staffId}`);
+  revalidatePath("/staff/admin/staff");
+  return { ok: true, data: undefined };
+}
+
 export async function getAllStaff(): Promise<StaffProfile[]> {
   const staff = await getStaffUser();
   if (!staff || staff.role !== "admin") return [];

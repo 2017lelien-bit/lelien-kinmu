@@ -181,7 +181,15 @@ export async function generatePayslip(
 
   if (error || !inserted) return { ok: false, error: "明細の作成に失敗しました。" };
 
+  // 明細を作成した時点で「確定」扱いとし、提出バッジから消す。
+  await admin
+    .from("period_submissions")
+    .update({ acknowledged_at: new Date().toISOString() })
+    .eq("staff_id", staffId)
+    .eq("period_start", periodStart);
+
   revalidatePath(`/staff/admin/staff/${staffId}`);
+  revalidatePath("/staff/admin/staff");
   return { ok: true, data: inserted as StaffPayslip };
 }
 

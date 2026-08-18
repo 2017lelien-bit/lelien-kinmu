@@ -1,13 +1,15 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getStaffUser } from "@/lib/auth";
-import { getAllStaff } from "@/lib/staff-admin";
+import { getAllStaff, getSubmissionStatusMap } from "@/lib/staff-admin";
+import { currentPayPeriod } from "@/lib/date";
 
 export default async function StaffAdminStaffListPage() {
   const staff = await getStaffUser();
   if (!staff || staff.role !== "admin") notFound();
 
-  const allStaff = await getAllStaff();
+  const { periodStart } = currentPayPeriod();
+  const [allStaff, submissionMap] = await Promise.all([getAllStaff(), getSubmissionStatusMap(periodStart)]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -29,25 +31,39 @@ export default async function StaffAdminStaffListPage() {
               <th className="py-2 pr-4">権限</th>
               <th className="py-2 pr-4">連絡先</th>
               <th className="py-2 pr-4">状態</th>
+              <th className="py-2 pr-4">今期の提出</th>
             </tr>
           </thead>
           <tbody>
-            {allStaff.map((s) => (
-              <tr key={s.id} className="border-b border-neutral-100 dark:border-neutral-900">
-                <td className="py-2 pr-4">
-                  <Link href={`/staff/admin/staff/${s.id}`} className="underline">
-                    {s.name}
-                  </Link>
-                </td>
-                <td className="py-2 pr-4">{s.role === "admin" ? "管理者" : "スタッフ"}</td>
-                <td className="py-2 pr-4">{s.phone ?? s.contact_email ?? "-"}</td>
-                <td className="py-2 pr-4">
-                  {s.is_active ? "在籍中" : (
-                    <span className="text-neutral-400">退職済み</span>
-                  )}
-                </td>
-              </tr>
-            ))}
+            {allStaff.map((s) => {
+              const submission = submissionMap[s.id];
+              const pending = submission?.submittedAt && !submission.acknowledgedAt;
+              return (
+                <tr key={s.id} className="border-b border-neutral-100 dark:border-neutral-900">
+                  <td className="py-2 pr-4">
+                    <Link href={`/staff/admin/staff/${s.id}`} className="underline">
+                      {s.name}
+                    </Link>
+                  </td>
+                  <td className="py-2 pr-4">{s.role === "admin" ? "管理者" : "スタッフ"}</td>
+                  <td className="py-2 pr-4">{s.phone ?? s.contact_email ?? "-"}</td>
+                  <td className="py-2 pr-4">
+                    {s.is_active ? "在籍中" : (
+                      <span className="text-neutral-400">退職済み</span>
+                    )}
+                  </td>
+                  <td className="py-2 pr-4">
+                    {pending ? (
+                      <span className="font-semibold text-red-600">未確認</span>
+                    ) : submission?.submittedAt ? (
+                      <span className="text-neutral-400">確認済み</span>
+                    ) : (
+                      <span className="text-neutral-400">-</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

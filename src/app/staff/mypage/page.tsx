@@ -1,12 +1,13 @@
 import { notFound } from "next/navigation";
 import { getOwnPayCategories } from "@/lib/pay-categories";
 import { getOwnHasPayRateRules, getOwnLessonLogEntries } from "@/lib/lesson-log";
-import { getOwnPayEntries, getOwnPayslips, getOwnStaffProfile } from "@/lib/staff-self";
+import { getOwnPayEntries, getOwnPayslips, getOwnStaffProfile, getOwnSubmissionStatus } from "@/lib/staff-self";
 import { currentPayPeriod } from "@/lib/date";
 import MyStaffProfileForm from "@/components/staff/MyStaffProfileForm";
 import PayEntryForm from "@/components/staff/PayEntryForm";
 import LessonLogForm from "@/components/staff/LessonLogForm";
 import MyPayslipList from "@/components/staff/MyPayslipList";
+import SubmitPeriodButton from "@/components/staff/SubmitPeriodButton";
 
 export default async function StaffMyPage() {
   const profile = await getOwnStaffProfile();
@@ -14,13 +15,15 @@ export default async function StaffMyPage() {
 
   const { periodStart, periodEnd } = currentPayPeriod();
   const periodLabel = `${periodStart}〜${periodEnd}`;
-  const [payCategories, payEntries, hasPayRateRules, lessonLogEntries, payslips] = await Promise.all([
+  const [payCategories, payEntries, hasPayRateRules, lessonLogEntries, payslips, submittedAt] = await Promise.all([
     getOwnPayCategories(),
     getOwnPayEntries(periodStart),
     getOwnHasPayRateRules(),
     getOwnLessonLogEntries(periodStart, periodEnd),
     getOwnPayslips(),
+    getOwnSubmissionStatus(periodStart),
   ]);
+  const hasEntryInput = payCategories.length > 0 || hasPayRateRules;
 
   return (
     <div className="flex max-w-2xl flex-col gap-6">
@@ -41,6 +44,8 @@ export default async function StaffMyPage() {
           <LessonLogForm entries={lessonLogEntries} />
         </section>
       )}
+
+      {hasEntryInput && <SubmitPeriodButton periodStart={periodStart} submittedAt={submittedAt} />}
 
       <section className="flex flex-col gap-2">
         <h2 className="text-lg font-semibold">給与明細</h2>

@@ -96,6 +96,40 @@ export async function upsertPayEntry(
   return { ok: true, data: undefined };
 }
 
+export async function getOwnSubmissionStatus(periodStart: string): Promise<string | null> {
+  const staff = await getStaffUser();
+  if (!staff) return null;
+
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("period_submissions")
+    .select("submitted_at")
+    .eq("staff_id", staff.id)
+    .eq("period_start", periodStart)
+    .maybeSingle();
+
+  return data?.submitted_at ?? null;
+}
+
+export async function submitPeriodEntries(periodStart: string): Promise<ActionResult> {
+  const staff = await getStaffUser();
+  if (!staff) return { ok: false, error: "スタッフとしてログインしてください。" };
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("period_submissions")
+    .upsert(
+      { staff_id: staff.id, period_start: periodStart, submitted_at: new Date().toISOString() },
+      { onConflict: "staff_id,period_start" },
+    );
+
+  if (error) return { ok: false, error: "提出に失敗しました。" };
+
+  revalidatePath("/staff/mypage");
+  revalidatePath(`/staff/admin/staff/${staff.id}`);
+  return { ok: true, data: undefined };
+}
+
 export async function getOwnPayslips(): Promise<StaffPayslip[]> {
   const staff = await getStaffUser();
   if (!staff) return [];

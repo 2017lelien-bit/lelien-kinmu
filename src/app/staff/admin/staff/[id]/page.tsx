@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getStaffUser } from "@/lib/auth";
-import { getLessonLogEntriesForStaff, getStaffDetail } from "@/lib/staff-admin";
+import { getLessonLogEntriesForStaff, getStaffDetail, getSubmissionStatus } from "@/lib/staff-admin";
 import { getPayslipsForStaff } from "@/lib/payroll";
 import { getOwnPayEntries } from "@/lib/staff-self";
 import { getOwnLessonLogEntries } from "@/lib/lesson-log";
@@ -13,6 +13,7 @@ import PayrollPanel from "@/components/staff/PayrollPanel";
 import LessonLogApprovalPanel from "@/components/staff/LessonLogApprovalPanel";
 import PayEntryForm from "@/components/staff/PayEntryForm";
 import LessonLogForm from "@/components/staff/LessonLogForm";
+import SubmissionStatusPanel from "@/components/staff/SubmissionStatusPanel";
 
 export default async function StaffAdminDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -20,13 +21,15 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
   if (!staff || staff.role !== "admin") notFound();
 
   const { periodStart, periodEnd } = currentPayPeriod();
-  const [detail, payslips, lessonLogEntries, currentPayEntries, currentLessonLogEntries] = await Promise.all([
-    getStaffDetail(id),
-    getPayslipsForStaff(id),
-    getLessonLogEntriesForStaff(id),
-    getOwnPayEntries(periodStart, id),
-    getOwnLessonLogEntries(periodStart, periodEnd, id),
-  ]);
+  const [detail, payslips, lessonLogEntries, currentPayEntries, currentLessonLogEntries, submission] =
+    await Promise.all([
+      getStaffDetail(id),
+      getPayslipsForStaff(id),
+      getLessonLogEntriesForStaff(id),
+      getOwnPayEntries(periodStart, id),
+      getOwnLessonLogEntries(periodStart, periodEnd, id),
+      getSubmissionStatus(id, periodStart),
+    ]);
   if (!detail) notFound();
 
   const { profile, payCategories, payRateRules } = detail;
@@ -34,6 +37,13 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
   return (
     <div className="flex max-w-2xl flex-col gap-6">
       <h1 className="text-xl font-semibold">{profile.name} さん</h1>
+
+      <SubmissionStatusPanel
+        staffId={profile.id}
+        periodStart={periodStart}
+        submittedAt={submission.submittedAt}
+        acknowledgedAt={submission.acknowledgedAt}
+      />
 
       <dl className="grid grid-cols-[10rem_1fr] gap-y-2 text-sm">
         <dt className="text-neutral-500">権限</dt>

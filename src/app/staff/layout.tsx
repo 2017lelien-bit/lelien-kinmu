@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getStaffUser } from "@/lib/auth";
+import { getPendingSubmissionCount } from "@/lib/staff-admin";
 import SignOutButton from "@/components/staff/SignOutButton";
 
 export default async function StaffLayout({ children }: { children: React.ReactNode }) {
@@ -10,6 +11,8 @@ export default async function StaffLayout({ children }: { children: React.ReactN
     return <>{children}</>;
   }
 
+  const pendingCount = staff.role === "admin" ? await getPendingSubmissionCount() : 0;
+
   return (
     <div className="flex min-h-screen flex-col">
       <header className="flex flex-wrap items-center justify-between gap-4 border-b border-neutral-200 px-6 py-4 dark:border-neutral-800">
@@ -17,7 +20,16 @@ export default async function StaffLayout({ children }: { children: React.ReactN
           <span className="text-lg font-semibold tracking-wide">Le lien</span>
           <nav className="flex flex-wrap gap-4 text-sm">
             <Link href="/staff/mypage">マイページ</Link>
-            {staff.role === "admin" && <Link href="/staff/admin/staff">スタッフ管理</Link>}
+            {staff.role === "admin" && (
+              <Link href="/staff/admin/staff" className="inline-flex items-center gap-1">
+                スタッフ管理
+                {pendingCount > 0 && (
+                  <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-xs font-semibold text-white">
+                    {pendingCount}
+                  </span>
+                )}
+              </Link>
+            )}
             {staff.role === "admin" && <Link href="/staff/admin/export">給与データ出力</Link>}
           </nav>
         </div>
