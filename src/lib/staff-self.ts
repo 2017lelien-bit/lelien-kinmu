@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStaffUser, resolveActingStaffId } from "@/lib/auth";
+import { notifyAdmins } from "@/lib/push";
+import { payPeriodEnd } from "@/lib/date";
 import type { ActionResult, PayEntry, StaffPayslip, StaffProfile } from "@/lib/types";
 
 export async function getOwnStaffProfile(): Promise<StaffProfile | null> {
@@ -124,6 +126,12 @@ export async function submitPeriodEntries(periodStart: string): Promise<ActionRe
     );
 
   if (error) return { ok: false, error: "提出に失敗しました。" };
+
+  await notifyAdmins({
+    title: "実績が提出されました",
+    body: `${staff.name}さん(${periodStart}〜${payPeriodEnd(periodStart)})`,
+    url: `/staff/admin/staff/${staff.id}`,
+  });
 
   revalidatePath("/staff/mypage");
   revalidatePath(`/staff/admin/staff/${staff.id}`);
