@@ -59,6 +59,7 @@ export default function CommuteSettingsForm({
             type="number"
             min={0}
             value={commuteAmount}
+            onFocus={(e) => e.target.select()}
             onChange={(e) => setCommuteAmount(Number(e.target.value))}
             className="w-32 rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
           />

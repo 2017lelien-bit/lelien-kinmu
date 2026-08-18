@@ -100,6 +100,7 @@ export default function LessonLogForm({ entries, staffId }: { entries: LessonLog
             type="number"
             min={1}
             value={durationMinutes}
+            onFocus={(e) => e.target.select()}
             onChange={(e) => setDurationMinutes(Number(e.target.value))}
             className="w-24 rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
           />
@@ -110,6 +111,7 @@ export default function LessonLogForm({ entries, staffId }: { entries: LessonLog
             type="number"
             min={1}
             value={headcount}
+            onFocus={(e) => e.target.select()}
             onChange={(e) => setHeadcount(Number(e.target.value))}
             className="w-24 rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
           />

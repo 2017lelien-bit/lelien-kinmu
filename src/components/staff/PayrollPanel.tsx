@@ -130,6 +130,7 @@ export default function PayrollPanel({
                 type="number"
                 min={0}
                 value={commuteAllowance}
+                onFocus={(e) => e.target.select()}
                 onChange={(e) => setCommuteAllowance(Number(e.target.value))}
                 className="w-28 rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
               />
@@ -140,6 +141,7 @@ export default function PayrollPanel({
                 type="number"
                 min={0}
                 value={residentTax}
+                onFocus={(e) => e.target.select()}
                 onChange={(e) => setResidentTax(Number(e.target.value))}
                 className="w-28 rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
               />
@@ -150,6 +152,7 @@ export default function PayrollPanel({
                 type="number"
                 min={0}
                 value={daysWorked}
+                onFocus={(e) => e.target.select()}
                 onChange={(e) => handleDaysWorkedChange(Number(e.target.value))}
                 className="w-24 rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
               />

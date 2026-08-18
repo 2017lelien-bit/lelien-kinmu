@@ -88,6 +88,7 @@ export default function MyStaffProfileForm({ profile }: { profile: StaffProfile 
             type="number"
             min={0}
             value={dependentCount}
+            onFocus={(e) => e.target.select()}
             onChange={(e) => setDependentCount(Number(e.target.value))}
             className="w-24 rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
           />

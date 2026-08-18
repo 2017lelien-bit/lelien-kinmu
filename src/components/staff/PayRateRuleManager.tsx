@@ -68,6 +68,7 @@ function RuleFields({
           type="number"
           min={0}
           value={values.durationMinutes}
+          onFocus={(e) => e.target.select()}
           onChange={(e) => onChange({ ...values, durationMinutes: e.target.value })}
           className="w-20 rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
         />
@@ -78,6 +79,7 @@ function RuleFields({
           type="number"
           min={0}
           value={values.minHeadcount}
+          onFocus={(e) => e.target.select()}
           onChange={(e) => onChange({ ...values, minHeadcount: e.target.value })}
           className="w-20 rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
         />
@@ -88,6 +90,7 @@ function RuleFields({
           type="number"
           min={0}
           value={values.maxHeadcount}
+          onFocus={(e) => e.target.select()}
           onChange={(e) => onChange({ ...values, maxHeadcount: e.target.value })}
           className="w-20 rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
         />
@@ -98,6 +101,7 @@ function RuleFields({
           type="number"
           min={0}
           value={values.rate}
+          onFocus={(e) => e.target.select()}
           onChange={(e) => onChange({ ...values, rate: e.target.value })}
           className="w-24 rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
         />

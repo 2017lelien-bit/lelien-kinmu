@@ -41,8 +41,13 @@ export default async function StaffAdminStaffListPage() {
               return (
                 <tr key={s.id} className="border-b border-neutral-100 dark:border-neutral-900">
                   <td className="py-2 pr-4">
-                    <Link href={`/staff/admin/staff/${s.id}`} className="underline">
+                    <Link href={`/staff/admin/staff/${s.id}`} className="inline-flex items-center gap-1 underline">
                       {s.name}
+                      {pending && (
+                        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-xs font-semibold text-white">
+                          1
+                        </span>
+                      )}
                     </Link>
                   </td>
                   <td className="py-2 pr-4">{s.role === "admin" ? "管理者" : "スタッフ"}</td>

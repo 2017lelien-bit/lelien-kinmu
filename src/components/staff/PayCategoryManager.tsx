@@ -67,6 +67,7 @@ function CategoryRow({
         type="number"
         min={0}
         value={rate}
+        onFocus={(e) => e.target.select()}
         onChange={(e) => setRate(Number(e.target.value))}
         className="w-28 rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
       />
@@ -153,6 +154,7 @@ export default function PayCategoryManager({ staffId, payCategories }: { staffId
             type="number"
             min={0}
             value={newRate}
+            onFocus={(e) => e.target.select()}
             onChange={(e) => setNewRate(Number(e.target.value))}
             className="w-28 rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
           />

@@ -85,6 +85,7 @@ export default function PayEntryForm({
                   min={0}
                   step={c.unit_type === "hourly" ? 0.25 : 1}
                   value={quantities[c.id] ?? 0}
+                  onFocus={(e) => e.target.select()}
                   onChange={(e) =>
                     setQuantities((prev) => ({ ...prev, [c.id]: Number(e.target.value) }))
                   }
