@@ -4,6 +4,7 @@ import { getLessonLogEntriesForStaff, getStaffDetail, getSubmissionStatus } from
 import { getPayslipsForStaff } from "@/lib/payroll";
 import { getOwnPayEntries } from "@/lib/staff-self";
 import { getOwnLessonLogEntries } from "@/lib/lesson-log";
+import { getOwnTimeLogEntries } from "@/lib/time-log";
 import { currentPayPeriod } from "@/lib/date";
 import TaxSettingsForm from "@/components/staff/TaxSettingsForm";
 import CommuteSettingsForm from "@/components/staff/CommuteSettingsForm";
@@ -13,6 +14,7 @@ import PayrollPanel from "@/components/staff/PayrollPanel";
 import LessonLogApprovalPanel from "@/components/staff/LessonLogApprovalPanel";
 import PayEntryForm from "@/components/staff/PayEntryForm";
 import LessonLogForm from "@/components/staff/LessonLogForm";
+import TimeLogForm from "@/components/staff/TimeLogForm";
 import SubmissionStatusPanel from "@/components/staff/SubmissionStatusPanel";
 
 export default async function StaffAdminDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -33,6 +35,14 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
   if (!detail) notFound();
 
   const { profile, payCategories, payRateRules } = detail;
+  const hourlyCategories = payCategories.filter((c) => c.unit_type === "hourly");
+  const timeLogEntriesByCategory = Object.fromEntries(
+    await Promise.all(
+      hourlyCategories.map(
+        async (c) => [c.id, await getOwnTimeLogEntries(c.id, periodStart, periodEnd, id)] as const,
+      ),
+    ),
+  );
 
   return (
     <div className="flex max-w-2xl flex-col gap-6">
@@ -89,6 +99,17 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
             />
           )}
           {payRateRules.length > 0 && <LessonLogForm entries={currentLessonLogEntries} staffId={profile.id} />}
+          {hourlyCategories.map((c) => (
+            <TimeLogForm
+              key={c.id}
+              payCategoryId={c.id}
+              categoryName={c.name}
+              entries={timeLogEntriesByCategory[c.id]}
+              periodStart={periodStart}
+              periodEnd={periodEnd}
+              staffId={profile.id}
+            />
+          ))}
         </section>
       )}
 

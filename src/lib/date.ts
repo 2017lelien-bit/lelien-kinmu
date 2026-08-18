@@ -33,6 +33,25 @@ export function currentPayPeriod(): { periodStart: string; periodEnd: string } {
   return { periodStart, periodEnd: payPeriodEnd(periodStart) };
 }
 
+function minutesSinceMidnight(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
+}
+
+// 出勤〜退勤・休憩時刻(いずれも"HH:MM"形式)から実労働時間(分)を計算する。
+export function computeWorkedMinutes(entry: {
+  startTime: string;
+  endTime: string;
+  breakStart?: string | null;
+  breakEnd?: string | null;
+}): number {
+  let minutes = minutesSinceMidnight(entry.endTime) - minutesSinceMidnight(entry.startTime);
+  if (entry.breakStart && entry.breakEnd) {
+    minutes -= minutesSinceMidnight(entry.breakEnd) - minutesSinceMidnight(entry.breakStart);
+  }
+  return Math.max(0, minutes);
+}
+
 export function jstDateStringFromIso(iso: string): string {
   return new Date(iso).toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
 }

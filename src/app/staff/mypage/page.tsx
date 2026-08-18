@@ -2,10 +2,12 @@ import { notFound } from "next/navigation";
 import { getOwnPayCategories } from "@/lib/pay-categories";
 import { getOwnHasPayRateRules, getOwnLessonLogEntries } from "@/lib/lesson-log";
 import { getOwnPayEntries, getOwnPayslips, getOwnStaffProfile, getOwnSubmissionStatus } from "@/lib/staff-self";
+import { getOwnTimeLogEntries } from "@/lib/time-log";
 import { currentPayPeriod } from "@/lib/date";
 import MyStaffProfileForm from "@/components/staff/MyStaffProfileForm";
 import PayEntryForm from "@/components/staff/PayEntryForm";
 import LessonLogForm from "@/components/staff/LessonLogForm";
+import TimeLogForm from "@/components/staff/TimeLogForm";
 import MyPayslipList from "@/components/staff/MyPayslipList";
 import SubmitPeriodButton from "@/components/staff/SubmitPeriodButton";
 
@@ -24,6 +26,12 @@ export default async function StaffMyPage() {
     getOwnSubmissionStatus(periodStart),
   ]);
   const hasEntryInput = payCategories.length > 0 || hasPayRateRules;
+  const hourlyCategories = payCategories.filter((c) => c.unit_type === "hourly");
+  const timeLogEntriesByCategory = Object.fromEntries(
+    await Promise.all(
+      hourlyCategories.map(async (c) => [c.id, await getOwnTimeLogEntries(c.id, periodStart, periodEnd)] as const),
+    ),
+  );
 
   return (
     <div className="flex max-w-2xl flex-col gap-6">
@@ -35,6 +43,25 @@ export default async function StaffMyPage() {
         <section className="flex flex-col gap-2">
           <h2 className="text-lg font-semibold">今期の実績入力(区分ごと)({periodLabel})</h2>
           <PayEntryForm payCategories={payCategories} payEntries={payEntries} periodStart={periodStart} />
+        </section>
+      )}
+
+      {hourlyCategories.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-lg font-semibold">今期の出退勤記録({periodLabel})</h2>
+          <p className="text-xs text-neutral-400">
+            出勤・退勤・休憩の時刻を入れると、労働時間が自動計算されて上の実績入力に反映されます。
+          </p>
+          {hourlyCategories.map((c) => (
+            <TimeLogForm
+              key={c.id}
+              payCategoryId={c.id}
+              categoryName={c.name}
+              entries={timeLogEntriesByCategory[c.id]}
+              periodStart={periodStart}
+              periodEnd={periodEnd}
+            />
+          ))}
         </section>
       )}
 

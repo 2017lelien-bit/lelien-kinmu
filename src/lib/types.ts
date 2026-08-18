@@ -62,6 +62,18 @@ export interface PayEntry {
   note: string | null;
 }
 
+export interface TimeLogEntry {
+  id: string;
+  staff_id: string;
+  pay_category_id: string;
+  entry_date: string; // "YYYY-MM-DD"
+  start_time: string; // "HH:MM:SS"
+  end_time: string;
+  break_start: string | null;
+  break_end: string | null;
+  note: string | null;
+}
+
 export interface PayrollBreakdownLine {
   payCategoryId: string;
   name: string;
