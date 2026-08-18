@@ -31,7 +31,7 @@ export default async function StaffAdminStaffListPage() {
               <th className="py-2 pr-4">権限</th>
               <th className="py-2 pr-4">連絡先</th>
               <th className="py-2 pr-4">状態</th>
-              <th className="py-2 pr-4">今期の提出</th>
+              <th className="py-2 pr-4">本日の確認</th>
             </tr>
           </thead>
           <tbody>

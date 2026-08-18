@@ -20,7 +20,7 @@ export default function SubmissionStatusPanel({
   const [submitting, setSubmitting] = useState(false);
 
   if (!submittedAt) {
-    return <p className="text-sm text-neutral-400">今期の提出: まだありません</p>;
+    return <p className="text-sm text-neutral-400">本日の確認: まだありません</p>;
   }
 
   const pending = !acknowledgedAt;
@@ -35,7 +35,7 @@ export default function SubmissionStatusPanel({
   return (
     <p className="flex flex-wrap items-center gap-3 text-sm">
       <span className={pending ? "font-semibold text-red-600" : "text-neutral-500"}>
-        今期の提出: {formatDateTimeJst(submittedAt)}{pending ? "(未確認)" : "(確認済み)"}
+        本日の確認: {formatDateTimeJst(submittedAt)}{pending ? "(未確認)" : "(確認済み)"}
       </span>
       {pending && (
         <button onClick={handleAcknowledge} disabled={submitting} className="underline disabled:opacity-40">
