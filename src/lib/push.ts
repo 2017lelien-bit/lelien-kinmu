@@ -60,11 +60,16 @@ export async function notifyAdmins(payload: { title: string; body: string; url: 
     .select("id, endpoint, p256dh, auth")
     .in("staff_id", adminIds);
 
+  const { count: badgeCount } = await admin
+    .from("period_submissions")
+    .select("id", { count: "exact", head: true })
+    .is("acknowledged_at", null);
+
   for (const sub of subscriptions ?? []) {
     try {
       await webpush.sendNotification(
         { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-        JSON.stringify(payload),
+        JSON.stringify({ ...payload, badgeCount: badgeCount ?? 0 }),
       );
     } catch (error) {
       const statusCode = (error as { statusCode?: number }).statusCode;

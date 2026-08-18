@@ -3,6 +3,7 @@ import { getStaffUser } from "@/lib/auth";
 import { getPendingSubmissionCount } from "@/lib/staff-admin";
 import SignOutButton from "@/components/staff/SignOutButton";
 import NotificationOptIn from "@/components/staff/NotificationOptIn";
+import AppBadgeSync from "@/components/staff/AppBadgeSync";
 
 export default async function StaffLayout({ children }: { children: React.ReactNode }) {
   const staff = await getStaffUser();
@@ -16,6 +17,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
 
   return (
     <div className="flex min-h-screen flex-col">
+      {staff.role === "admin" && <AppBadgeSync pendingCount={pendingCount} />}
       <header className="flex flex-wrap items-center justify-between gap-4 border-b border-neutral-200 px-6 py-4 dark:border-neutral-800">
         <div className="flex items-center gap-4">
           <span className="text-lg font-semibold tracking-wide">Le lien</span>
