@@ -23,8 +23,8 @@ export default async function StaffAdminStaffListPage() {
         </Link>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] border-collapse text-sm">
+      <div>
+        <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-neutral-200 text-left text-neutral-500 dark:border-neutral-800">
               <th className="py-2 pr-4">お名前</th>
