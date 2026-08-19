@@ -19,6 +19,7 @@ export default function TodaySummaryPanel({
   const pendingLessons = lessons.filter((l) => !l.approved);
   const lessonsTotal = pendingLessons.reduce((sum, l) => sum + l.rate, 0);
   const shiftsTotal = shifts.reduce((sum, s) => sum + s.amount, 0);
+  const hasLeLienShift = shifts.some((s) => s.categoryName.toLowerCase().replace(/\s+/g, "").includes("lelien"));
 
   async function handleApprove(lessonId: string) {
     setSavingId(lessonId);
@@ -85,9 +86,11 @@ export default function TodaySummaryPanel({
               </li>
             ))}
           </ul>
-          <p className="text-xs text-neutral-400">
-            同じ日にレッスンと時間が重なっていた場合、1レッスンにつき2時間分が実際の反映額から差し引かれます。
-          </p>
+          {hasLeLienShift && (
+            <p className="text-xs text-neutral-400">
+              「Le lien」区分は、同じ日にレッスンと時間が重なっていた場合、1レッスンにつき2時間分が実際の反映額から差し引かれます(むすひなど他の区分には適用されません)。
+            </p>
+          )}
         </div>
       )}
     </div>
