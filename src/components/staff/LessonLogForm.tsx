@@ -13,6 +13,7 @@ export default function LessonLogForm({ entries, staffId }: { entries: LessonLog
   const [lessonName, setLessonName] = useState<string>(LESSON_NAMES[0]);
   const [durationMinutes, setDurationMinutes] = useState(60);
   const [headcount, setHeadcount] = useState(1);
+  const [startTime, setStartTime] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -24,6 +25,7 @@ export default function LessonLogForm({ entries, staffId }: { entries: LessonLog
     setLessonName(LESSON_NAMES[0]);
     setDurationMinutes(60);
     setHeadcount(1);
+    setStartTime("");
     setNote("");
   }
 
@@ -34,13 +36,21 @@ export default function LessonLogForm({ entries, staffId }: { entries: LessonLog
     setLessonName(entry.lesson_name);
     setDurationMinutes(entry.duration_minutes);
     setHeadcount(entry.headcount);
+    setStartTime(entry.start_time?.slice(0, 5) ?? "");
     setNote(entry.note ?? "");
   }
 
   async function handleSubmit() {
     setSubmitting(true);
     setError(null);
-    const input = { entryDate, lessonName, durationMinutes, headcount, note: note || undefined };
+    const input = {
+      entryDate,
+      lessonName,
+      durationMinutes,
+      headcount,
+      startTime: startTime || undefined,
+      note: note || undefined,
+    };
     const result = editingId
       ? await updateLessonLogEntry(editingId, input, staffId)
       : await addLessonLogEntry(input, staffId);
@@ -116,7 +126,19 @@ export default function LessonLogForm({ entries, staffId }: { entries: LessonLog
             className="w-24 rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
           />
         </label>
+        <label className="flex flex-col gap-1 text-sm">
+          開始時刻(任意)
+          <input
+            type="time"
+            value={startTime}
+            onChange={(e) => setStartTime(e.target.value)}
+            className="rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
+          />
+        </label>
       </div>
+      <p className="text-xs text-neutral-400">
+        開始時刻を入れると、同じ日の受付シフトと時間が重なっているレッスンだけが、受付の時給から差し引かれます。
+      </p>
 
       <label className="flex flex-col gap-1 text-sm">
         メモ
@@ -150,6 +172,7 @@ export default function LessonLogForm({ entries, staffId }: { entries: LessonLog
             {entries.map((e) => (
               <li key={e.id} className="flex flex-wrap items-center gap-3 border-b border-neutral-100 pb-2 dark:border-neutral-900">
                 <span>{e.entry_date}</span>
+                {e.start_time && <span>{e.start_time.slice(0, 5)}〜</span>}
                 <span>{e.lesson_name}</span>
                 <span>{e.duration_minutes}分</span>
                 <span>{e.headcount}人</span>

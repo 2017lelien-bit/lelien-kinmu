@@ -104,6 +104,7 @@ export interface LessonLogEntry {
   headcount: number;
   note: string | null;
   approved: boolean;
+  start_time: string | null; // "HH:MM:SS"
 }
 
 export interface PayrollBreakdownLessonLine {

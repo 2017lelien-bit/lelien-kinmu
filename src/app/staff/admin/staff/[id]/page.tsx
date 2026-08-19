@@ -30,7 +30,7 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
       getLessonLogEntriesForStaff(id),
       getOwnPayEntries(periodStart, id),
       getOwnLessonLogEntries(periodStart, periodEnd, id),
-      getSubmissionStatus(id, periodStart),
+      getSubmissionStatus(id),
     ]);
   if (!detail) notFound();
 
@@ -50,7 +50,6 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
 
       <SubmissionStatusPanel
         staffId={profile.id}
-        periodStart={periodStart}
         submittedAt={submission.submittedAt}
         acknowledgedAt={submission.acknowledgedAt}
       />

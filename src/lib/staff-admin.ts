@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStaffUser } from "@/lib/auth";
+import { todayJstDateString } from "@/lib/date";
 import type { ActionResult, CommuteType, LessonLogEntry, PayCategory, PayRateRule, StaffProfile } from "@/lib/types";
 
 function siteUrl(): string {
@@ -27,7 +28,9 @@ export interface SubmissionStatus {
   acknowledgedAt: string | null;
 }
 
-export async function getSubmissionStatus(staffId: string, periodStart: string): Promise<SubmissionStatus> {
+// 「本日の確認」は日ごとに管理する。締め期間をまたいでも古い提出の確認状態が残らないようにするため、
+// 常に今日の日付の行だけを見る。
+export async function getSubmissionStatus(staffId: string): Promise<SubmissionStatus> {
   const staff = await getStaffUser();
   if (!staff || staff.role !== "admin") return { submittedAt: null, acknowledgedAt: null };
 
@@ -36,13 +39,13 @@ export async function getSubmissionStatus(staffId: string, periodStart: string):
     .from("period_submissions")
     .select("submitted_at, acknowledged_at")
     .eq("staff_id", staffId)
-    .eq("period_start", periodStart)
+    .eq("submission_date", todayJstDateString())
     .maybeSingle();
 
   return { submittedAt: data?.submitted_at ?? null, acknowledgedAt: data?.acknowledged_at ?? null };
 }
 
-export async function getSubmissionStatusMap(periodStart: string): Promise<Record<string, SubmissionStatus>> {
+export async function getSubmissionStatusMap(): Promise<Record<string, SubmissionStatus>> {
   const staff = await getStaffUser();
   if (!staff || staff.role !== "admin") return {};
 
@@ -50,7 +53,7 @@ export async function getSubmissionStatusMap(periodStart: string): Promise<Recor
   const { data } = await admin
     .from("period_submissions")
     .select("staff_id, submitted_at, acknowledged_at")
-    .eq("period_start", periodStart);
+    .eq("submission_date", todayJstDateString());
 
   const map: Record<string, SubmissionStatus> = {};
   for (const row of data ?? []) {
@@ -59,7 +62,7 @@ export async function getSubmissionStatusMap(periodStart: string): Promise<Recor
   return map;
 }
 
-export async function acknowledgeSubmission(staffId: string, periodStart: string): Promise<ActionResult> {
+export async function acknowledgeSubmission(staffId: string): Promise<ActionResult> {
   const staff = await getStaffUser();
   if (!staff || staff.role !== "admin") return { ok: false, error: "管理者としてログインしてください。" };
 
@@ -68,7 +71,7 @@ export async function acknowledgeSubmission(staffId: string, periodStart: string
     .from("period_submissions")
     .update({ acknowledged_at: new Date().toISOString() })
     .eq("staff_id", staffId)
-    .eq("period_start", periodStart);
+    .eq("submission_date", todayJstDateString());
   if (error) return { ok: false, error: "更新に失敗しました。" };
 
   revalidatePath(`/staff/admin/staff/${staffId}`);

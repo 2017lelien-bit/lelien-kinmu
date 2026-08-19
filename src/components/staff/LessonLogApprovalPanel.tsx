@@ -37,6 +37,7 @@ export default function LessonLogApprovalPanel({ entries }: { entries: LessonLog
           {pendingEntries.map((entry) => (
             <li key={entry.id} className="flex flex-wrap items-center gap-3 border-b border-neutral-100 pb-2 dark:border-neutral-900">
               <span>{entry.entry_date}</span>
+              {entry.start_time && <span>{entry.start_time.slice(0, 5)}〜</span>}
               <span>{entry.lesson_name}</span>
               <span>{entry.duration_minutes}分</span>
               <span className="font-semibold">{entry.headcount}人</span>

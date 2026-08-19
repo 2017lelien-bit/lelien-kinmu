@@ -187,12 +187,14 @@ export async function generatePayslip(
 
   if (error || !inserted) return { ok: false, error: "明細の作成に失敗しました。" };
 
-  // 明細を作成した時点で「確定」扱いとし、提出バッジから消す。
+  // 明細を作成した時点で、この締め期間内の提出をまとめて「確定」扱いとし、提出バッジから消す。
   await admin
     .from("period_submissions")
     .update({ acknowledged_at: new Date().toISOString() })
     .eq("staff_id", staffId)
-    .eq("period_start", periodStart);
+    .gte("submission_date", periodStart)
+    .lte("submission_date", periodEnd)
+    .is("acknowledged_at", null);
 
   revalidatePath(`/staff/admin/staff/${staffId}`);
   revalidatePath("/staff/admin/staff");

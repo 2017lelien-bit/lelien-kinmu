@@ -2,14 +2,12 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getStaffUser } from "@/lib/auth";
 import { getAllStaff, getSubmissionStatusMap } from "@/lib/staff-admin";
-import { currentPayPeriod } from "@/lib/date";
 
 export default async function StaffAdminStaffListPage() {
   const staff = await getStaffUser();
   if (!staff || staff.role !== "admin") notFound();
 
-  const { periodStart } = currentPayPeriod();
-  const [allStaff, submissionMap] = await Promise.all([getAllStaff(), getSubmissionStatusMap(periodStart)]);
+  const [allStaff, submissionMap] = await Promise.all([getAllStaff(), getSubmissionStatusMap()]);
 
   return (
     <div className="flex flex-col gap-6">

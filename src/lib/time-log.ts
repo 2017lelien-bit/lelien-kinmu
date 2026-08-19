@@ -28,12 +28,22 @@ export async function getOwnTimeLogEntries(
   return (data ?? []) as TimeLogEntry[];
 }
 
-// レッスンと同じ日に受付シフトが入っている場合、その分は受付をしていないとみなし、
-// 「Le lien」区分の時給から1レッスンにつき2時間差し引く。
+// 受付シフトの時間と実際に重なっているレッスンがあれば、その分は受付をしていないとみなし、
+// 「Le lien」区分の時給から1レッスンにつき2時間差し引く。開始時刻が入力されていないレッスンは、
+// 重なりを確認できないため差し引きの対象にしない。
 const LESSON_DEDUCTION_MINUTES_PER_LESSON = 120;
 
 function isLeLienCategoryName(name: string): boolean {
   return name.toLowerCase().replace(/\s+/g, "").includes("lelien");
+}
+
+function toMinutes(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function intervalsOverlap(aStart: number, aEnd: number, bStart: number, bEnd: number): boolean {
+  return aStart < bEnd && bStart < aEnd;
 }
 
 async function syncPayEntryFromTimeLog(
@@ -55,6 +65,7 @@ async function syncPayEntryFromTimeLog(
   ]);
 
   const minutesByDate = new Map<string, number>();
+  const shiftsByDate = new Map<string, { start: number; end: number }[]>();
   for (const e of timeEntries ?? []) {
     const minutes = computeWorkedMinutes({
       startTime: e.start_time,
@@ -63,23 +74,34 @@ async function syncPayEntryFromTimeLog(
       breakEnd: e.break_end,
     });
     minutesByDate.set(e.entry_date, (minutesByDate.get(e.entry_date) ?? 0) + minutes);
+    const shifts = shiftsByDate.get(e.entry_date) ?? [];
+    shifts.push({ start: toMinutes(e.start_time), end: toMinutes(e.end_time) });
+    shiftsByDate.set(e.entry_date, shifts);
   }
 
   if (category && isLeLienCategoryName(category.name) && minutesByDate.size > 0) {
     const { data: lessons } = await admin
       .from("lesson_log_entries")
-      .select("entry_date")
+      .select("entry_date, start_time, duration_minutes")
       .eq("staff_id", staffId)
       .gte("entry_date", periodStart)
-      .lte("entry_date", periodEnd);
+      .lte("entry_date", periodEnd)
+      .not("start_time", "is", null);
 
-    const lessonCountByDate = new Map<string, number>();
+    const overlappingLessonCountByDate = new Map<string, number>();
     for (const l of lessons ?? []) {
-      lessonCountByDate.set(l.entry_date, (lessonCountByDate.get(l.entry_date) ?? 0) + 1);
+      const shifts = shiftsByDate.get(l.entry_date);
+      if (!shifts) continue;
+      const lessonStart = toMinutes(l.start_time);
+      const lessonEnd = lessonStart + l.duration_minutes;
+      const overlaps = shifts.some((s) => intervalsOverlap(lessonStart, lessonEnd, s.start, s.end));
+      if (overlaps) {
+        overlappingLessonCountByDate.set(l.entry_date, (overlappingLessonCountByDate.get(l.entry_date) ?? 0) + 1);
+      }
     }
 
     for (const [date, minutes] of minutesByDate) {
-      const lessonCount = lessonCountByDate.get(date) ?? 0;
+      const lessonCount = overlappingLessonCountByDate.get(date) ?? 0;
       if (lessonCount > 0) {
         minutesByDate.set(date, Math.max(0, minutes - lessonCount * LESSON_DEDUCTION_MINUTES_PER_LESSON));
       }
@@ -97,6 +119,27 @@ async function syncPayEntryFromTimeLog(
     },
     { onConflict: "staff_id,pay_category_id,period_start" },
   );
+}
+
+// レッスン実績(lesson_log_entries)側の変更でも、重なりを再計算して受付の実績を更新する必要があるため、
+// lesson-log.tsから呼べるように公開する。
+export async function resyncLeLienCategoriesForPeriod(
+  staffId: string,
+  periodStart: string,
+  periodEnd: string,
+): Promise<void> {
+  const admin = createAdminClient();
+  const { data: categories } = await admin
+    .from("pay_categories")
+    .select("id, name")
+    .eq("staff_id", staffId)
+    .eq("unit_type", "hourly");
+
+  for (const c of categories ?? []) {
+    if (isLeLienCategoryName(c.name)) {
+      await syncPayEntryFromTimeLog(admin, staffId, c.id, periodStart, periodEnd);
+    }
+  }
 }
 
 export async function addTimeLogEntry(

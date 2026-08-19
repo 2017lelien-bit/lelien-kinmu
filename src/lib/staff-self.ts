@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStaffUser, resolveActingStaffId } from "@/lib/auth";
 import { notifyAdmins } from "@/lib/push";
-import { payPeriodEnd } from "@/lib/date";
+import { todayJstDateString } from "@/lib/date";
 import type { ActionResult, PayEntry, StaffPayslip, StaffProfile } from "@/lib/types";
 
 export async function getOwnStaffProfile(): Promise<StaffProfile | null> {
@@ -98,7 +98,8 @@ export async function upsertPayEntry(
   return { ok: true, data: undefined };
 }
 
-export async function getOwnSubmissionStatus(periodStart: string): Promise<string | null> {
+// 「本日の提出」は日ごとに管理する(締め期間ではなく、実際に提出したカレンダー上の日付をキーにする)。
+export async function getOwnSubmissionStatus(): Promise<string | null> {
   const staff = await getStaffUser();
   if (!staff) return null;
 
@@ -107,29 +108,30 @@ export async function getOwnSubmissionStatus(periodStart: string): Promise<strin
     .from("period_submissions")
     .select("submitted_at")
     .eq("staff_id", staff.id)
-    .eq("period_start", periodStart)
+    .eq("submission_date", todayJstDateString())
     .maybeSingle();
 
   return data?.submitted_at ?? null;
 }
 
-export async function submitPeriodEntries(periodStart: string): Promise<ActionResult> {
+export async function submitPeriodEntries(): Promise<ActionResult> {
   const staff = await getStaffUser();
   if (!staff) return { ok: false, error: "スタッフとしてログインしてください。" };
 
+  const today = todayJstDateString();
   const admin = createAdminClient();
   const { error } = await admin
     .from("period_submissions")
     .upsert(
-      { staff_id: staff.id, period_start: periodStart, submitted_at: new Date().toISOString() },
-      { onConflict: "staff_id,period_start" },
+      { staff_id: staff.id, submission_date: today, submitted_at: new Date().toISOString() },
+      { onConflict: "staff_id,submission_date" },
     );
 
   if (error) return { ok: false, error: "提出に失敗しました。" };
 
   await notifyAdmins({
-    title: "実績が提出されました",
-    body: `${staff.name}さん(${periodStart}〜${payPeriodEnd(periodStart)})`,
+    title: "本日の勤務が提出されました",
+    body: `${staff.name}さん(${today})`,
     url: `/staff/admin/staff/${staff.id}`,
   });
 

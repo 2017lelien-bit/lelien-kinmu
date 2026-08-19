@@ -26,11 +26,16 @@ export function payPeriodEnd(periodStart: string): string {
   return end.toISOString().slice(0, 10);
 }
 
-export function currentPayPeriod(): { periodStart: string; periodEnd: string } {
-  const [y, m, d] = todayJstDateString().split("-").map(Number);
+// 任意の日付が属する締め期間(16日〜翌15日)を返す。
+export function payPeriodForDate(dateStr: string): { periodStart: string; periodEnd: string } {
+  const [y, m, d] = dateStr.split("-").map(Number);
   const start = d >= 16 ? new Date(Date.UTC(y, m - 1, 16)) : new Date(Date.UTC(y, m - 2, 16));
   const periodStart = start.toISOString().slice(0, 10);
   return { periodStart, periodEnd: payPeriodEnd(periodStart) };
+}
+
+export function currentPayPeriod(): { periodStart: string; periodEnd: string } {
+  return payPeriodForDate(todayJstDateString());
 }
 
 function minutesSinceMidnight(time: string): number {

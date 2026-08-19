@@ -23,7 +23,7 @@ export default async function StaffMyPage() {
     getOwnHasPayRateRules(),
     getOwnLessonLogEntries(periodStart, periodEnd),
     getOwnPayslips(),
-    getOwnSubmissionStatus(periodStart),
+    getOwnSubmissionStatus(),
   ]);
   const hasEntryInput = payCategories.length > 0 || hasPayRateRules;
   const hourlyCategories = payCategories.filter((c) => c.unit_type === "hourly");
@@ -72,7 +72,7 @@ export default async function StaffMyPage() {
         </section>
       )}
 
-      {hasEntryInput && <SubmitPeriodButton periodStart={periodStart} submittedAt={submittedAt} />}
+      {hasEntryInput && <SubmitPeriodButton submittedAt={submittedAt} />}
 
       <section className="flex flex-col gap-2">
         <h2 className="text-lg font-semibold">給与明細</h2>

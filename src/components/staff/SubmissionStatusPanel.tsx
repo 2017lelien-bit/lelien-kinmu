@@ -7,12 +7,10 @@ import { formatDateTimeJst } from "@/lib/date";
 
 export default function SubmissionStatusPanel({
   staffId,
-  periodStart,
   submittedAt,
   acknowledgedAt,
 }: {
   staffId: string;
-  periodStart: string;
   submittedAt: string | null;
   acknowledgedAt: string | null;
 }) {
@@ -27,7 +25,7 @@ export default function SubmissionStatusPanel({
 
   async function handleAcknowledge() {
     setSubmitting(true);
-    await acknowledgeSubmission(staffId, periodStart);
+    await acknowledgeSubmission(staffId);
     setSubmitting(false);
     router.refresh();
   }

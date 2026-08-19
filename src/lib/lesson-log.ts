@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStaffUser, resolveActingStaffId } from "@/lib/auth";
+import { resyncLeLienCategoriesForPeriod } from "@/lib/time-log";
+import { payPeriodForDate } from "@/lib/date";
 import type { ActionResult, LessonLogEntry } from "@/lib/types";
 
 function revalidateMypageAndAdmin(staffId: string) {
@@ -50,6 +52,7 @@ export async function addLessonLogEntry(
     lessonName: string;
     durationMinutes: number;
     headcount: number;
+    startTime?: string;
     note?: string;
   },
   staffId?: string,
@@ -68,10 +71,14 @@ export async function addLessonLogEntry(
     lesson_name: input.lessonName.trim(),
     duration_minutes: input.durationMinutes,
     headcount: input.headcount,
+    start_time: input.startTime || null,
     note: input.note || null,
   });
 
   if (error) return { ok: false, error: "実績の登録に失敗しました。" };
+
+  const { periodStart, periodEnd } = payPeriodForDate(input.entryDate);
+  await resyncLeLienCategoriesForPeriod(acting.id, periodStart, periodEnd);
 
   revalidateMypageAndAdmin(acting.id);
   return { ok: true, data: undefined };
@@ -84,6 +91,7 @@ export async function updateLessonLogEntry(
     lessonName: string;
     durationMinutes: number;
     headcount: number;
+    startTime?: string;
     note?: string;
   },
   staffId?: string,
@@ -98,7 +106,7 @@ export async function updateLessonLogEntry(
   const admin = createAdminClient();
   const { data: existing } = await admin
     .from("lesson_log_entries")
-    .select("approved")
+    .select("approved, entry_date")
     .eq("id", id)
     .eq("staff_id", acting.id)
     .maybeSingle();
@@ -112,12 +120,22 @@ export async function updateLessonLogEntry(
       lesson_name: input.lessonName.trim(),
       duration_minutes: input.durationMinutes,
       headcount: input.headcount,
+      start_time: input.startTime || null,
       note: input.note || null,
     })
     .eq("id", id)
     .eq("staff_id", acting.id);
 
   if (error) return { ok: false, error: "実績の更新に失敗しました。" };
+
+  const oldPeriod = payPeriodForDate(existing.entry_date);
+  await resyncLeLienCategoriesForPeriod(acting.id, oldPeriod.periodStart, oldPeriod.periodEnd);
+  if (existing.entry_date !== input.entryDate) {
+    const newPeriod = payPeriodForDate(input.entryDate);
+    if (newPeriod.periodStart !== oldPeriod.periodStart) {
+      await resyncLeLienCategoriesForPeriod(acting.id, newPeriod.periodStart, newPeriod.periodEnd);
+    }
+  }
 
   revalidateMypageAndAdmin(acting.id);
   return { ok: true, data: undefined };
@@ -130,7 +148,7 @@ export async function deleteLessonLogEntry(id: string, staffId?: string): Promis
   const admin = createAdminClient();
   const { data: existing } = await admin
     .from("lesson_log_entries")
-    .select("approved")
+    .select("approved, entry_date")
     .eq("id", id)
     .eq("staff_id", acting.id)
     .maybeSingle();
@@ -139,6 +157,9 @@ export async function deleteLessonLogEntry(id: string, staffId?: string): Promis
 
   const { error } = await admin.from("lesson_log_entries").delete().eq("id", id).eq("staff_id", acting.id);
   if (error) return { ok: false, error: "削除に失敗しました。" };
+
+  const { periodStart, periodEnd } = payPeriodForDate(existing.entry_date);
+  await resyncLeLienCategoriesForPeriod(acting.id, periodStart, periodEnd);
 
   revalidateMypageAndAdmin(acting.id);
   return { ok: true, data: undefined };
