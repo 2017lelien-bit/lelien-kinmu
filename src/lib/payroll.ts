@@ -137,9 +137,15 @@ export async function generatePayslip(
 
   // 収入の出どころによって税の扱いが異なるため、それぞれ別に計算して合算する。
   // 区分(支払区分)からの収入 = 給与所得として、扶養設定に応じた月額表(甲欄)の算式で計算する(通勤費は非課税)。
-  // レッスン実績からの収入 = 報酬・料金等として、一律10.21%で源泉徴収する。
+  // レッスン実績からの収入 = 報酬・料金等として、一律10.21%で源泉徴収する(通勤費も課税対象に含む)。
+  // 両方の収入があるスタッフは、通勤費を支給額の比率で按分する。
   const categoryGross = breakdown.lines.reduce((sum, l) => sum + l.subtotal, 0);
   const lessonGross = breakdown.lessonLines.reduce((sum, l) => sum + l.rate, 0);
+
+  const commuteForLessons =
+    categoryGross + lessonGross > 0
+      ? Math.round((input.commuteAllowance * lessonGross) / (categoryGross + lessonGross))
+      : 0;
 
   const employeeTax =
     categoryGross > 0
@@ -149,9 +155,9 @@ export async function generatePayslip(
           hasSpouseDeduction: profile.has_spouse_deduction,
         })
       : 0;
-  const contractorTax = calculateContractorWithholding(lessonGross);
+  const contractorTax = calculateContractorWithholding(lessonGross + commuteForLessons);
 
-  const taxableAmount = categoryGross + lessonGross;
+  const taxableAmount = categoryGross + lessonGross + commuteForLessons;
   const incomeTax = employeeTax + contractorTax;
   const employmentType: EmploymentType =
     categoryGross > 0 && lessonGross > 0 ? "mixed" : lessonGross > 0 ? "contract" : "hourly";
