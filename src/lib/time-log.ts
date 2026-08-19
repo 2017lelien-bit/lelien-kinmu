@@ -28,6 +28,14 @@ export async function getOwnTimeLogEntries(
   return (data ?? []) as TimeLogEntry[];
 }
 
+// レッスンと同じ日に受付シフトが入っている場合、その分は受付をしていないとみなし、
+// 「Le lien」区分の時給から1レッスンにつき2時間差し引く。
+const LESSON_DEDUCTION_MINUTES_PER_LESSON = 120;
+
+function isLeLienCategoryName(name: string): boolean {
+  return name.toLowerCase().replace(/\s+/g, "").includes("lelien");
+}
+
 async function syncPayEntryFromTimeLog(
   admin: ReturnType<typeof createAdminClient>,
   staffId: string,
@@ -35,25 +43,50 @@ async function syncPayEntryFromTimeLog(
   periodStart: string,
   periodEnd: string,
 ): Promise<void> {
-  const { data } = await admin
-    .from("time_log_entries")
-    .select("start_time, end_time, break_start, break_end")
-    .eq("staff_id", staffId)
-    .eq("pay_category_id", payCategoryId)
-    .gte("entry_date", periodStart)
-    .lte("entry_date", periodEnd);
+  const [{ data: category }, { data: timeEntries }] = await Promise.all([
+    admin.from("pay_categories").select("name").eq("id", payCategoryId).maybeSingle(),
+    admin
+      .from("time_log_entries")
+      .select("entry_date, start_time, end_time, break_start, break_end")
+      .eq("staff_id", staffId)
+      .eq("pay_category_id", payCategoryId)
+      .gte("entry_date", periodStart)
+      .lte("entry_date", periodEnd),
+  ]);
 
-  const totalMinutes = (data ?? []).reduce(
-    (sum, e) =>
-      sum +
-      computeWorkedMinutes({
-        startTime: e.start_time,
-        endTime: e.end_time,
-        breakStart: e.break_start,
-        breakEnd: e.break_end,
-      }),
-    0,
-  );
+  const minutesByDate = new Map<string, number>();
+  for (const e of timeEntries ?? []) {
+    const minutes = computeWorkedMinutes({
+      startTime: e.start_time,
+      endTime: e.end_time,
+      breakStart: e.break_start,
+      breakEnd: e.break_end,
+    });
+    minutesByDate.set(e.entry_date, (minutesByDate.get(e.entry_date) ?? 0) + minutes);
+  }
+
+  if (category && isLeLienCategoryName(category.name) && minutesByDate.size > 0) {
+    const { data: lessons } = await admin
+      .from("lesson_log_entries")
+      .select("entry_date")
+      .eq("staff_id", staffId)
+      .gte("entry_date", periodStart)
+      .lte("entry_date", periodEnd);
+
+    const lessonCountByDate = new Map<string, number>();
+    for (const l of lessons ?? []) {
+      lessonCountByDate.set(l.entry_date, (lessonCountByDate.get(l.entry_date) ?? 0) + 1);
+    }
+
+    for (const [date, minutes] of minutesByDate) {
+      const lessonCount = lessonCountByDate.get(date) ?? 0;
+      if (lessonCount > 0) {
+        minutesByDate.set(date, Math.max(0, minutes - lessonCount * LESSON_DEDUCTION_MINUTES_PER_LESSON));
+      }
+    }
+  }
+
+  const totalMinutes = [...minutesByDate.values()].reduce((sum, m) => sum + m, 0);
 
   await admin.from("pay_entries").upsert(
     {
