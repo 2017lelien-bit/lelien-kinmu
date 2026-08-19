@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getStaffUser } from "@/lib/auth";
-import { getLessonLogEntriesForStaff, getStaffDetail, getSubmissionStatus } from "@/lib/staff-admin";
-import { getPayslipsForStaff } from "@/lib/payroll";
+import { getStaffDetail, getSubmissionStatus } from "@/lib/staff-admin";
+import { getPayslipsForStaff, getTodaySummary } from "@/lib/payroll";
 import { getOwnPayEntries } from "@/lib/staff-self";
 import { getOwnLessonLogEntries } from "@/lib/lesson-log";
 import { getOwnTimeLogEntries } from "@/lib/time-log";
@@ -11,7 +11,7 @@ import CommuteSettingsForm from "@/components/staff/CommuteSettingsForm";
 import PayCategoryManager from "@/components/staff/PayCategoryManager";
 import PayRateRuleManager from "@/components/staff/PayRateRuleManager";
 import PayrollPanel from "@/components/staff/PayrollPanel";
-import LessonLogApprovalPanel from "@/components/staff/LessonLogApprovalPanel";
+import TodaySummaryPanel from "@/components/staff/TodaySummaryPanel";
 import PayEntryForm from "@/components/staff/PayEntryForm";
 import LessonLogForm from "@/components/staff/LessonLogForm";
 import TimeLogForm from "@/components/staff/TimeLogForm";
@@ -23,11 +23,11 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
   if (!staff || staff.role !== "admin") notFound();
 
   const { periodStart, periodEnd } = currentPayPeriod();
-  const [detail, payslips, lessonLogEntries, currentPayEntries, currentLessonLogEntries, submission] =
+  const [detail, payslips, todaySummary, currentPayEntries, currentLessonLogEntries, submission] =
     await Promise.all([
       getStaffDetail(id),
       getPayslipsForStaff(id),
-      getLessonLogEntriesForStaff(id),
+      getTodaySummary(id),
       getOwnPayEntries(periodStart, id),
       getOwnLessonLogEntries(periodStart, periodEnd, id),
       getSubmissionStatus(id),
@@ -53,6 +53,8 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
         submittedAt={submission.submittedAt}
         acknowledgedAt={submission.acknowledgedAt}
       />
+
+      <TodaySummaryPanel lessons={todaySummary.lessons} shifts={todaySummary.shifts} />
 
       <dl className="grid grid-cols-[10rem_1fr] gap-y-2 text-sm">
         <dt className="text-neutral-500">権限</dt>
@@ -81,8 +83,6 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
       <PayCategoryManager staffId={profile.id} payCategories={payCategories} />
 
       <PayRateRuleManager staffId={profile.id} payRateRules={payRateRules} />
-
-      {payRateRules.length > 0 && <LessonLogApprovalPanel entries={lessonLogEntries} />}
 
       {(payCategories.length > 0 || payRateRules.length > 0) && (
         <section className="flex flex-col gap-4">

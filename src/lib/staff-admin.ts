@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStaffUser } from "@/lib/auth";
 import { todayJstDateString } from "@/lib/date";
-import type { ActionResult, CommuteType, LessonLogEntry, PayCategory, PayRateRule, StaffProfile } from "@/lib/types";
+import type { ActionResult, CommuteType, PayCategory, PayRateRule, StaffProfile } from "@/lib/types";
 
 function siteUrl(): string {
   return process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -111,20 +111,6 @@ export async function getStaffDetail(id: string): Promise<StaffDetail | null> {
     payCategories: (categories ?? []) as PayCategory[],
     payRateRules: (rules ?? []) as PayRateRule[],
   };
-}
-
-export async function getLessonLogEntriesForStaff(staffId: string): Promise<LessonLogEntry[]> {
-  const staff = await getStaffUser();
-  if (!staff || staff.role !== "admin") return [];
-
-  const admin = createAdminClient();
-  const { data } = await admin
-    .from("lesson_log_entries")
-    .select("*")
-    .eq("staff_id", staffId)
-    .order("entry_date", { ascending: false });
-
-  return (data ?? []) as LessonLogEntry[];
 }
 
 export async function setLessonLogEntryApproval(id: string, approved: boolean): Promise<ActionResult> {

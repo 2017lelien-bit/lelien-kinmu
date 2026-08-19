@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getStaffUser } from "@/lib/auth";
 import { sendStaffPayslipEmail } from "@/lib/notifications";
 import { calculateContractorWithholding, calculateEmployeeWithholding } from "@/lib/tax";
-import { payPeriodEnd } from "@/lib/date";
+import { payPeriodEnd, computeWorkedMinutes, todayJstDateString } from "@/lib/date";
 import type {
   ActionResult,
   EmploymentType,
@@ -44,6 +44,85 @@ function matchPayRateRule(rules: PayRateRule[], entry: { lessonName: string; dur
         (r.max_headcount === null || entry.headcount <= r.max_headcount),
     ) ?? null
   );
+}
+
+export interface TodayLessonSummary {
+  id: string;
+  startTime: string | null;
+  lessonName: string;
+  durationMinutes: number;
+  headcount: number;
+  rate: number;
+  approved: boolean;
+}
+
+export interface TodayShiftSummary {
+  id: string;
+  categoryName: string;
+  startTime: string;
+  endTime: string;
+  hours: number;
+  amount: number;
+}
+
+export interface TodaySummary {
+  lessons: TodayLessonSummary[];
+  shifts: TodayShiftSummary[];
+}
+
+// 管理者が「本日の確認」で内容を一目で見られるように、その日のレッスンと出退勤をまとめて金額付きで返す。
+export async function getTodaySummary(staffId: string): Promise<TodaySummary> {
+  const adminCheck = await requireAdmin();
+  if (adminCheck) return { lessons: [], shifts: [] };
+
+  const today = todayJstDateString();
+  const admin = createAdminClient();
+
+  const [{ data: lessons }, { data: rules }, { data: timeEntries }, { data: categories }] = await Promise.all([
+    admin.from("lesson_log_entries").select("*").eq("staff_id", staffId).eq("entry_date", today),
+    admin.from("pay_rate_rules").select("*").eq("staff_id", staffId),
+    admin.from("time_log_entries").select("*").eq("staff_id", staffId).eq("entry_date", today),
+    admin.from("pay_categories").select("id, name, rate").eq("staff_id", staffId),
+  ]);
+
+  const categoryById = new Map((categories ?? []).map((c) => [c.id, c]));
+
+  const lessonSummaries: TodayLessonSummary[] = (lessons ?? []).map((l) => {
+    const matched = matchPayRateRule(rules ?? [], {
+      lessonName: l.lesson_name,
+      durationMinutes: l.duration_minutes,
+      headcount: l.headcount,
+    });
+    return {
+      id: l.id,
+      startTime: l.start_time,
+      lessonName: l.lesson_name,
+      durationMinutes: l.duration_minutes,
+      headcount: l.headcount,
+      rate: matched?.rate ?? 0,
+      approved: l.approved,
+    };
+  });
+
+  const shiftSummaries: TodayShiftSummary[] = (timeEntries ?? []).map((e) => {
+    const category = categoryById.get(e.pay_category_id);
+    const hours = computeWorkedMinutes({
+      startTime: e.start_time,
+      endTime: e.end_time,
+      breakStart: e.break_start,
+      breakEnd: e.break_end,
+    }) / 60;
+    return {
+      id: e.id,
+      categoryName: category?.name ?? "(不明な区分)",
+      startTime: e.start_time,
+      endTime: e.end_time,
+      hours,
+      amount: Math.round(hours * (category?.rate ?? 0)),
+    };
+  });
+
+  return { lessons: lessonSummaries, shifts: shiftSummaries };
 }
 
 export interface PayrollResult {
