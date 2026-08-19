@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { upsertPayEntry } from "@/lib/staff-self";
-import { PAY_UNIT_LABEL, type PayCategory, type PayEntry } from "@/lib/types";
+import type { PayCategory, PayEntry } from "@/lib/types";
 
 export default function PayEntryForm({
   payCategories,
@@ -62,41 +62,39 @@ export default function PayEntryForm({
       {error && <p className="text-sm text-red-600">{error}</p>}
       {saved && <p className="text-sm text-green-600">保存しました。</p>}
 
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-neutral-200 text-left text-neutral-500 dark:border-neutral-800">
-            <th className="py-2 pr-4">区分</th>
-            <th className="py-2 pr-4">単価</th>
-            <th className="py-2 pr-4">{"実績(時間 or 回数)"}</th>
-            <th className="py-2 pr-4">小計</th>
-          </tr>
-        </thead>
-        <tbody>
-          {payCategories.map((c) => (
-            <tr key={c.id} className="border-b border-neutral-100 dark:border-neutral-900">
-              <td className="py-2 pr-4">
-                {c.name}
-                <span className="ml-1 text-xs text-neutral-400">({PAY_UNIT_LABEL[c.unit_type]})</span>
-              </td>
-              <td className="py-2 pr-4">¥{c.rate.toLocaleString()}</td>
-              <td className="py-2 pr-4">
+      <div className="flex flex-col gap-3">
+        {payCategories.map((c) => {
+          const isHourly = c.unit_type === "hourly";
+          const quantity = quantities[c.id] ?? 0;
+          return (
+            <div key={c.id} className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="font-semibold">{c.name}</span>
+                <span className="text-xs text-neutral-400">
+                  {isHourly ? "時給" : "1回あたり"} ¥{c.rate.toLocaleString()}
+                </span>
+              </div>
+              <label className="mt-2 flex flex-col gap-1 text-sm">
+                {isHourly ? "働いた時間(合計・時間)" : "行った回数"}
                 <input
                   type="number"
                   min={0}
-                  step={c.unit_type === "hourly" ? 0.25 : 1}
-                  value={quantities[c.id] ?? 0}
+                  step={isHourly ? 0.25 : 1}
+                  value={quantity}
                   onFocus={(e) => e.target.select()}
                   onChange={(e) =>
                     setQuantities((prev) => ({ ...prev, [c.id]: Number(e.target.value) }))
                   }
-                  className="w-24 rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
+                  className="w-32 rounded-lg border border-neutral-200 px-3 py-2 text-base dark:border-neutral-800"
                 />
-              </td>
-              <td className="py-2 pr-4">¥{((quantities[c.id] ?? 0) * c.rate).toLocaleString()}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+              </label>
+              <p className="mt-2 text-sm text-neutral-500">
+                小計: ¥{(quantity * c.rate).toLocaleString()}
+              </p>
+            </div>
+          );
+        })}
+      </div>
 
       <p className="text-sm font-semibold">当月の支給額計: ¥{total.toLocaleString()}</p>
 
