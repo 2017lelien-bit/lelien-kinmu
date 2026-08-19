@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { calculatePayroll, generatePayslip, sendPayslipEmail, type PayrollResult } from "@/lib/payroll";
+import { calculatePayroll, deletePayslip, generatePayslip, sendPayslipEmail, type PayrollResult } from "@/lib/payroll";
 import { currentPayPeriod } from "@/lib/date";
 import type { CommuteType, StaffPayslip } from "@/lib/types";
 
@@ -27,6 +27,7 @@ export default function PayrollPanel({
   const [calculating, setCalculating] = useState(false);
   const [creating, setCreating] = useState(false);
   const [sendingId, setSendingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function handleCalculate() {
     setCalculating(true);
@@ -66,6 +67,18 @@ export default function PayrollPanel({
     setError(null);
     const result = await sendPayslipEmail(payslipId);
     setSendingId(null);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    router.refresh();
+  }
+
+  async function handleDelete(payslipId: string) {
+    setDeletingId(payslipId);
+    setError(null);
+    const result = await deletePayslip(payslipId);
+    setDeletingId(null);
     if (!result.ok) {
       setError(result.error);
       return;
@@ -190,6 +203,13 @@ export default function PayrollPanel({
                   className="underline disabled:opacity-40"
                 >
                   {sendingId === p.id ? "送信中..." : p.sent_at ? "再送信する" : "明細をメール送信する"}
+                </button>
+                <button
+                  onClick={() => handleDelete(p.id)}
+                  disabled={deletingId === p.id}
+                  className="text-red-600 underline disabled:opacity-40"
+                >
+                  {deletingId === p.id ? "削除中..." : "削除"}
                 </button>
               </li>
             ))}

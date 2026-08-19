@@ -259,6 +259,26 @@ export async function exportPayrollCsv(periodStart: string): Promise<ActionResul
   return { ok: true, data: `﻿${csv}` };
 }
 
+export async function deletePayslip(payslipId: string): Promise<ActionResult> {
+  const adminCheck = await requireAdmin();
+  if (adminCheck) return adminCheck;
+
+  const admin = createAdminClient();
+  const { data: payslip, error: fetchError } = await admin
+    .from("staff_payslips")
+    .select("staff_id")
+    .eq("id", payslipId)
+    .maybeSingle();
+  if (fetchError || !payslip) return { ok: false, error: "明細が見つかりませんでした。" };
+
+  const { error } = await admin.from("staff_payslips").delete().eq("id", payslipId);
+  if (error) return { ok: false, error: "削除に失敗しました。" };
+
+  revalidatePath(`/staff/admin/staff/${payslip.staff_id}`);
+  revalidatePath("/staff/mypage");
+  return { ok: true, data: undefined };
+}
+
 export async function sendPayslipEmail(payslipId: string): Promise<ActionResult> {
   const adminCheck = await requireAdmin();
   if (adminCheck) return adminCheck;
