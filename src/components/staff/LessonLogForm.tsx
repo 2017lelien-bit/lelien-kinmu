@@ -167,34 +167,38 @@ export default function LessonLogForm({ entries, staffId }: { entries: LessonLog
         )}
       </div>
 
-      <div className="flex flex-col gap-2 border-t border-neutral-100 pt-4 dark:border-neutral-900">
-        {visibleEntries.length === 0 ? (
-          <p className="text-sm text-neutral-400">登録されたレッスンはありません。</p>
-        ) : (
-          <ul className="flex flex-col gap-2 text-sm">
-            {visibleEntries.map((e) => (
-              <li key={e.id} className="flex flex-wrap items-center gap-3 border-b border-neutral-100 pb-2 dark:border-neutral-900">
-                <span>{e.entry_date}</span>
-                {e.start_time && <span>{e.start_time.slice(0, 5)}〜</span>}
-                <span>{e.lesson_name}</span>
-                <span>{e.duration_minutes}分</span>
-                <span>{e.headcount}人</span>
-                {e.note && <span className="text-neutral-400">{e.note}</span>}
-                <button onClick={() => startEdit(e)} className="underline">
-                  編集
-                </button>
-                <button
-                  onClick={() => handleDelete(e.id)}
-                  disabled={deletingId === e.id}
-                  className="text-red-600 underline disabled:opacity-40"
-                >
-                  {deletingId === e.id ? "削除中..." : "削除"}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      {/* 管理者の代理入力では、過去の一覧を出すと画面が煩雑になるため入力欄だけにする。
+          スタッフ本人の画面では、自分の未承認レッスンの一覧を見せる。 */}
+      {!staffId && (
+        <div className="flex flex-col gap-2 border-t border-neutral-100 pt-4 dark:border-neutral-900">
+          {visibleEntries.length === 0 ? (
+            <p className="text-sm text-neutral-400">登録されたレッスンはありません。</p>
+          ) : (
+            <ul className="flex flex-col gap-2 text-sm">
+              {visibleEntries.map((e) => (
+                <li key={e.id} className="flex flex-wrap items-center gap-3 border-b border-neutral-100 pb-2 dark:border-neutral-900">
+                  <span>{e.entry_date}</span>
+                  {e.start_time && <span>{e.start_time.slice(0, 5)}〜</span>}
+                  <span>{e.lesson_name}</span>
+                  <span>{e.duration_minutes}分</span>
+                  <span>{e.headcount}人</span>
+                  {e.note && <span className="text-neutral-400">{e.note}</span>}
+                  <button onClick={() => startEdit(e)} className="underline">
+                    編集
+                  </button>
+                  <button
+                    onClick={() => handleDelete(e.id)}
+                    disabled={deletingId === e.id}
+                    className="text-red-600 underline disabled:opacity-40"
+                  >
+                    {deletingId === e.id ? "削除中..." : "削除"}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }

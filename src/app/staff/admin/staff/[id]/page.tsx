@@ -86,9 +86,7 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
 
       {(payCategories.length > 0 || payRateRules.length > 0) && (
         <section className="flex flex-col gap-4">
-          <h2 className="text-lg font-semibold">
-            実績の代理入力(本人がアプリを開けない場合。今期: {periodStart}〜{periodEnd})
-          </h2>
+          <h2 className="text-lg font-semibold">実績の代理入力(本人がアプリを開けない場合)</h2>
           {payCategories.length > 0 && (
             <PayEntryForm
               payCategories={payCategories}
