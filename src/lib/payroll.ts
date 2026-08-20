@@ -75,18 +75,23 @@ export interface TodaySummary {
   shifts: TodayShiftSummary[];
 }
 
-// 管理者が「本日の確認」で内容を一目で見られるように、その日のレッスンと出退勤をまとめて金額付きで返す。
-export async function getTodaySummary(staffId: string): Promise<TodaySummary> {
-  const adminCheck = await requireAdmin();
-  if (adminCheck) return { lessons: [], shifts: [] };
-
-  const today = todayJstDateString();
+async function buildSummaryForRange(staffId: string, startDate: string, endDate: string): Promise<TodaySummary> {
   const admin = createAdminClient();
 
   const [{ data: lessons }, { data: rules }, { data: timeEntries }, { data: categories }] = await Promise.all([
-    admin.from("lesson_log_entries").select("*").eq("staff_id", staffId).eq("entry_date", today),
+    admin
+      .from("lesson_log_entries")
+      .select("*")
+      .eq("staff_id", staffId)
+      .gte("entry_date", startDate)
+      .lte("entry_date", endDate),
     admin.from("pay_rate_rules").select("*").eq("staff_id", staffId),
-    admin.from("time_log_entries").select("*").eq("staff_id", staffId).eq("entry_date", today),
+    admin
+      .from("time_log_entries")
+      .select("*")
+      .eq("staff_id", staffId)
+      .gte("entry_date", startDate)
+      .lte("entry_date", endDate),
     admin.from("pay_categories").select("id, name, rate").eq("staff_id", staffId),
   ]);
 
@@ -132,7 +137,27 @@ export async function getTodaySummary(staffId: string): Promise<TodaySummary> {
     };
   });
 
+  lessonSummaries.sort((a, b) => b.entryDate.localeCompare(a.entryDate));
+  shiftSummaries.sort((a, b) => b.entryDate.localeCompare(a.entryDate));
+
   return { lessons: lessonSummaries, shifts: shiftSummaries };
+}
+
+// 管理者が「本日の確認」で内容を一目で見られるように、その日のレッスンと出退勤をまとめて金額付きで返す。
+export async function getTodaySummary(staffId: string): Promise<TodaySummary> {
+  const adminCheck = await requireAdmin();
+  if (adminCheck) return { lessons: [], shifts: [] };
+
+  const today = todayJstDateString();
+  return buildSummaryForRange(staffId, today, today);
+}
+
+// 管理者が過去の実績をまとめて見て、間違いにすぐ気づけるように、任意の期間のレッスンと出退勤を返す。
+export async function getPeriodSummary(staffId: string, periodStart: string, periodEnd: string): Promise<TodaySummary> {
+  const adminCheck = await requireAdmin();
+  if (adminCheck) return { lessons: [], shifts: [] };
+
+  return buildSummaryForRange(staffId, periodStart, periodEnd);
 }
 
 export interface PayrollResult {

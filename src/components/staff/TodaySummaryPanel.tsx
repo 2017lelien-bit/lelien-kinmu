@@ -3,11 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { setLessonLogEntryApproval } from "@/lib/staff-admin";
-import { updateLessonLogEntry } from "@/lib/lesson-log";
-import { updateTimeLogEntry } from "@/lib/time-log";
+import { updateLessonLogEntry, deleteLessonLogEntry } from "@/lib/lesson-log";
+import { updateTimeLogEntry, deleteTimeLogEntry } from "@/lib/time-log";
+import { getPeriodSummary, type TodayLessonSummary, type TodayShiftSummary } from "@/lib/payroll";
 import { LESSON_NAMES } from "@/lib/types";
-import { payPeriodForDate } from "@/lib/date";
-import type { TodayLessonSummary, TodayShiftSummary } from "@/lib/payroll";
+import { payPeriodForDate, currentPayPeriod, payPeriodEnd } from "@/lib/date";
 
 export default function TodaySummaryPanel({
   staffId,
@@ -25,10 +25,62 @@ export default function TodaySummaryPanel({
   const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
   const [shiftEditValues, setShiftEditValues] = useState({ startTime: "", endTime: "", breakStart: "", breakEnd: "" });
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const lessonsTotal = lessons.reduce((sum, l) => sum + l.rate, 0);
-  const shiftsTotal = shifts.reduce((sum, s) => sum + s.amount, 0);
-  const hasLeLienShift = shifts.some((s) => s.categoryName.toLowerCase().replace(/\s+/g, "").includes("lelien"));
+  // 「本日」以外の期間もまとめて確認・訂正できるように、指定期間で見ている間はこちらのデータを表示する。
+  const [viewingPeriod, setViewingPeriod] = useState<{ periodStart: string; periodEnd: string } | null>(null);
+  const [viewPeriodStart, setViewPeriodStart] = useState(currentPayPeriod().periodStart);
+  const [viewData, setViewData] = useState<{ lessons: TodayLessonSummary[]; shifts: TodayShiftSummary[] } | null>(null);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  const displayLessons = viewingPeriod ? (viewData?.lessons ?? []) : lessons;
+  const displayShifts = viewingPeriod ? (viewData?.shifts ?? []) : shifts;
+
+  async function handleShowPeriod() {
+    setLoadingHistory(true);
+    setError(null);
+    const periodEnd = payPeriodEnd(viewPeriodStart);
+    const data = await getPeriodSummary(staffId, viewPeriodStart, periodEnd);
+    setLoadingHistory(false);
+    setViewingPeriod({ periodStart: viewPeriodStart, periodEnd });
+    setViewData(data);
+  }
+
+  function handleBackToToday() {
+    setViewingPeriod(null);
+    setViewData(null);
+  }
+
+  async function handleDeleteLesson(id: string) {
+    setDeletingId(id);
+    setError(null);
+    const result = await deleteLessonLogEntry(id, staffId);
+    setDeletingId(null);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    if (viewingPeriod) await handleShowPeriod();
+    router.refresh();
+  }
+
+  async function handleDeleteShift(s: TodayShiftSummary) {
+    setDeletingId(s.id);
+    setError(null);
+    const { periodStart, periodEnd } = payPeriodForDate(s.entryDate);
+    const result = await deleteTimeLogEntry(s.id, s.payCategoryId, periodStart, periodEnd, staffId);
+    setDeletingId(null);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    if (viewingPeriod) await handleShowPeriod();
+    router.refresh();
+  }
+
+  const lessonsTotal = displayLessons.reduce((sum, l) => sum + l.rate, 0);
+  const shiftsTotal = displayShifts.reduce((sum, s) => sum + s.amount, 0);
+  const hasLeLienShift = displayShifts.some((s) => s.categoryName.toLowerCase().replace(/\s+/g, "").includes("lelien"));
 
   async function handleApprove(lessonId: string) {
     setSavingId(lessonId);
@@ -39,6 +91,7 @@ export default function TodaySummaryPanel({
       setError(result.error);
       return;
     }
+    if (viewingPeriod) await handleShowPeriod();
     router.refresh();
   }
 
@@ -73,6 +126,7 @@ export default function TodaySummaryPanel({
       return;
     }
     setEditingId(null);
+    if (viewingPeriod) await handleShowPeriod();
     router.refresh();
   }
 
@@ -111,28 +165,51 @@ export default function TodaySummaryPanel({
       return;
     }
     setEditingShiftId(null);
+    if (viewingPeriod) await handleShowPeriod();
     router.refresh();
-  }
-
-  if (lessons.length === 0 && shifts.length === 0) {
-    return (
-      <div className="rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
-        <h2 className="text-sm font-semibold">本日の実績</h2>
-        <p className="mt-2 text-sm text-neutral-400">本日の入力はまだありません。</p>
-      </div>
-    );
   }
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
-      <h2 className="text-sm font-semibold">本日の実績</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold">{viewingPeriod ? `${viewingPeriod.periodStart}〜${viewingPeriod.periodEnd}の実績` : "本日の実績"}</h2>
+        {viewingPeriod && (
+          <button onClick={handleBackToToday} className="text-xs underline">
+            本日の表示に戻す
+          </button>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-end gap-2 border-b border-neutral-100 pb-3 text-sm dark:border-neutral-900">
+        <label className="flex flex-col gap-1">
+          期間を選んで確認(16日締め)
+          <input
+            type="date"
+            value={viewPeriodStart}
+            onChange={(e) => setViewPeriodStart(e.target.value)}
+            className="rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
+          />
+        </label>
+        <button
+          onClick={handleShowPeriod}
+          disabled={loadingHistory}
+          className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs disabled:opacity-40 dark:border-neutral-700"
+        >
+          {loadingHistory ? "読込中..." : "この期間の実績を確認する"}
+        </button>
+      </div>
+
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      {lessons.length > 0 && (
+      {displayLessons.length === 0 && displayShifts.length === 0 && (
+        <p className="text-sm text-neutral-400">{viewingPeriod ? "この期間の入力はありません。" : "本日の入力はまだありません。"}</p>
+      )}
+
+      {displayLessons.length > 0 && (
         <div className="flex flex-col gap-2">
-          <p className="text-xs text-neutral-500">レッスン {lessons.length}本(合計 ¥{lessonsTotal.toLocaleString()})</p>
+          <p className="text-xs text-neutral-500">レッスン {displayLessons.length}本(合計 ¥{lessonsTotal.toLocaleString()})</p>
           <ul className="flex flex-col gap-2 text-sm">
-            {lessons.map((l) =>
+            {displayLessons.map((l) =>
               editingId === l.id ? (
                 <li key={l.id} className="flex flex-wrap items-center gap-2 border-b border-neutral-100 pb-2 dark:border-neutral-900">
                   <input
@@ -183,6 +260,7 @@ export default function TodaySummaryPanel({
                 </li>
               ) : (
                 <li key={l.id} className="flex flex-wrap items-center gap-3 border-b border-neutral-100 pb-2 dark:border-neutral-900">
+                  {viewingPeriod && <span className="text-neutral-400">{l.entryDate}</span>}
                   {l.startTime && <span>{l.startTime.slice(0, 5)}〜</span>}
                   <span>{l.lessonName}</span>
                   <span>{l.headcount}人</span>
@@ -203,6 +281,13 @@ export default function TodaySummaryPanel({
                   <button onClick={() => startEdit(l)} className="ml-auto text-xs underline">
                     訂正する
                   </button>
+                  <button
+                    onClick={() => handleDeleteLesson(l.id)}
+                    disabled={deletingId === l.id}
+                    className="text-xs text-red-600 underline disabled:opacity-40"
+                  >
+                    {deletingId === l.id ? "削除中..." : "削除"}
+                  </button>
                 </li>
               ),
             )}
@@ -210,11 +295,11 @@ export default function TodaySummaryPanel({
         </div>
       )}
 
-      {shifts.length > 0 && (
+      {displayShifts.length > 0 && (
         <div className="flex flex-col gap-2 border-t border-neutral-100 pt-3 dark:border-neutral-900">
           <p className="text-xs text-neutral-500">出退勤(合計 ¥{shiftsTotal.toLocaleString()})</p>
           <ul className="flex flex-col gap-2 text-sm">
-            {shifts.map((s) =>
+            {displayShifts.map((s) =>
               editingShiftId === s.id ? (
                 <li key={s.id} className="flex flex-wrap items-center gap-2 border-b border-neutral-100 pb-2 dark:border-neutral-900">
                   <span>{s.categoryName}</span>
@@ -259,6 +344,7 @@ export default function TodaySummaryPanel({
                 </li>
               ) : (
                 <li key={s.id} className="flex flex-wrap items-center gap-3">
+                  {viewingPeriod && <span className="text-neutral-400">{s.entryDate}</span>}
                   <span>{s.categoryName}</span>
                   <span>
                     {s.startTime.slice(0, 5)}〜{s.endTime.slice(0, 5)}({s.hours}時間)
@@ -266,6 +352,13 @@ export default function TodaySummaryPanel({
                   <span className="font-semibold">¥{s.amount.toLocaleString()}</span>
                   <button onClick={() => startEditShift(s)} className="ml-auto text-xs underline">
                     訂正する
+                  </button>
+                  <button
+                    onClick={() => handleDeleteShift(s)}
+                    disabled={deletingId === s.id}
+                    className="text-xs text-red-600 underline disabled:opacity-40"
+                  >
+                    {deletingId === s.id ? "削除中..." : "削除"}
                   </button>
                 </li>
               ),
