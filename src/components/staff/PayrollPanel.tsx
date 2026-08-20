@@ -40,8 +40,12 @@ export default function PayrollPanel({
       return;
     }
     setPreview(result.data);
+    // 出退勤記録・レッスン実績から実際に働いた日数を自動で数え、通勤費もそこから自動計算する。
+    // 手入力が必要な場合(実績を入力していない日も出勤扱いにしたい等)は、後から出勤日数欄を直せる。
+    const autoDaysWorked = result.data.daysWorked;
+    setDaysWorked(autoDaysWorked);
     if (commuteType === "fixed") setCommuteAllowance(commuteAmount);
-    else if (commuteType === "per_day") setCommuteAllowance(commuteAmount * daysWorked);
+    else if (commuteType === "per_day") setCommuteAllowance(commuteAmount * autoDaysWorked);
   }
 
   function handleDaysWorkedChange(value: number) {
@@ -160,7 +164,7 @@ export default function PayrollPanel({
               />
             </label>
             <label className="flex flex-col gap-1">
-              出勤日数
+              出勤日数(実績から自動計算・修正可)
               <input
                 type="number"
                 min={0}

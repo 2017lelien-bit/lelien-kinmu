@@ -138,6 +138,7 @@ export async function getTodaySummary(staffId: string): Promise<TodaySummary> {
 export interface PayrollResult {
   breakdown: PayrollBreakdown;
   grossAmount: number;
+  daysWorked: number;
 }
 
 // 支給額計(内訳)を計算する。通勤費・税額はこの時点では含めない。
@@ -150,17 +151,30 @@ export async function calculatePayroll(staffId: string, periodStart: string): Pr
   const admin = createAdminClient();
   const periodEnd = payPeriodEnd(periodStart);
 
-  const [{ data: categories }, { data: entries }, { data: rules }, { data: logEntries }] = await Promise.all([
-    admin.from("pay_categories").select("*").eq("staff_id", staffId).order("sort_order", { ascending: true }),
-    admin.from("pay_entries").select("*").eq("staff_id", staffId).eq("period_start", periodStart),
-    admin.from("pay_rate_rules").select("*").eq("staff_id", staffId),
-    admin
-      .from("lesson_log_entries")
-      .select("*")
-      .eq("staff_id", staffId)
-      .gte("entry_date", periodStart)
-      .lte("entry_date", periodEnd),
-  ]);
+  const [{ data: categories }, { data: entries }, { data: rules }, { data: logEntries }, { data: timeEntries }] =
+    await Promise.all([
+      admin.from("pay_categories").select("*").eq("staff_id", staffId).order("sort_order", { ascending: true }),
+      admin.from("pay_entries").select("*").eq("staff_id", staffId).eq("period_start", periodStart),
+      admin.from("pay_rate_rules").select("*").eq("staff_id", staffId),
+      admin
+        .from("lesson_log_entries")
+        .select("*")
+        .eq("staff_id", staffId)
+        .gte("entry_date", periodStart)
+        .lte("entry_date", periodEnd),
+      admin
+        .from("time_log_entries")
+        .select("entry_date")
+        .eq("staff_id", staffId)
+        .gte("entry_date", periodStart)
+        .lte("entry_date", periodEnd),
+    ]);
+
+  // 出勤日数は、出退勤記録またはレッスン実績のいずれかが入っている日の実日数を自動で数える。
+  const workedDates = new Set<string>();
+  for (const e of timeEntries ?? []) workedDates.add(e.entry_date as string);
+  for (const e of logEntries ?? []) workedDates.add(e.entry_date as string);
+  const daysWorked = workedDates.size;
 
   const entryByCategory = new Map((entries ?? []).map((e) => [e.pay_category_id as string, e.quantity as number]));
   const lines = (categories ?? []).map((c) => {
@@ -195,7 +209,7 @@ export async function calculatePayroll(staffId: string, periodStart: string): Pr
   const grossAmount =
     lines.reduce((sum, l) => sum + l.subtotal, 0) + lessonLines.reduce((sum, l) => sum + l.rate, 0);
 
-  return { ok: true, data: { breakdown: { lines, lessonLines }, grossAmount } };
+  return { ok: true, data: { breakdown: { lines, lessonLines }, grossAmount, daysWorked } };
 }
 
 export async function generatePayslip(
