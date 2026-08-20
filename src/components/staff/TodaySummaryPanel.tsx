@@ -13,10 +13,13 @@ export default function TodaySummaryPanel({
   staffId,
   lessons,
   shifts,
+  headcountMatters,
 }: {
   staffId: string;
   lessons: TodayLessonSummary[];
   shifts: TodayShiftSummary[];
+  // 単価が人数で変わらないスタッフは、参加人数は常に1(意味を持たない値)なので表示・編集させない。
+  headcountMatters: boolean;
 }) {
   const router = useRouter();
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -263,7 +266,7 @@ export default function TodaySummaryPanel({
                   {viewingPeriod && <span className="text-neutral-400">{l.entryDate}</span>}
                   {l.startTime && <span>{l.startTime.slice(0, 5)}〜</span>}
                   <span>{l.lessonName}</span>
-                  <span>{l.headcount}人</span>
+                  {headcountMatters && <span>{l.headcount}人</span>}
                   <span className="font-semibold">
                     {l.rate > 0 ? `¥${l.rate.toLocaleString()}` : "該当ルールなし"}
                   </span>

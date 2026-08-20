@@ -55,7 +55,12 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
         acknowledgedAt={submission.acknowledgedAt}
       />
 
-      <TodaySummaryPanel staffId={profile.id} lessons={todaySummary.lessons} shifts={todaySummary.shifts} />
+      <TodaySummaryPanel
+        staffId={profile.id}
+        lessons={todaySummary.lessons}
+        shifts={todaySummary.shifts}
+        headcountMatters={headcountMatters}
+      />
 
       <dl className="grid grid-cols-[10rem_1fr] gap-y-2 text-sm">
         <dt className="text-neutral-500">権限</dt>
