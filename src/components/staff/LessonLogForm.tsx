@@ -19,6 +19,9 @@ export default function LessonLogForm({ entries, staffId }: { entries: LessonLog
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  // 承認済みのものは管理者側でのみ確認できればよく、ここに残すと画面が見づらくなるため表示しない。
+  const visibleEntries = entries.filter((e) => !e.approved);
+
   function resetForm() {
     setEditingId(null);
     setEntryDate(todayJstDateString());
@@ -165,11 +168,11 @@ export default function LessonLogForm({ entries, staffId }: { entries: LessonLog
       </div>
 
       <div className="flex flex-col gap-2 border-t border-neutral-100 pt-4 dark:border-neutral-900">
-        {entries.length === 0 ? (
+        {visibleEntries.length === 0 ? (
           <p className="text-sm text-neutral-400">登録されたレッスンはありません。</p>
         ) : (
           <ul className="flex flex-col gap-2 text-sm">
-            {entries.map((e) => (
+            {visibleEntries.map((e) => (
               <li key={e.id} className="flex flex-wrap items-center gap-3 border-b border-neutral-100 pb-2 dark:border-neutral-900">
                 <span>{e.entry_date}</span>
                 {e.start_time && <span>{e.start_time.slice(0, 5)}〜</span>}
@@ -177,22 +180,16 @@ export default function LessonLogForm({ entries, staffId }: { entries: LessonLog
                 <span>{e.duration_minutes}分</span>
                 <span>{e.headcount}人</span>
                 {e.note && <span className="text-neutral-400">{e.note}</span>}
-                {e.approved ? (
-                  <span className="text-neutral-400">承認済み(変更不可)</span>
-                ) : (
-                  <>
-                    <button onClick={() => startEdit(e)} className="underline">
-                      編集
-                    </button>
-                    <button
-                      onClick={() => handleDelete(e.id)}
-                      disabled={deletingId === e.id}
-                      className="text-red-600 underline disabled:opacity-40"
-                    >
-                      {deletingId === e.id ? "削除中..." : "削除"}
-                    </button>
-                  </>
-                )}
+                <button onClick={() => startEdit(e)} className="underline">
+                  編集
+                </button>
+                <button
+                  onClick={() => handleDelete(e.id)}
+                  disabled={deletingId === e.id}
+                  className="text-red-600 underline disabled:opacity-40"
+                >
+                  {deletingId === e.id ? "削除中..." : "削除"}
+                </button>
               </li>
             ))}
           </ul>
