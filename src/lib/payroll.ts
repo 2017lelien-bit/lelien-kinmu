@@ -59,9 +59,13 @@ export interface TodayLessonSummary {
 
 export interface TodayShiftSummary {
   id: string;
+  payCategoryId: string;
+  entryDate: string;
   categoryName: string;
   startTime: string;
   endTime: string;
+  breakStart: string | null;
+  breakEnd: string | null;
   hours: number;
   amount: number;
 }
@@ -116,9 +120,13 @@ export async function getTodaySummary(staffId: string): Promise<TodaySummary> {
     }) / 60;
     return {
       id: e.id,
+      payCategoryId: e.pay_category_id,
+      entryDate: e.entry_date,
       categoryName: category?.name ?? "(不明な区分)",
       startTime: e.start_time,
       endTime: e.end_time,
+      breakStart: e.break_start,
+      breakEnd: e.break_end,
       hours,
       amount: Math.round(hours * (category?.rate ?? 0)),
     };

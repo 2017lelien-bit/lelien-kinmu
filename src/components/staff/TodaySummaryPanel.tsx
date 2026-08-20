@@ -4,7 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { setLessonLogEntryApproval } from "@/lib/staff-admin";
 import { updateLessonLogEntry } from "@/lib/lesson-log";
+import { updateTimeLogEntry } from "@/lib/time-log";
 import { LESSON_NAMES } from "@/lib/types";
+import { payPeriodForDate } from "@/lib/date";
 import type { TodayLessonSummary, TodayShiftSummary } from "@/lib/payroll";
 
 export default function TodaySummaryPanel({
@@ -20,6 +22,8 @@ export default function TodaySummaryPanel({
   const [savingId, setSavingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState({ lessonName: "", durationMinutes: 60, headcount: 1, startTime: "" });
+  const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
+  const [shiftEditValues, setShiftEditValues] = useState({ startTime: "", endTime: "", breakStart: "", breakEnd: "" });
   const [error, setError] = useState<string | null>(null);
 
   const lessonsTotal = lessons.reduce((sum, l) => sum + l.rate, 0);
@@ -69,6 +73,44 @@ export default function TodaySummaryPanel({
       return;
     }
     setEditingId(null);
+    router.refresh();
+  }
+
+  function startEditShift(s: TodayShiftSummary) {
+    setError(null);
+    setEditingShiftId(s.id);
+    setShiftEditValues({
+      startTime: s.startTime.slice(0, 5),
+      endTime: s.endTime.slice(0, 5),
+      breakStart: s.breakStart?.slice(0, 5) ?? "",
+      breakEnd: s.breakEnd?.slice(0, 5) ?? "",
+    });
+  }
+
+  async function handleSaveShiftEdit(s: TodayShiftSummary) {
+    setSavingId(s.id);
+    setError(null);
+    const { periodStart, periodEnd } = payPeriodForDate(s.entryDate);
+    const result = await updateTimeLogEntry(
+      s.id,
+      {
+        payCategoryId: s.payCategoryId,
+        entryDate: s.entryDate,
+        startTime: shiftEditValues.startTime,
+        endTime: shiftEditValues.endTime,
+        breakStart: shiftEditValues.breakStart || undefined,
+        breakEnd: shiftEditValues.breakEnd || undefined,
+        periodStart,
+        periodEnd,
+      },
+      staffId,
+    );
+    setSavingId(null);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setEditingShiftId(null);
     router.refresh();
   }
 
@@ -171,16 +213,63 @@ export default function TodaySummaryPanel({
       {shifts.length > 0 && (
         <div className="flex flex-col gap-2 border-t border-neutral-100 pt-3 dark:border-neutral-900">
           <p className="text-xs text-neutral-500">出退勤(合計 ¥{shiftsTotal.toLocaleString()})</p>
-          <ul className="flex flex-col gap-1 text-sm">
-            {shifts.map((s) => (
-              <li key={s.id} className="flex flex-wrap items-center gap-3">
-                <span>{s.categoryName}</span>
-                <span>
-                  {s.startTime.slice(0, 5)}〜{s.endTime.slice(0, 5)}({s.hours}時間)
-                </span>
-                <span className="font-semibold">¥{s.amount.toLocaleString()}</span>
-              </li>
-            ))}
+          <ul className="flex flex-col gap-2 text-sm">
+            {shifts.map((s) =>
+              editingShiftId === s.id ? (
+                <li key={s.id} className="flex flex-wrap items-center gap-2 border-b border-neutral-100 pb-2 dark:border-neutral-900">
+                  <span>{s.categoryName}</span>
+                  出勤
+                  <input
+                    type="time"
+                    value={shiftEditValues.startTime}
+                    onChange={(e) => setShiftEditValues((v) => ({ ...v, startTime: e.target.value }))}
+                    className="rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
+                  />
+                  退勤
+                  <input
+                    type="time"
+                    value={shiftEditValues.endTime}
+                    onChange={(e) => setShiftEditValues((v) => ({ ...v, endTime: e.target.value }))}
+                    className="rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
+                  />
+                  休憩
+                  <input
+                    type="time"
+                    value={shiftEditValues.breakStart}
+                    onChange={(e) => setShiftEditValues((v) => ({ ...v, breakStart: e.target.value }))}
+                    className="rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
+                  />
+                  〜
+                  <input
+                    type="time"
+                    value={shiftEditValues.breakEnd}
+                    onChange={(e) => setShiftEditValues((v) => ({ ...v, breakEnd: e.target.value }))}
+                    className="rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
+                  />
+                  <button
+                    onClick={() => handleSaveShiftEdit(s)}
+                    disabled={savingId === s.id}
+                    className="rounded-lg bg-neutral-900 px-3 py-1 text-xs text-white disabled:opacity-40 dark:bg-white dark:text-black"
+                  >
+                    {savingId === s.id ? "保存中..." : "保存"}
+                  </button>
+                  <button onClick={() => setEditingShiftId(null)} className="text-xs underline">
+                    キャンセル
+                  </button>
+                </li>
+              ) : (
+                <li key={s.id} className="flex flex-wrap items-center gap-3">
+                  <span>{s.categoryName}</span>
+                  <span>
+                    {s.startTime.slice(0, 5)}〜{s.endTime.slice(0, 5)}({s.hours}時間)
+                  </span>
+                  <span className="font-semibold">¥{s.amount.toLocaleString()}</span>
+                  <button onClick={() => startEditShift(s)} className="ml-auto text-xs underline">
+                    訂正する
+                  </button>
+                </li>
+              ),
+            )}
           </ul>
           {hasLeLienShift && (
             <p className="text-xs text-neutral-400">
