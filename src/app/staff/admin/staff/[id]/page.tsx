@@ -35,6 +35,7 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
   if (!detail) notFound();
 
   const { profile, payCategories, payRateRules } = detail;
+  const headcountMatters = payRateRules.some((r) => r.min_headcount !== null || r.max_headcount !== null);
   const hourlyCategories = payCategories.filter((c) => c.unit_type === "hourly");
   const timeLogEntriesByCategory = Object.fromEntries(
     await Promise.all(
@@ -95,7 +96,13 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
               staffId={profile.id}
             />
           )}
-          {payRateRules.length > 0 && <LessonLogForm entries={currentLessonLogEntries} staffId={profile.id} />}
+          {payRateRules.length > 0 && (
+            <LessonLogForm
+              entries={currentLessonLogEntries}
+              headcountMatters={headcountMatters}
+              staffId={profile.id}
+            />
+          )}
           {hourlyCategories.map((c) => (
             <TimeLogForm
               key={c.id}

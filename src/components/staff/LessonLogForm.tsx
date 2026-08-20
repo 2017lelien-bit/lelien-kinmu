@@ -6,13 +6,25 @@ import { addLessonLogEntry, deleteLessonLogEntry, updateLessonLogEntry } from "@
 import { todayJstDateString } from "@/lib/date";
 import { LESSON_NAMES, type LessonLogEntry } from "@/lib/types";
 
-export default function LessonLogForm({ entries, staffId }: { entries: LessonLogEntry[]; staffId?: string }) {
+export default function LessonLogForm({
+  entries,
+  headcountMatters,
+  staffId,
+}: {
+  entries: LessonLogEntry[];
+  // このスタッフの単価ルールが1件も人数で単価を変えていなければ、参加人数の入力は不要(常に同額)とみなし、
+  // 代わりに「本数」をまとめて入力できるようにする。単価ルールの中身自体はスタッフに見せられないため、
+  // この判定結果(true/false)だけをサーバー側で計算して渡す。
+  headcountMatters: boolean;
+  staffId?: string;
+}) {
   const router = useRouter();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [entryDate, setEntryDate] = useState(todayJstDateString());
   const [lessonName, setLessonName] = useState<string>(LESSON_NAMES[0]);
   const [durationMinutes, setDurationMinutes] = useState(60);
   const [headcount, setHeadcount] = useState(1);
+  const [quantity, setQuantity] = useState(1);
   const [startTime, setStartTime] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +40,7 @@ export default function LessonLogForm({ entries, staffId }: { entries: LessonLog
     setLessonName(LESSON_NAMES[0]);
     setDurationMinutes(60);
     setHeadcount(1);
+    setQuantity(1);
     setStartTime("");
     setNote("");
   }
@@ -46,6 +59,33 @@ export default function LessonLogForm({ entries, staffId }: { entries: LessonLog
   async function handleSubmit() {
     setSubmitting(true);
     setError(null);
+
+    if (!headcountMatters && !editingId) {
+      // 本数分、同じ内容のレッスン実績をまとめて作成する(重なり判定は1本ずつ行われる)。
+      for (let i = 0; i < quantity; i++) {
+        const result = await addLessonLogEntry(
+          {
+            entryDate,
+            lessonName,
+            durationMinutes,
+            headcount: 1,
+            startTime: startTime || undefined,
+            note: note || undefined,
+          },
+          staffId,
+        );
+        if (!result.ok) {
+          setSubmitting(false);
+          setError(result.error);
+          return;
+        }
+      }
+      setSubmitting(false);
+      resetForm();
+      router.refresh();
+      return;
+    }
+
     const input = {
       entryDate,
       lessonName,
@@ -118,17 +158,31 @@ export default function LessonLogForm({ entries, staffId }: { entries: LessonLog
             className="w-24 rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
           />
         </label>
-        <label className="flex flex-col gap-1 text-sm">
-          参加人数
-          <input
-            type="number"
-            min={1}
-            value={headcount}
-            onFocus={(e) => e.target.select()}
-            onChange={(e) => setHeadcount(Number(e.target.value))}
-            className="w-24 rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
-          />
-        </label>
+        {headcountMatters || editingId ? (
+          <label className="flex flex-col gap-1 text-sm">
+            参加人数
+            <input
+              type="number"
+              min={1}
+              value={headcount}
+              onFocus={(e) => e.target.select()}
+              onChange={(e) => setHeadcount(Number(e.target.value))}
+              className="w-24 rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
+            />
+          </label>
+        ) : (
+          <label className="flex flex-col gap-1 text-sm">
+            本数
+            <input
+              type="number"
+              min={1}
+              value={quantity}
+              onFocus={(e) => e.target.select()}
+              onChange={(e) => setQuantity(Number(e.target.value))}
+              className="w-24 rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
+            />
+          </label>
+        )}
         <label className="flex flex-col gap-1 text-sm">
           開始時刻(任意)
           <input
@@ -181,7 +235,7 @@ export default function LessonLogForm({ entries, staffId }: { entries: LessonLog
                   {e.start_time && <span>{e.start_time.slice(0, 5)}〜</span>}
                   <span>{e.lesson_name}</span>
                   <span>{e.duration_minutes}分</span>
-                  <span>{e.headcount}人</span>
+                  {headcountMatters && <span>{e.headcount}人</span>}
                   {e.note && <span className="text-neutral-400">{e.note}</span>}
                   <button onClick={() => startEdit(e)} className="underline">
                     編集

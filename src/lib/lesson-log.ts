@@ -26,6 +26,21 @@ export async function getOwnHasPayRateRules(): Promise<boolean> {
   return (count ?? 0) > 0;
 }
 
+// 単価ルールが1件でも人数によって単価を変えていれば、参加人数の入力は正確に必要。
+// 内容自体はスタッフに見せず、この判定結果だけを渡す。
+export async function getOwnHeadcountMatters(staffId?: string): Promise<boolean> {
+  const acting = await resolveActingStaffId(staffId);
+  if ("error" in acting) return true;
+
+  const admin = createAdminClient();
+  const { data: rules } = await admin
+    .from("pay_rate_rules")
+    .select("min_headcount, max_headcount")
+    .eq("staff_id", acting.id);
+
+  return (rules ?? []).some((r) => r.min_headcount !== null || r.max_headcount !== null);
+}
+
 export async function getOwnLessonLogEntries(
   periodStart: string,
   periodEnd: string,

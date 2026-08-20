@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getOwnPayCategories } from "@/lib/pay-categories";
-import { getOwnHasPayRateRules, getOwnLessonLogEntries } from "@/lib/lesson-log";
+import { getOwnHasPayRateRules, getOwnHeadcountMatters, getOwnLessonLogEntries } from "@/lib/lesson-log";
 import { getOwnPayEntries, getOwnPayslips, getOwnStaffProfile, getOwnSubmissionStatus } from "@/lib/staff-self";
 import { getOwnTimeLogEntries } from "@/lib/time-log";
 import { currentPayPeriod } from "@/lib/date";
@@ -17,14 +17,16 @@ export default async function StaffMyPage() {
 
   const { periodStart, periodEnd } = currentPayPeriod();
   const periodLabel = `${periodStart}〜${periodEnd}`;
-  const [payCategories, payEntries, hasPayRateRules, lessonLogEntries, payslips, submittedAt] = await Promise.all([
-    getOwnPayCategories(),
-    getOwnPayEntries(periodStart),
-    getOwnHasPayRateRules(),
-    getOwnLessonLogEntries(periodStart, periodEnd),
-    getOwnPayslips(),
-    getOwnSubmissionStatus(),
-  ]);
+  const [payCategories, payEntries, hasPayRateRules, headcountMatters, lessonLogEntries, payslips, submittedAt] =
+    await Promise.all([
+      getOwnPayCategories(),
+      getOwnPayEntries(periodStart),
+      getOwnHasPayRateRules(),
+      getOwnHeadcountMatters(),
+      getOwnLessonLogEntries(periodStart, periodEnd),
+      getOwnPayslips(),
+      getOwnSubmissionStatus(),
+    ]);
   const hasEntryInput = payCategories.length > 0 || hasPayRateRules;
   const hourlyCategories = payCategories.filter((c) => c.unit_type === "hourly");
   const timeLogEntriesByCategory = Object.fromEntries(
@@ -68,7 +70,7 @@ export default async function StaffMyPage() {
       {hasPayRateRules && (
         <section className="flex flex-col gap-2">
           <h2 className="text-lg font-semibold">今期のレッスン実績({periodLabel})</h2>
-          <LessonLogForm entries={lessonLogEntries} />
+          <LessonLogForm entries={lessonLogEntries} headcountMatters={headcountMatters} />
         </section>
       )}
 
