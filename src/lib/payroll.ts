@@ -48,6 +48,7 @@ function matchPayRateRule(rules: PayRateRule[], entry: { lessonName: string; dur
 
 export interface TodayLessonSummary {
   id: string;
+  entryDate: string;
   startTime: string | null;
   lessonName: string;
   durationMinutes: number;
@@ -95,6 +96,7 @@ export async function getTodaySummary(staffId: string): Promise<TodaySummary> {
     });
     return {
       id: l.id,
+      entryDate: l.entry_date,
       startTime: l.start_time,
       lessonName: l.lesson_name,
       durationMinutes: l.duration_minutes,

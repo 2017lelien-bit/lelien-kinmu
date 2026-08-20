@@ -96,6 +96,7 @@ export async function updateLessonLogEntry(
   },
   staffId?: string,
 ): Promise<ActionResult> {
+  const staffUser = await getStaffUser();
   const acting = await resolveActingStaffId(staffId);
   if ("error" in acting) return { ok: false, error: acting.error };
 
@@ -111,7 +112,10 @@ export async function updateLessonLogEntry(
     .eq("staff_id", acting.id)
     .maybeSingle();
   if (!existing) return { ok: false, error: "実績が見つかりません。" };
-  if (existing.approved) return { ok: false, error: "承認済みの実績は変更できません。管理者に取り消しを依頼してください。" };
+  // 承認済みの実績は、スタッフ本人は変更できない。管理者は訂正できるようにする。
+  if (existing.approved && staffUser?.role !== "admin") {
+    return { ok: false, error: "承認済みの実績は変更できません。管理者に訂正を依頼してください。" };
+  }
 
   const { error } = await admin
     .from("lesson_log_entries")
@@ -142,6 +146,7 @@ export async function updateLessonLogEntry(
 }
 
 export async function deleteLessonLogEntry(id: string, staffId?: string): Promise<ActionResult> {
+  const staffUser = await getStaffUser();
   const acting = await resolveActingStaffId(staffId);
   if ("error" in acting) return { ok: false, error: acting.error };
 
@@ -153,7 +158,9 @@ export async function deleteLessonLogEntry(id: string, staffId?: string): Promis
     .eq("staff_id", acting.id)
     .maybeSingle();
   if (!existing) return { ok: false, error: "実績が見つかりません。" };
-  if (existing.approved) return { ok: false, error: "承認済みの実績は削除できません。管理者に取り消しを依頼してください。" };
+  if (existing.approved && staffUser?.role !== "admin") {
+    return { ok: false, error: "承認済みの実績は削除できません。管理者に訂正を依頼してください。" };
+  }
 
   const { error } = await admin.from("lesson_log_entries").delete().eq("id", id).eq("staff_id", acting.id);
   if (error) return { ok: false, error: "削除に失敗しました。" };
