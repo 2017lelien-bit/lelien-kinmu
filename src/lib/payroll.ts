@@ -266,14 +266,12 @@ export async function generatePayslip(
   // 収入の出どころによって税の扱いが異なるため、それぞれ別に計算して合算する。
   // 区分(支払区分)からの収入 = 給与所得として、扶養設定に応じた月額表(甲欄)の算式で計算する(通勤費は非課税)。
   // レッスン実績からの収入 = 報酬・料金等として、一律10.21%で源泉徴収する(通勤費も課税対象に含む)。
-  // 両方の収入があるスタッフは、通勤費を支給額の比率で按分する。
+  // パートと業務委託が両方ある場合、通勤費は全額パート側(非課税)として扱う。業務委託のみの場合は、
+  // 従来通り通勤費も課税対象に含める(税理士確認済み)。
   const categoryGross = breakdown.lines.reduce((sum, l) => sum + l.subtotal, 0);
   const lessonGross = breakdown.lessonLines.reduce((sum, l) => sum + l.rate, 0);
 
-  const commuteForLessons =
-    categoryGross + lessonGross > 0
-      ? Math.round((input.commuteAllowance * lessonGross) / (categoryGross + lessonGross))
-      : 0;
+  const commuteForLessons = categoryGross > 0 ? 0 : input.commuteAllowance;
 
   const employeeTax =
     categoryGross > 0
