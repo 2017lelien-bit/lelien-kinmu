@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { setLessonLogEntryApproval } from "@/lib/staff-admin";
-import { updateLessonLogEntry, deleteLessonLogEntry } from "@/lib/lesson-log";
+import { addLessonLogEntry, updateLessonLogEntry, deleteLessonLogEntry } from "@/lib/lesson-log";
 import { updateTimeLogEntry, deleteTimeLogEntry } from "@/lib/time-log";
 import {
   getPeriodCategorySummary,
@@ -30,7 +30,14 @@ export default function TodaySummaryPanel({
   const router = useRouter();
   const [savingId, setSavingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editValues, setEditValues] = useState({ entryDate: "", lessonName: "", durationMinutes: 60, headcount: 1, startTime: "" });
+  const [editValues, setEditValues] = useState({
+    entryDate: "",
+    lessonName: "",
+    durationMinutes: 60,
+    headcount: 1,
+    startTime: "",
+    count: 1,
+  });
   const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
   const [shiftEditValues, setShiftEditValues] = useState({ startTime: "", endTime: "", breakStart: "", breakEnd: "" });
   const [error, setError] = useState<string | null>(null);
@@ -66,19 +73,6 @@ export default function TodaySummaryPanel({
     setCategoryData([]);
   }
 
-  async function handleDeleteLesson(id: string) {
-    setDeletingId(id);
-    setError(null);
-    const result = await deleteLessonLogEntry(id, staffId);
-    setDeletingId(null);
-    if (!result.ok) {
-      setError(result.error);
-      return;
-    }
-    if (viewingPeriod) await handleShowPeriod();
-    router.refresh();
-  }
-
   async function handleDeleteShift(s: TodayShiftSummary) {
     setDeletingId(s.id);
     setError(null);
@@ -97,51 +91,153 @@ export default function TodaySummaryPanel({
   const shiftsTotal = displayShifts.reduce((sum, s) => sum + s.amount, 0);
   const hasLeLienShift = displayShifts.some((s) => s.categoryName.toLowerCase().replace(/\s+/g, "").includes("lelien"));
 
-  async function handleApprove(lessonId: string) {
-    setSavingId(lessonId);
-    setError(null);
-    const result = await setLessonLogEntryApproval(lessonId, true);
-    setSavingId(null);
-    if (!result.ok) {
-      setError(result.error);
-      return;
+  // 同じ日・同じレッスン名・同じ時間/人数の実績は、1行の「○本」表示にまとめる。
+  interface LessonGroup {
+    key: string;
+    entryDate: string;
+    lessonName: string;
+    startTime: string | null;
+    durationMinutes: number;
+    headcount: number;
+    rate: number;
+    count: number;
+    total: number;
+    ids: string[];
+    allApproved: boolean;
+  }
+
+  const lessonGroups: LessonGroup[] = [];
+  {
+    const map = new Map<string, LessonGroup>();
+    for (const l of displayLessons) {
+      const key = `${l.entryDate}|${l.lessonName}|${l.startTime ?? ""}|${l.durationMinutes}|${l.headcount}`;
+      const existing = map.get(key);
+      if (existing) {
+        existing.count += 1;
+        existing.total += l.rate;
+        existing.ids.push(l.id);
+        existing.allApproved = existing.allApproved && l.approved;
+      } else {
+        const group: LessonGroup = {
+          key,
+          entryDate: l.entryDate,
+          lessonName: l.lessonName,
+          startTime: l.startTime,
+          durationMinutes: l.durationMinutes,
+          headcount: l.headcount,
+          rate: l.rate,
+          count: 1,
+          total: l.rate,
+          ids: [l.id],
+          allApproved: l.approved,
+        };
+        map.set(key, group);
+        lessonGroups.push(group);
+      }
     }
+  }
+
+  async function handleApproveGroup(g: LessonGroup) {
+    setSavingId(g.key);
+    setError(null);
+    for (const id of g.ids) {
+      const result = await setLessonLogEntryApproval(id, true);
+      if (!result.ok) {
+        setSavingId(null);
+        setError(result.error);
+        return;
+      }
+    }
+    setSavingId(null);
     if (viewingPeriod) await handleShowPeriod();
     router.refresh();
   }
 
-  function startEdit(l: TodayLessonSummary) {
+  function startEditGroup(g: LessonGroup) {
     setError(null);
-    setEditingId(l.id);
+    setEditingId(g.key);
     setEditValues({
-      entryDate: l.entryDate,
-      lessonName: l.lessonName,
-      durationMinutes: l.durationMinutes,
-      headcount: l.headcount,
-      startTime: l.startTime?.slice(0, 5) ?? "",
+      entryDate: g.entryDate,
+      lessonName: g.lessonName,
+      durationMinutes: g.durationMinutes,
+      headcount: g.headcount,
+      startTime: g.startTime?.slice(0, 5) ?? "",
+      count: g.count,
     });
   }
 
-  async function handleSaveEdit(l: TodayLessonSummary) {
-    setSavingId(l.id);
+  async function handleSaveGroupEdit(g: LessonGroup) {
+    setSavingId(g.key);
     setError(null);
-    const result = await updateLessonLogEntry(
-      l.id,
-      {
-        entryDate: editValues.entryDate,
-        lessonName: editValues.lessonName,
-        durationMinutes: editValues.durationMinutes,
-        headcount: editValues.headcount,
-        startTime: editValues.startTime || undefined,
-      },
-      staffId,
-    );
-    setSavingId(null);
-    if (!result.ok) {
-      setError(result.error);
-      return;
+
+    for (const id of g.ids) {
+      const result = await updateLessonLogEntry(
+        id,
+        {
+          entryDate: editValues.entryDate,
+          lessonName: editValues.lessonName,
+          durationMinutes: editValues.durationMinutes,
+          headcount: editValues.headcount,
+          startTime: editValues.startTime || undefined,
+        },
+        staffId,
+      );
+      if (!result.ok) {
+        setSavingId(null);
+        setError(result.error);
+        return;
+      }
     }
+
+    const diff = editValues.count - g.count;
+    if (diff > 0) {
+      for (let i = 0; i < diff; i++) {
+        const result = await addLessonLogEntry(
+          {
+            entryDate: editValues.entryDate,
+            lessonName: editValues.lessonName,
+            durationMinutes: editValues.durationMinutes,
+            headcount: editValues.headcount,
+            startTime: editValues.startTime || undefined,
+          },
+          staffId,
+        );
+        if (!result.ok) {
+          setSavingId(null);
+          setError(result.error);
+          return;
+        }
+      }
+    } else if (diff < 0) {
+      for (const id of g.ids.slice(0, -diff)) {
+        const result = await deleteLessonLogEntry(id, staffId);
+        if (!result.ok) {
+          setSavingId(null);
+          setError(result.error);
+          return;
+        }
+      }
+    }
+
+    setSavingId(null);
     setEditingId(null);
+    if (viewingPeriod) await handleShowPeriod();
+    router.refresh();
+  }
+
+  async function handleDeleteGroup(g: LessonGroup) {
+    setDeletingId(g.key);
+    setError(null);
+    for (const id of g.ids) {
+      const result = await deleteLessonLogEntry(id, staffId);
+      if (!result.ok) {
+        setDeletingId(null);
+        setError(result.error);
+        return;
+      }
+    }
+    setDeletingId(null);
+    if (editingId === g.key) setEditingId(null);
     if (viewingPeriod) await handleShowPeriod();
     router.refresh();
   }
@@ -246,9 +342,9 @@ export default function TodaySummaryPanel({
         <div className="flex flex-col gap-2">
           <p className="text-xs text-neutral-500">レッスン {displayLessons.length}本(合計 ¥{lessonsTotal.toLocaleString()})</p>
           <ul className="flex flex-col gap-2 text-sm">
-            {displayLessons.map((l) =>
-              editingId === l.id ? (
-                <li key={l.id} className="flex flex-wrap items-center gap-2 border-b border-neutral-100 pb-2 dark:border-neutral-900">
+            {lessonGroups.map((g) =>
+              editingId === g.key ? (
+                <li key={g.key} className="flex flex-wrap items-center gap-2 border-b border-neutral-100 pb-2 dark:border-neutral-900">
                   <input
                     type="date"
                     value={editValues.entryDate}
@@ -281,55 +377,69 @@ export default function TodaySummaryPanel({
                     className="w-16 rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
                   />
                   分
+                  {headcountMatters && (
+                    <>
+                      <input
+                        type="number"
+                        min={1}
+                        value={editValues.headcount}
+                        onFocus={(e) => e.target.select()}
+                        onChange={(e) => setEditValues((v) => ({ ...v, headcount: Number(e.target.value) }))}
+                        className="w-16 rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
+                      />
+                      人
+                    </>
+                  )}
                   <input
                     type="number"
                     min={1}
-                    value={editValues.headcount}
+                    value={editValues.count}
                     onFocus={(e) => e.target.select()}
-                    onChange={(e) => setEditValues((v) => ({ ...v, headcount: Number(e.target.value) }))}
+                    onChange={(e) => setEditValues((v) => ({ ...v, count: Number(e.target.value) }))}
                     className="w-16 rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
                   />
-                  人
+                  本
                   <button
-                    onClick={() => handleSaveEdit(l)}
-                    disabled={savingId === l.id}
+                    onClick={() => handleSaveGroupEdit(g)}
+                    disabled={savingId === g.key}
                     className="rounded-lg bg-neutral-900 px-3 py-1 text-xs text-white disabled:opacity-40 dark:bg-white dark:text-black"
                   >
-                    {savingId === l.id ? "保存中..." : "保存"}
+                    {savingId === g.key ? "保存中..." : "保存"}
                   </button>
                   <button onClick={() => setEditingId(null)} className="text-xs underline">
                     キャンセル
                   </button>
                 </li>
               ) : (
-                <li key={l.id} className="flex flex-wrap items-center gap-3 border-b border-neutral-100 pb-2 dark:border-neutral-900">
-                  {viewingPeriod && <span className="text-neutral-400">{l.entryDate}</span>}
-                  {l.startTime && <span>{l.startTime.slice(0, 5)}〜</span>}
-                  <span>{l.lessonName}</span>
-                  {headcountMatters && <span>{l.headcount}人</span>}
+                <li key={g.key} className="flex flex-wrap items-center gap-3 border-b border-neutral-100 pb-2 dark:border-neutral-900">
+                  {viewingPeriod && <span className="text-neutral-400">{g.entryDate}</span>}
+                  {g.startTime && <span>{g.startTime.slice(0, 5)}〜</span>}
+                  <span>{g.lessonName}</span>
+                  {g.count > 1 && <span className="text-neutral-400">({g.count}本)</span>}
+                  {headcountMatters && <span>{g.headcount}人</span>}
                   <span className="font-semibold">
-                    {l.rate > 0 ? `¥${l.rate.toLocaleString()}` : "該当ルールなし"}
+                    {g.total > 0 ? `¥${g.total.toLocaleString()}` : "該当ルールなし"}
                   </span>
-                  {l.approved ? (
+                  {g.allApproved ? (
                     <span className="text-neutral-400">承認済み</span>
                   ) : (
                     <button
-                      onClick={() => handleApprove(l.id)}
-                      disabled={savingId === l.id}
+                      onClick={() => handleApproveGroup(g)}
+                      disabled={savingId === g.key}
                       className="rounded-lg bg-neutral-900 px-3 py-1 text-xs text-white disabled:opacity-40 dark:bg-white dark:text-black"
                     >
-                      {savingId === l.id ? "更新中..." : "承認する"}
+                      {savingId === g.key ? "更新中..." : "承認する"}
                     </button>
                   )}
-                  <button onClick={() => startEdit(l)} className="ml-auto text-xs underline">
+                  <button onClick={() => startEditGroup(g)} className="ml-auto text-xs underline">
                     訂正する
                   </button>
                   <button
-                    onClick={() => handleDeleteLesson(l.id)}
-                    disabled={deletingId === l.id}
+                    onClick={() => handleDeleteGroup(g)}
+                    disabled={deletingId === g.key}
                     className="text-xs text-red-600 underline disabled:opacity-40"
                   >
-                    {deletingId === l.id ? "削除中..." : "削除"}
+                    {deletingId === g.key ? "削除中..." : "削除"}
                   </button>
                 </li>
               ),
