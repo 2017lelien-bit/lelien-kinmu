@@ -93,7 +93,7 @@ export async function getPeriodCategorySummary(staffId: string, periodStart: str
 
   const admin = createAdminClient();
   const [{ data: categories }, { data: entries }] = await Promise.all([
-    admin.from("pay_categories").select("id, name, unit_type, rate").eq("staff_id", staffId),
+    admin.from("pay_categories").select("id, name, unit_type, rate").eq("staff_id", staffId).eq("is_active", true),
     admin.from("pay_entries").select("pay_category_id, quantity").eq("staff_id", staffId).eq("period_start", periodStart),
   ]);
 
@@ -215,7 +215,12 @@ export async function calculatePayroll(staffId: string, periodStart: string): Pr
 
   const [{ data: categories }, { data: entries }, { data: rules }, { data: logEntries }, { data: timeEntries }] =
     await Promise.all([
-      admin.from("pay_categories").select("*").eq("staff_id", staffId).order("sort_order", { ascending: true }),
+      admin
+        .from("pay_categories")
+        .select("*")
+        .eq("staff_id", staffId)
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true }),
       admin.from("pay_entries").select("*").eq("staff_id", staffId).eq("period_start", periodStart),
       admin.from("pay_rate_rules").select("*").eq("staff_id", staffId),
       admin
