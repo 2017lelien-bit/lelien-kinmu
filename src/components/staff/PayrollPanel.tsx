@@ -11,11 +11,14 @@ export default function PayrollPanel({
   payslips,
   commuteType,
   commuteAmount,
+  headcountMatters,
 }: {
   staffId: string;
   payslips: StaffPayslip[];
   commuteType: CommuteType;
   commuteAmount: number;
+  // 単価が人数で変わらないスタッフは、参加人数は常に1(意味を持たない値)なので、代わりに本数を表示する。
+  headcountMatters: boolean;
 }) {
   const router = useRouter();
   const [periodStart, setPeriodStart] = useState(currentPayPeriod().periodStart);
@@ -78,6 +81,25 @@ export default function PayrollPanel({
     router.refresh();
   }
 
+  // 同じ日・レッスン名・時間・人数のレッスンは、1行の「○本」表示にまとめる。
+  const lessonGroups = preview
+    ? Object.values(
+        preview.breakdown.lessonLines.reduce<
+          Record<string, { date: string; lessonName: string; durationMinutes: number; headcount: number; matchedRuleLabel: string | null; rate: number; count: number }>
+        >((groups, line) => {
+          const key = `${line.date}|${line.lessonName}|${line.durationMinutes}|${line.headcount}`;
+          const existing = groups[key];
+          if (existing) {
+            existing.count += 1;
+            existing.rate += line.rate;
+          } else {
+            groups[key] = { ...line, count: 1 };
+          }
+          return groups;
+        }, {}),
+      )
+    : [];
+
   async function handleDelete(payslipId: string) {
     setDeletingId(payslipId);
     setError(null);
@@ -127,13 +149,13 @@ export default function PayrollPanel({
               ))}
             </ul>
           )}
-          {preview.breakdown.lessonLines.length > 0 && (
+          {lessonGroups.length > 0 && (
             <ul className="text-sm">
-              {preview.breakdown.lessonLines.map((line) => (
-                <li key={line.entryId}>
-                  {line.date} {line.lessonName}({line.durationMinutes}分・{line.headcount}人) →
-                  {line.matchedRuleLabel ? ` ${line.matchedRuleLabel}` : " 該当ルールなし"} = ¥
-                  {line.rate.toLocaleString()}
+              {lessonGroups.map((g) => (
+                <li key={`${g.date}|${g.lessonName}|${g.durationMinutes}|${g.headcount}`}>
+                  {g.date} {g.lessonName}({g.durationMinutes}分・{headcountMatters ? `${g.headcount}人` : `${g.count}本`}) →
+                  {g.matchedRuleLabel ? ` ${g.matchedRuleLabel}` : " 該当ルールなし"} = ¥
+                  {g.rate.toLocaleString()}
                 </li>
               ))}
             </ul>
