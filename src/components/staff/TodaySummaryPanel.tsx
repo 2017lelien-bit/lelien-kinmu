@@ -30,7 +30,7 @@ export default function TodaySummaryPanel({
   const router = useRouter();
   const [savingId, setSavingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editValues, setEditValues] = useState({ lessonName: "", durationMinutes: 60, headcount: 1, startTime: "" });
+  const [editValues, setEditValues] = useState({ entryDate: "", lessonName: "", durationMinutes: 60, headcount: 1, startTime: "" });
   const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
   const [shiftEditValues, setShiftEditValues] = useState({ startTime: "", endTime: "", breakStart: "", breakEnd: "" });
   const [error, setError] = useState<string | null>(null);
@@ -114,6 +114,7 @@ export default function TodaySummaryPanel({
     setError(null);
     setEditingId(l.id);
     setEditValues({
+      entryDate: l.entryDate,
       lessonName: l.lessonName,
       durationMinutes: l.durationMinutes,
       headcount: l.headcount,
@@ -127,7 +128,7 @@ export default function TodaySummaryPanel({
     const result = await updateLessonLogEntry(
       l.id,
       {
-        entryDate: l.entryDate,
+        entryDate: editValues.entryDate,
         lessonName: editValues.lessonName,
         durationMinutes: editValues.durationMinutes,
         headcount: editValues.headcount,
@@ -248,6 +249,12 @@ export default function TodaySummaryPanel({
             {displayLessons.map((l) =>
               editingId === l.id ? (
                 <li key={l.id} className="flex flex-wrap items-center gap-2 border-b border-neutral-100 pb-2 dark:border-neutral-900">
+                  <input
+                    type="date"
+                    value={editValues.entryDate}
+                    onChange={(e) => setEditValues((v) => ({ ...v, entryDate: e.target.value }))}
+                    className="rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
+                  />
                   <input
                     type="time"
                     value={editValues.startTime}
