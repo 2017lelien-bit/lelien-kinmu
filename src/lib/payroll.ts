@@ -75,6 +75,43 @@ export interface TodaySummary {
   shifts: TodayShiftSummary[];
 }
 
+export interface PeriodCategorySummary {
+  categoryId: string;
+  categoryName: string;
+  unitType: "hourly" | "per_lesson";
+  rate: number;
+  quantity: number;
+  subtotal: number;
+}
+
+// 区分(回数・時間をまとめて1つの数字で入力する方式)の、指定期間の合計を管理者が確認できるようにする。
+// pay_entriesは期間ごとに1件(staff_id, pay_category_id, period_start)なので、日付ごとの内訳は出せないが、
+// 「その期間にいくら分入力されているか」は確認できる。
+export async function getPeriodCategorySummary(staffId: string, periodStart: string): Promise<PeriodCategorySummary[]> {
+  const adminCheck = await requireAdmin();
+  if (adminCheck) return [];
+
+  const admin = createAdminClient();
+  const [{ data: categories }, { data: entries }] = await Promise.all([
+    admin.from("pay_categories").select("id, name, unit_type, rate").eq("staff_id", staffId),
+    admin.from("pay_entries").select("pay_category_id, quantity").eq("staff_id", staffId).eq("period_start", periodStart),
+  ]);
+
+  const qtyByCategory = new Map((entries ?? []).map((e) => [e.pay_category_id as string, e.quantity as number]));
+
+  return (categories ?? []).map((c) => {
+    const quantity = qtyByCategory.get(c.id) ?? 0;
+    return {
+      categoryId: c.id,
+      categoryName: c.name,
+      unitType: c.unit_type as "hourly" | "per_lesson",
+      rate: c.rate,
+      quantity,
+      subtotal: Math.round(quantity * c.rate),
+    };
+  });
+}
+
 async function buildSummaryForRange(staffId: string, startDate: string, endDate: string): Promise<TodaySummary> {
   const admin = createAdminClient();
 

@@ -5,7 +5,13 @@ import { useRouter } from "next/navigation";
 import { setLessonLogEntryApproval } from "@/lib/staff-admin";
 import { updateLessonLogEntry, deleteLessonLogEntry } from "@/lib/lesson-log";
 import { updateTimeLogEntry, deleteTimeLogEntry } from "@/lib/time-log";
-import { getPeriodSummary, type TodayLessonSummary, type TodayShiftSummary } from "@/lib/payroll";
+import {
+  getPeriodCategorySummary,
+  getPeriodSummary,
+  type PeriodCategorySummary,
+  type TodayLessonSummary,
+  type TodayShiftSummary,
+} from "@/lib/payroll";
 import { LESSON_NAMES } from "@/lib/types";
 import { payPeriodForDate, currentPayPeriod, payPeriodEnd } from "@/lib/date";
 
@@ -34,6 +40,7 @@ export default function TodaySummaryPanel({
   const [viewingPeriod, setViewingPeriod] = useState<{ periodStart: string; periodEnd: string } | null>(null);
   const [viewPeriodStart, setViewPeriodStart] = useState(currentPayPeriod().periodStart);
   const [viewData, setViewData] = useState<{ lessons: TodayLessonSummary[]; shifts: TodayShiftSummary[] } | null>(null);
+  const [categoryData, setCategoryData] = useState<PeriodCategorySummary[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
   const displayLessons = viewingPeriod ? (viewData?.lessons ?? []) : lessons;
@@ -43,15 +50,20 @@ export default function TodaySummaryPanel({
     setLoadingHistory(true);
     setError(null);
     const periodEnd = payPeriodEnd(viewPeriodStart);
-    const data = await getPeriodSummary(staffId, viewPeriodStart, periodEnd);
+    const [data, categories] = await Promise.all([
+      getPeriodSummary(staffId, viewPeriodStart, periodEnd),
+      getPeriodCategorySummary(staffId, viewPeriodStart),
+    ]);
     setLoadingHistory(false);
     setViewingPeriod({ periodStart: viewPeriodStart, periodEnd });
     setViewData(data);
+    setCategoryData(categories);
   }
 
   function handleBackToToday() {
     setViewingPeriod(null);
     setViewData(null);
+    setCategoryData([]);
   }
 
   async function handleDeleteLesson(id: string) {
@@ -204,7 +216,28 @@ export default function TodaySummaryPanel({
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      {displayLessons.length === 0 && displayShifts.length === 0 && (
+      {viewingPeriod && categoryData.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <p className="text-xs text-neutral-500">区分ごとの入力(この期間の合計)</p>
+          <ul className="flex flex-col gap-1 text-sm">
+            {categoryData.map((c) => (
+              <li key={c.categoryId} className="flex flex-wrap items-center gap-3">
+                <span>{c.categoryName}</span>
+                <span className="text-neutral-400">
+                  {c.quantity}
+                  {c.unitType === "hourly" ? "時間" : "回"} × ¥{c.rate.toLocaleString()}
+                </span>
+                <span className="font-semibold">¥{c.subtotal.toLocaleString()}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-neutral-400">
+            日付ごとの内訳ではなく、この期間の合計(スタッフが入力した最新の数字)です。
+          </p>
+        </div>
+      )}
+
+      {displayLessons.length === 0 && displayShifts.length === 0 && categoryData.length === 0 && (
         <p className="text-sm text-neutral-400">{viewingPeriod ? "この期間の入力はありません。" : "本日の入力はまだありません。"}</p>
       )}
 
