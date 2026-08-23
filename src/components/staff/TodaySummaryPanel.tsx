@@ -415,8 +415,7 @@ export default function TodaySummaryPanel({
                   {viewingPeriod && <span className="text-neutral-400">{g.entryDate}</span>}
                   {g.startTime && <span>{g.startTime.slice(0, 5)}〜</span>}
                   <span>{g.lessonName}</span>
-                  {g.count > 1 && <span className="text-neutral-400">({g.count}本)</span>}
-                  {headcountMatters && <span>{g.headcount}人</span>}
+                  {headcountMatters ? <span>{g.headcount}人</span> : <span>{g.count}本</span>}
                   <span className="font-semibold">
                     {g.total > 0 ? `¥${g.total.toLocaleString()}` : "該当ルールなし"}
                   </span>
