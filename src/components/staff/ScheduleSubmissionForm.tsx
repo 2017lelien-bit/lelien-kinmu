@@ -109,10 +109,31 @@ export default function ScheduleSubmissionForm({
     }
     setTogglingDate(dateStr);
     setError(null);
-    const existingUnavailable = (entriesByDate.get(dateStr) ?? []).find((e) => e.kind === "unavailable");
-    const result = existingUnavailable
-      ? await deleteScheduleEntry(existingUnavailable.id, staffId)
-      : await addScheduleEntry({ entryDate: dateStr, kind: "unavailable" }, staffId);
+    const dayEntries = entriesByDate.get(dateStr) ?? [];
+    const existingUnavailable = dayEntries.find((e) => e.kind === "unavailable");
+
+    if (existingUnavailable) {
+      const result = await deleteScheduleEntry(existingUnavailable.id, staffId);
+      setTogglingDate(null);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      router.refresh();
+      return;
+    }
+
+    // 休み希望にする日は、固定パターンなどで既に入っている受付・レッスンの予定を残しておくと
+    // 矛盾するので、先にその日の他の予定を削除してから休み希望を登録する。
+    for (const e of dayEntries) {
+      const delResult = await deleteScheduleEntry(e.id, staffId);
+      if (!delResult.ok) {
+        setTogglingDate(null);
+        setError(delResult.error);
+        return;
+      }
+    }
+    const result = await addScheduleEntry({ entryDate: dateStr, kind: "unavailable" }, staffId);
     setTogglingDate(null);
     if (!result.ok) {
       setError(result.error);
@@ -178,7 +199,7 @@ export default function ScheduleSubmissionForm({
         </div>
         <p className="text-xs text-neutral-400">
           {ngMode
-            ? "日付をタップすると、その日が休み希望になります。もう一度タップすると解除されます。"
+            ? "日付をタップすると、その日の他の予定を削除して休み希望になります。もう一度タップすると解除されます(元の固定予定は「今月に反映する」で戻せます)。"
             : "日付をタップすると、下の入力欄の日付が切り替わります。"}
         </p>
 
