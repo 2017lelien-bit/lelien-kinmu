@@ -158,6 +158,7 @@ export interface ScheduleTemplate {
   end_time: string | null; // 受付のみ
   lesson_name: string | null; // レッスンのみ
   note: string | null;
+  weeks_of_month: number[] | null; // null/空 = 毎週。[2,4]なら第2・第4週のその曜日だけ
 }
 
 export const DAY_OF_WEEK_LABEL = ["日", "月", "火", "水", "木", "金", "土"] as const;

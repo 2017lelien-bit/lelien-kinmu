@@ -181,6 +181,7 @@ export async function addScheduleTemplate(
     endTime?: string;
     lessonName?: string;
     note?: string;
+    weeksOfMonth?: number[];
   },
   staffId?: string,
 ): Promise<ActionResult> {
@@ -203,6 +204,7 @@ export async function addScheduleTemplate(
     end_time: input.kind === "reception" ? input.endTime : null,
     lesson_name: input.kind === "lesson" ? input.lessonName?.trim() : null,
     note: input.note || null,
+    weeks_of_month: input.weeksOfMonth && input.weeksOfMonth.length > 0 ? input.weeksOfMonth : null,
   });
   if (error) return { ok: false, error: "登録に失敗しました。" };
 
@@ -261,8 +263,10 @@ export async function applyTemplatesToMonth(
   let cursor = monthStart;
   while (cursor <= monthEndDate) {
     const dow = dayOfWeekForDate(cursor);
+    const weekOfMonth = Math.ceil(Number(cursor.split("-")[2]) / 7); // 1〜5(第何週か)
     for (const t of templates as ScheduleTemplate[]) {
       if (t.day_of_week !== dow) continue;
+      if (t.weeks_of_month && t.weeks_of_month.length > 0 && !t.weeks_of_month.includes(weekOfMonth)) continue;
       const key = `${cursor}|${t.kind}|${t.start_time}|${t.lesson_name ?? ""}`;
       if (existingKeys.has(key)) continue;
       rows.push({

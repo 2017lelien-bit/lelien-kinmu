@@ -21,9 +21,15 @@ export default function ScheduleTemplateManager({
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("13:00");
   const [lessonName, setLessonName] = useState(lessonOptions[0]?.name ?? "");
+  const [everyWeek, setEveryWeek] = useState(true);
+  const [weeksOfMonth, setWeeksOfMonth] = useState<number[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  function toggleWeek(w: number) {
+    setWeeksOfMonth((prev) => (prev.includes(w) ? prev.filter((x) => x !== w) : [...prev, w].sort()));
+  }
 
   async function handleAdd() {
     setAdding(true);
@@ -35,6 +41,7 @@ export default function ScheduleTemplateManager({
         startTime,
         endTime: kind === "reception" ? endTime : undefined,
         lessonName: kind === "lesson" ? lessonName : undefined,
+        weeksOfMonth: everyWeek ? undefined : weeksOfMonth,
       },
       staffId,
     );
@@ -43,6 +50,8 @@ export default function ScheduleTemplateManager({
       setError(result.error);
       return;
     }
+    setWeeksOfMonth([]);
+    setEveryWeek(true);
     router.refresh();
   }
 
@@ -69,7 +78,11 @@ export default function ScheduleTemplateManager({
         <ul className="flex flex-col gap-2 text-sm">
           {templates.map((t) => (
             <li key={t.id} className="flex flex-wrap items-center gap-3 border-b border-neutral-100 pb-2 dark:border-neutral-900">
-              <span>毎週{DAY_OF_WEEK_LABEL[t.day_of_week]}曜日</span>
+              <span>
+                {t.weeks_of_month && t.weeks_of_month.length > 0
+                  ? `第${t.weeks_of_month.join("・")}${DAY_OF_WEEK_LABEL[t.day_of_week]}曜日`
+                  : `毎週${DAY_OF_WEEK_LABEL[t.day_of_week]}曜日`}
+              </span>
               <span>
                 {t.start_time.slice(0, 5)}
                 {t.end_time ? `〜${t.end_time.slice(0, 5)}` : ""}
@@ -86,6 +99,27 @@ export default function ScheduleTemplateManager({
           ))}
         </ul>
       )}
+
+      <div className="flex flex-wrap items-center gap-3 text-sm">
+        <label className="flex items-center gap-1">
+          <input type="radio" checked={everyWeek} onChange={() => setEveryWeek(true)} />
+          毎週
+        </label>
+        <label className="flex items-center gap-1">
+          <input type="radio" checked={!everyWeek} onChange={() => setEveryWeek(false)} />
+          特定の週だけ
+        </label>
+        {!everyWeek && (
+          <div className="flex flex-wrap gap-2">
+            {[1, 2, 3, 4, 5].map((w) => (
+              <label key={w} className="flex items-center gap-1">
+                <input type="checkbox" checked={weeksOfMonth.includes(w)} onChange={() => toggleWeek(w)} />
+                第{w}週
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-1 text-sm">
@@ -160,7 +194,7 @@ export default function ScheduleTemplateManager({
         )}
         <button
           onClick={handleAdd}
-          disabled={adding}
+          disabled={adding || (!everyWeek && weeksOfMonth.length === 0)}
           className="rounded-lg border border-neutral-300 px-4 py-2 text-sm disabled:opacity-40 dark:border-neutral-700"
         >
           {adding ? "追加中..." : "追加する"}
