@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   getAllScheduleSubmissions,
   getScheduleSubmissionStatusList,
@@ -28,7 +27,6 @@ export default function ScheduleReviewPanel({
   initialEntries: EntryWithName[];
   initialStatusList: StatusRow[];
 }) {
-  const router = useRouter();
   const [monthStart, setMonthStart] = useState(initialMonthStart);
   const [entries, setEntries] = useState(initialEntries);
   const [statusList, setStatusList] = useState(initialStatusList);
@@ -49,16 +47,17 @@ export default function ScheduleReviewPanel({
   }
 
   async function handleToggleConfirmed(entry: EntryWithName) {
-    setSavingId(entry.id);
     setError(null);
-    const result = await setScheduleEntryConfirmed(entry.id, !entry.confirmed);
+    const nextConfirmed = !entry.confirmed;
+    // 通信を待たず、まずチェックの見た目を切り替える(体感速度のため)。失敗したら元に戻す。
+    setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, confirmed: nextConfirmed } : e)));
+    setSavingId(entry.id);
+    const result = await setScheduleEntryConfirmed(entry.id, nextConfirmed);
     setSavingId(null);
     if (!result.ok) {
       setError(result.error);
-      return;
+      setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, confirmed: !nextConfirmed } : e)));
     }
-    setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, confirmed: !e.confirmed } : e)));
-    router.refresh();
   }
 
   // 日付ごとではなく、1人ずつまとめて見やすくする。

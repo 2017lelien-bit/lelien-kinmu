@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { getAllScheduleSubmissions, setScheduleEntryConfirmed } from "@/lib/schedule-submissions";
 import { monthEnd } from "@/lib/date";
 import type { ScheduleSubmission } from "@/lib/types";
@@ -26,7 +25,6 @@ export default function ScheduleBuilderPanel({
   initialMonthStart: string;
   initialEntries: EntryWithName[];
 }) {
-  const router = useRouter();
   const [monthStart, setMonthStart] = useState(initialMonthStart);
   const [entries, setEntries] = useState(initialEntries);
   const [loading, setLoading] = useState(false);
@@ -45,25 +43,8 @@ export default function ScheduleBuilderPanel({
   }
 
   async function handleSelect(key: string, prevId: string, nextId: string) {
-    setSavingKey(key);
     setError(null);
-    if (prevId) {
-      const result = await setScheduleEntryConfirmed(prevId, false);
-      if (!result.ok) {
-        setSavingKey(null);
-        setError(result.error);
-        return;
-      }
-    }
-    if (nextId) {
-      const result = await setScheduleEntryConfirmed(nextId, true);
-      if (!result.ok) {
-        setSavingKey(null);
-        setError(result.error);
-        return;
-      }
-    }
-    setSavingKey(null);
+    // 通信を待たず、まず画面を即座に切り替える(体感速度のため)。失敗したら元に戻す。
     setEntries((prev) =>
       prev.map((e) => {
         if (e.id === prevId) return { ...e, confirmed: false };
@@ -71,7 +52,24 @@ export default function ScheduleBuilderPanel({
         return e;
       }),
     );
-    router.refresh();
+    setSavingKey(key);
+    const [prevResult, nextResult] = await Promise.all([
+      prevId ? setScheduleEntryConfirmed(prevId, false) : null,
+      nextId ? setScheduleEntryConfirmed(nextId, true) : null,
+    ]);
+    setSavingKey(null);
+    const failed = (prevResult && !prevResult.ok && prevResult) || (nextResult && !nextResult.ok && nextResult);
+    if (failed) {
+      setError(failed.error);
+      // 反映に失敗した分は元に戻す。
+      setEntries((prev) =>
+        prev.map((e) => {
+          if (e.id === prevId) return { ...e, confirmed: true };
+          if (e.id === nextId) return { ...e, confirmed: false };
+          return e;
+        }),
+      );
+    }
   }
 
   const [y, m] = monthStart.split("-").map(Number);
@@ -101,7 +99,10 @@ export default function ScheduleBuilderPanel({
 
     return (
       <div className="flex flex-col gap-1">
-        <p className="text-xs text-neutral-500">{label}</p>
+        <p className="text-xs text-neutral-500">
+          {label}
+          {savingKey === key && <span className="ml-1 text-neutral-400">保存中...</span>}
+        </p>
         {slots.map((selectedId, i) => {
           const usedElsewhere = new Set(slots.filter((_, j) => j !== i).filter(Boolean));
           const options = candidates.filter((c) => !usedElsewhere.has(c.id) || c.id === selectedId);
@@ -109,7 +110,6 @@ export default function ScheduleBuilderPanel({
             <select
               key={i}
               value={selectedId}
-              disabled={savingKey === key}
               onChange={(e) => handleSelect(key, selectedId, e.target.value)}
               className="rounded-lg border border-neutral-200 px-2 py-1 text-sm dark:border-neutral-800"
             >
