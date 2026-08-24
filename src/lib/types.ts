@@ -122,19 +122,45 @@ export interface PayrollBreakdown {
   lessonLines: PayrollBreakdownLessonLine[];
 }
 
-export type ScheduleKind = "reception" | "lesson";
+export type ScheduleKind = "reception" | "lesson" | "unavailable";
+
+export const SCHEDULE_KIND_LABEL: Record<ScheduleKind, string> = {
+  reception: "受付",
+  lesson: "レッスン",
+  unavailable: "休み希望(NG日)",
+};
 
 export interface ScheduleSubmission {
   id: string;
   staff_id: string;
   entry_date: string; // "YYYY-MM-DD"
   kind: ScheduleKind;
-  start_time: string; // "HH:MM:SS"
+  start_time: string | null; // "HH:MM:SS"(unavailableはnull)
   end_time: string | null; // 受付のみ
   lesson_name: string | null; // レッスンのみ
   note: string | null;
   confirmed: boolean;
 }
+
+export interface LessonOption {
+  id: string;
+  staff_id: string;
+  name: string;
+  sort_order: number;
+}
+
+export interface ScheduleTemplate {
+  id: string;
+  staff_id: string;
+  day_of_week: number; // 0=日曜〜6=土曜
+  kind: ScheduleKind;
+  start_time: string; // "HH:MM:SS"
+  end_time: string | null; // 受付のみ
+  lesson_name: string | null; // レッスンのみ
+  note: string | null;
+}
+
+export const DAY_OF_WEEK_LABEL = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
 export interface StaffPayslip {
   id: string;

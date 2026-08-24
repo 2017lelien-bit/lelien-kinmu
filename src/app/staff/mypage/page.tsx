@@ -3,13 +3,19 @@ import { getOwnPayCategories } from "@/lib/pay-categories";
 import { getOwnHasPayRateRules, getOwnHeadcountMatters, getOwnLessonLogEntries } from "@/lib/lesson-log";
 import { getOwnPayEntries, getOwnPayslips, getOwnStaffProfile, getOwnSubmissionStatus } from "@/lib/staff-self";
 import { getOwnTimeLogEntries } from "@/lib/time-log";
-import { getOwnScheduleSubmissions } from "@/lib/schedule-submissions";
+import {
+  getOwnLessonOptions,
+  getOwnScheduleSubmissions,
+  getOwnScheduleTemplates,
+} from "@/lib/schedule-submissions";
 import { currentPayPeriod, nextMonthStart, monthEnd } from "@/lib/date";
 import MyStaffProfileForm from "@/components/staff/MyStaffProfileForm";
 import PayEntryForm from "@/components/staff/PayEntryForm";
 import LessonLogForm from "@/components/staff/LessonLogForm";
 import TimeLogForm from "@/components/staff/TimeLogForm";
 import ScheduleSubmissionForm from "@/components/staff/ScheduleSubmissionForm";
+import ScheduleTemplateManager from "@/components/staff/ScheduleTemplateManager";
+import LessonOptionsManager from "@/components/staff/LessonOptionsManager";
 import MyPayslipList from "@/components/staff/MyPayslipList";
 import SubmitPeriodButton from "@/components/staff/SubmitPeriodButton";
 
@@ -29,6 +35,8 @@ export default async function StaffMyPage() {
     payslips,
     submittedAt,
     scheduleEntries,
+    lessonOptions,
+    scheduleTemplates,
   ] = await Promise.all([
     getOwnPayCategories(),
     getOwnPayEntries(periodStart),
@@ -38,6 +46,8 @@ export default async function StaffMyPage() {
     getOwnPayslips(),
     getOwnSubmissionStatus(),
     getOwnScheduleSubmissions(scheduleMonthStart, monthEnd(scheduleMonthStart)),
+    getOwnLessonOptions(),
+    getOwnScheduleTemplates(),
   ]);
   const hasEntryInput = payCategories.length > 0 || hasPayRateRules;
   const hourlyCategories = payCategories.filter((c) => c.unit_type === "hourly");
@@ -53,7 +63,11 @@ export default async function StaffMyPage() {
 
       <MyStaffProfileForm profile={profile} />
 
-      <ScheduleSubmissionForm entries={scheduleEntries} monthStart={scheduleMonthStart} />
+      <LessonOptionsManager options={lessonOptions} />
+
+      <ScheduleTemplateManager templates={scheduleTemplates} lessonOptions={lessonOptions} />
+
+      <ScheduleSubmissionForm entries={scheduleEntries} monthStart={scheduleMonthStart} lessonOptions={lessonOptions} />
 
       {payCategories.length > 0 && (
         <section className="flex flex-col gap-2">

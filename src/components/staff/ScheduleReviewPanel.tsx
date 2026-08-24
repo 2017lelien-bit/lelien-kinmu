@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { getAllScheduleSubmissions, setScheduleEntryConfirmed } from "@/lib/schedule-submissions";
 import { monthEnd } from "@/lib/date";
+import { SCHEDULE_KIND_LABEL } from "@/lib/types";
 import type { ScheduleSubmission } from "@/lib/types";
 
 type EntryWithName = ScheduleSubmission & { staffName: string };
@@ -90,11 +91,13 @@ export default function ScheduleReviewPanel({
                 {(entriesByDate.get(date) ?? []).map((e) => (
                   <li key={e.id} className="flex flex-wrap items-center gap-3">
                     <span className="font-semibold">{e.staffName}</span>
-                    <span>
-                      {e.start_time.slice(0, 5)}
-                      {e.end_time ? `〜${e.end_time.slice(0, 5)}` : ""}
-                    </span>
-                    <span>{e.kind === "reception" ? "受付" : e.lesson_name}</span>
+                    {e.start_time && (
+                      <span>
+                        {e.start_time.slice(0, 5)}
+                        {e.end_time ? `〜${e.end_time.slice(0, 5)}` : ""}
+                      </span>
+                    )}
+                    <span>{e.kind === "lesson" ? e.lesson_name : SCHEDULE_KIND_LABEL[e.kind]}</span>
                     {e.note && <span className="text-neutral-400">{e.note}</span>}
                     <label className="ml-auto flex items-center gap-1 text-xs">
                       <input
