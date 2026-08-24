@@ -44,6 +44,12 @@ export function nextMonthStart(dateStr: string = todayJstDateString()): string {
   return new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10);
 }
 
+// 月初(YYYY-MM-01)から、n(0以上)ヶ月先の月初を返す(先の月まで選べるようにする月ピッカー用)。
+export function addMonthsToMonthStart(monthStart: string, n: number): string {
+  const [y, m] = monthStart.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1 + n, 1)).toISOString().slice(0, 10);
+}
+
 // 月初(YYYY-MM-01)から、その月の月末の日付を返す。
 export function monthEnd(monthStart: string): string {
   const [y, m] = monthStart.split("-").map(Number);

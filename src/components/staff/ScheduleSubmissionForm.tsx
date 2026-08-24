@@ -2,8 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { addScheduleEntry, applyTemplatesToMonth, deleteScheduleEntry } from "@/lib/schedule-submissions";
-import { dayOfWeekForDate, monthEnd as monthEndOf } from "@/lib/date";
+import {
+  addScheduleEntry,
+  applyTemplatesToMonth,
+  deleteScheduleEntry,
+  getOwnScheduleSubmissions,
+} from "@/lib/schedule-submissions";
+import { addMonthsToMonthStart, dayOfWeekForDate, monthEnd as monthEndOf } from "@/lib/date";
 import { DAY_OF_WEEK_LABEL, SCHEDULE_KIND_LABEL } from "@/lib/types";
 import type { LessonOption, ScheduleSubmission } from "@/lib/types";
 
@@ -36,6 +41,9 @@ export default function ScheduleSubmissionForm({
   staffId?: string;
 }) {
   const router = useRouter();
+  const maxMonthStart = addMonthsToMonthStart(monthStart, 12);
+  const [viewMonth, setViewMonth] = useState(monthStart);
+  const [loadingMonth, setLoadingMonth] = useState(false);
   const [kind, setKind] = useState<"reception" | "lesson" | "unavailable">("reception");
   const [entryDate, setEntryDate] = useState(monthStart);
   const [startTime, setStartTime] = useState("09:00");
@@ -53,20 +61,33 @@ export default function ScheduleSubmissionForm({
   // サーバーの再取得(router.refresh)が反映されるまでの間、連打で二重登録されないように
   // ローカルでも即座に反映しておく。propsが更新されたら、そちらを正として同期する
   // (レンダー中にsetStateする、Reactが推奨する「propsからstateを導出し直す」パターン)。
+  // ただし、月を切り替えて表示中(viewMonth !== monthStart)は、propsは常に初期月(monthStart)分の
+  // データのままなので、同期の対象外にする。
   const [prevEntries, setPrevEntries] = useState(entries);
   const [localEntries, setLocalEntries] = useState(entries);
-  if (entries !== prevEntries) {
+  if (viewMonth === monthStart && entries !== prevEntries) {
     setPrevEntries(entries);
     setLocalEntries(entries);
   }
 
   function resetForm() {
-    setEntryDate(monthStart);
+    setEntryDate(viewMonth);
     setStartTime("09:00");
     setEndTime("13:00");
     setLessonName(lessonOptions[0]?.name ?? "");
     setNote("");
     setPartialUnavailable(false);
+  }
+
+  async function handleChangeMonth(newMonth: string) {
+    setViewMonth(newMonth);
+    setEntryDate(newMonth);
+    setLoadingMonth(true);
+    setError(null);
+    const data = await getOwnScheduleSubmissions(newMonth, monthEndOf(newMonth), staffId);
+    setLoadingMonth(false);
+    setLocalEntries(data);
+    setPrevEntries(data);
   }
 
   async function handleSubmit() {
@@ -112,7 +133,7 @@ export default function ScheduleSubmissionForm({
     list.push(e);
     entriesByDate.set(e.entry_date, list);
   }
-  const calendarCells = buildCalendarCells(monthStart);
+  const calendarCells = buildCalendarCells(viewMonth);
 
   // NG日モード中は、日付をタップするだけで休み希望のON/OFFを切り替える(他の予定はそのまま残す)。
   // それ以外のときは、下の入力フォームの日付欄にその日をセットするだけ。
@@ -150,7 +171,7 @@ export default function ScheduleSubmissionForm({
     setApplying(true);
     setError(null);
     setApplyMessage(null);
-    const result = await applyTemplatesToMonth(monthStart, monthEndOf(monthStart), staffId);
+    const result = await applyTemplatesToMonth(viewMonth, monthEndOf(viewMonth), staffId);
     setApplying(false);
     if (!result.ok) {
       setError(result.error);
@@ -164,7 +185,21 @@ export default function ScheduleSubmissionForm({
 
   return (
     <div className="flex flex-col gap-4 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
-      <h3 className="text-sm font-semibold">{formatMonthLabel(monthStart)}のスケジュール提出</h3>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold">{formatMonthLabel(viewMonth)}のスケジュール提出</h3>
+        <label className="flex items-center gap-1 text-sm">
+          対象月
+          <input
+            type="month"
+            value={viewMonth.slice(0, 7)}
+            min={monthStart.slice(0, 7)}
+            max={maxMonthStart.slice(0, 7)}
+            onChange={(e) => handleChangeMonth(`${e.target.value}-01`)}
+            className="rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
+          />
+        </label>
+      </div>
+      {loadingMonth && <p className="text-xs text-neutral-400">読込中...</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="flex flex-wrap items-center gap-2 border-b border-neutral-100 pb-4 dark:border-neutral-900">
@@ -260,8 +295,8 @@ export default function ScheduleSubmissionForm({
           日付
           <input
             type="date"
-            min={monthStart}
-            max={monthEndOf(monthStart)}
+            min={viewMonth}
+            max={monthEndOf(viewMonth)}
             value={entryDate}
             onChange={(e) => setEntryDate(e.target.value)}
             className="rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
