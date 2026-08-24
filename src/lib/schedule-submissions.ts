@@ -298,3 +298,58 @@ export async function applyTemplatesToMonth(
   revalidatePath("/staff/admin/schedule");
   return { ok: true, data: { created: rows.length } };
 }
+
+// スタッフが「対象月のスケジュール入力が終わった」ことを明示的に提出する。
+export async function getOwnScheduleSubmissionStatus(monthStart: string, staffId?: string): Promise<string | null> {
+  const acting = await resolveActingStaffId(staffId);
+  if ("error" in acting) return null;
+
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("schedule_submission_status")
+    .select("submitted_at")
+    .eq("staff_id", acting.id)
+    .eq("month_start", monthStart)
+    .maybeSingle();
+  return data?.submitted_at ?? null;
+}
+
+export async function submitSchedule(monthStart: string, staffId?: string): Promise<ActionResult> {
+  const acting = await resolveActingStaffId(staffId);
+  if ("error" in acting) return { ok: false, error: acting.error };
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("schedule_submission_status")
+    .upsert(
+      { staff_id: acting.id, month_start: monthStart, submitted_at: new Date().toISOString() },
+      { onConflict: "staff_id,month_start" },
+    );
+  if (error) return { ok: false, error: "提出に失敗しました。" };
+
+  revalidatePath("/staff/mypage");
+  revalidatePath(`/staff/admin/staff/${acting.id}`);
+  revalidatePath("/staff/admin/schedule");
+  return { ok: true, data: undefined };
+}
+
+// 管理者が、対象月の全スタッフ分の提出状況を一覧で確認できるようにする。
+export async function getScheduleSubmissionStatusList(
+  monthStart: string,
+): Promise<{ staffId: string; staffName: string; submittedAt: string | null }[]> {
+  const adminCheck = await requireAdmin();
+  if (adminCheck) return [];
+
+  const admin = createAdminClient();
+  const [{ data: staffRows }, { data: statusRows }] = await Promise.all([
+    admin.from("staff_profiles").select("id, name").eq("role", "staff").eq("is_active", true).order("name"),
+    admin.from("schedule_submission_status").select("staff_id, submitted_at").eq("month_start", monthStart),
+  ]);
+
+  const statusByStaff = new Map((statusRows ?? []).map((r) => [r.staff_id, r.submitted_at as string]));
+  return (staffRows ?? []).map((s) => ({
+    staffId: s.id,
+    staffName: s.name,
+    submittedAt: statusByStaff.get(s.id) ?? null,
+  }));
+}

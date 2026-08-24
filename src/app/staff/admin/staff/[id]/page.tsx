@@ -8,6 +8,7 @@ import { getOwnTimeLogEntries } from "@/lib/time-log";
 import {
   getOwnLessonOptions,
   getOwnScheduleSubmissions,
+  getOwnScheduleSubmissionStatus,
   getOwnScheduleTemplates,
 } from "@/lib/schedule-submissions";
 import { currentPayPeriod, nextMonthStart, monthEnd } from "@/lib/date";
@@ -23,6 +24,7 @@ import TimeLogForm from "@/components/staff/TimeLogForm";
 import ScheduleSubmissionForm from "@/components/staff/ScheduleSubmissionForm";
 import ScheduleTemplateManager from "@/components/staff/ScheduleTemplateManager";
 import LessonOptionsManager from "@/components/staff/LessonOptionsManager";
+import SubmitScheduleButton from "@/components/staff/SubmitScheduleButton";
 import SubmissionStatusPanel from "@/components/staff/SubmissionStatusPanel";
 
 export default async function StaffAdminDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -42,6 +44,7 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
     scheduleEntries,
     lessonOptions,
     scheduleTemplates,
+    scheduleSubmittedAt,
   ] = await Promise.all([
     getStaffDetail(id),
     getPayslipsForStaff(id),
@@ -52,6 +55,7 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
     getOwnScheduleSubmissions(scheduleMonthStart, monthEnd(scheduleMonthStart), id),
     getOwnLessonOptions(id),
     getOwnScheduleTemplates(id),
+    getOwnScheduleSubmissionStatus(scheduleMonthStart, id),
   ]);
   if (!detail) notFound();
 
@@ -93,6 +97,8 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
         lessonOptions={lessonOptions}
         staffId={profile.id}
       />
+
+      <SubmitScheduleButton monthStart={scheduleMonthStart} submittedAt={scheduleSubmittedAt} staffId={profile.id} />
 
       <dl className="grid grid-cols-[10rem_1fr] gap-y-2 text-sm">
         <dt className="text-neutral-500">権限</dt>

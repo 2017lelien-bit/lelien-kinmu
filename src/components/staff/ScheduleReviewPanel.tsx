@@ -2,12 +2,17 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { getAllScheduleSubmissions, setScheduleEntryConfirmed } from "@/lib/schedule-submissions";
-import { monthEnd } from "@/lib/date";
+import {
+  getAllScheduleSubmissions,
+  getScheduleSubmissionStatusList,
+  setScheduleEntryConfirmed,
+} from "@/lib/schedule-submissions";
+import { formatDateTimeJst, monthEnd } from "@/lib/date";
 import { SCHEDULE_KIND_LABEL } from "@/lib/types";
 import type { ScheduleSubmission } from "@/lib/types";
 
 type EntryWithName = ScheduleSubmission & { staffName: string };
+type StatusRow = { staffId: string; staffName: string; submittedAt: string | null };
 
 function formatMonthLabel(monthStart: string): string {
   const [y, m] = monthStart.split("-");
@@ -17,13 +22,16 @@ function formatMonthLabel(monthStart: string): string {
 export default function ScheduleReviewPanel({
   initialMonthStart,
   initialEntries,
+  initialStatusList,
 }: {
   initialMonthStart: string;
   initialEntries: EntryWithName[];
+  initialStatusList: StatusRow[];
 }) {
   const router = useRouter();
   const [monthStart, setMonthStart] = useState(initialMonthStart);
   const [entries, setEntries] = useState(initialEntries);
+  const [statusList, setStatusList] = useState(initialStatusList);
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -31,9 +39,13 @@ export default function ScheduleReviewPanel({
   async function handleShowMonth() {
     setLoading(true);
     setError(null);
-    const data = await getAllScheduleSubmissions(monthStart, monthEnd(monthStart));
+    const [data, status] = await Promise.all([
+      getAllScheduleSubmissions(monthStart, monthEnd(monthStart)),
+      getScheduleSubmissionStatusList(monthStart),
+    ]);
     setLoading(false);
     setEntries(data);
+    setStatusList(status);
   }
 
   async function handleToggleConfirmed(entry: EntryWithName) {
@@ -79,6 +91,24 @@ export default function ScheduleReviewPanel({
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
+
+      <div className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
+        <p className="mb-2 text-sm font-semibold">
+          提出状況({statusList.filter((s) => s.submittedAt).length}/{statusList.length}人)
+        </p>
+        <ul className="flex flex-col gap-1 text-sm">
+          {statusList.map((s) => (
+            <li key={s.staffId} className="flex flex-wrap items-center gap-3">
+              <span>{s.staffName}</span>
+              {s.submittedAt ? (
+                <span className="text-neutral-400">提出済み({formatDateTimeJst(s.submittedAt)})</span>
+              ) : (
+                <span className="text-red-600">未提出</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
 
       {dates.length === 0 ? (
         <p className="text-sm text-neutral-400">この月の提出はまだありません。</p>
