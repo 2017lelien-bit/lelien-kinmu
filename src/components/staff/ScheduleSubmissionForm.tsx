@@ -100,7 +100,7 @@ export default function ScheduleSubmissionForm({
   }
   const calendarCells = buildCalendarCells(monthStart);
 
-  // NG日モード中は、日付をタップするだけで休み希望のON/OFFを切り替える。
+  // NG日モード中は、日付をタップするだけで休み希望のON/OFFを切り替える(他の予定はそのまま残す)。
   // それ以外のときは、下の入力フォームの日付欄にその日をセットするだけ。
   async function handleDayClick(dateStr: string) {
     if (!ngMode) {
@@ -109,31 +109,10 @@ export default function ScheduleSubmissionForm({
     }
     setTogglingDate(dateStr);
     setError(null);
-    const dayEntries = entriesByDate.get(dateStr) ?? [];
-    const existingUnavailable = dayEntries.find((e) => e.kind === "unavailable");
-
-    if (existingUnavailable) {
-      const result = await deleteScheduleEntry(existingUnavailable.id, staffId);
-      setTogglingDate(null);
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      router.refresh();
-      return;
-    }
-
-    // 休み希望にする日は、固定パターンなどで既に入っている受付・レッスンの予定を残しておくと
-    // 矛盾するので、先にその日の他の予定を削除してから休み希望を登録する。
-    for (const e of dayEntries) {
-      const delResult = await deleteScheduleEntry(e.id, staffId);
-      if (!delResult.ok) {
-        setTogglingDate(null);
-        setError(delResult.error);
-        return;
-      }
-    }
-    const result = await addScheduleEntry({ entryDate: dateStr, kind: "unavailable" }, staffId);
+    const existingUnavailable = (entriesByDate.get(dateStr) ?? []).find((e) => e.kind === "unavailable");
+    const result = existingUnavailable
+      ? await deleteScheduleEntry(existingUnavailable.id, staffId)
+      : await addScheduleEntry({ entryDate: dateStr, kind: "unavailable" }, staffId);
     setTogglingDate(null);
     if (!result.ok) {
       setError(result.error);
@@ -199,7 +178,7 @@ export default function ScheduleSubmissionForm({
         </div>
         <p className="text-xs text-neutral-400">
           {ngMode
-            ? "日付をタップすると、その日の他の予定を削除して休み希望になります。もう一度タップすると解除されます(元の固定予定は「今月に反映する」で戻せます)。"
+            ? "日付をタップすると、その日が休み希望になります(他の予定は消えず、そのまま残ります)。もう一度タップすると解除されます。"
             : "日付をタップすると、下の入力欄の日付が切り替わります。"}
         </p>
 
@@ -213,6 +192,7 @@ export default function ScheduleSubmissionForm({
             if (!dateStr) return <div key={`empty-${i}`} />;
             const dayEntries = entriesByDate.get(dateStr) ?? [];
             const isUnavailable = dayEntries.some((e) => e.kind === "unavailable");
+            const otherCount = dayEntries.filter((e) => e.kind !== "unavailable").length;
             const day = Number(dateStr.split("-")[2]);
             return (
               <button
@@ -231,7 +211,7 @@ export default function ScheduleSubmissionForm({
               >
                 <span>{day}</span>
                 {isUnavailable && <span className="text-red-600">休</span>}
-                {!isUnavailable && dayEntries.length > 0 && <span className="text-neutral-500">{dayEntries.length}件</span>}
+                {otherCount > 0 && <span className="text-neutral-500">{otherCount}件</span>}
               </button>
             );
           })}
