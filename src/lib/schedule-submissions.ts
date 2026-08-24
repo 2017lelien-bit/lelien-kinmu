@@ -42,7 +42,7 @@ export async function addScheduleEntry(
     note?: string;
   },
   staffId?: string,
-): Promise<ActionResult> {
+): Promise<ActionResult<ScheduleSubmission>> {
   const acting = await resolveActingStaffId(staffId);
   if ("error" in acting) return { ok: false, error: acting.error };
 
@@ -54,21 +54,26 @@ export async function addScheduleEntry(
   }
 
   const admin = createAdminClient();
-  const { error } = await admin.from("schedule_submissions").insert({
-    staff_id: acting.id,
-    entry_date: input.entryDate,
-    kind: input.kind,
-    start_time: input.kind === "unavailable" ? null : input.startTime,
-    end_time: input.kind === "reception" ? input.endTime : null,
-    lesson_name: input.kind === "lesson" ? input.lessonName?.trim() : null,
-    note: input.note || null,
-  });
-  if (error) return { ok: false, error: "登録に失敗しました。" };
+  const { data: inserted, error } = await admin
+    .from("schedule_submissions")
+    .insert({
+      staff_id: acting.id,
+      entry_date: input.entryDate,
+      kind: input.kind,
+      // 休み希望(unavailable)は、時刻を空欄にすれば終日休み、指定すればその時間帯だけの休みになる。
+      start_time: input.kind === "unavailable" ? input.startTime || null : input.startTime,
+      end_time: input.kind === "lesson" ? null : input.endTime || null,
+      lesson_name: input.kind === "lesson" ? input.lessonName?.trim() : null,
+      note: input.note || null,
+    })
+    .select()
+    .single();
+  if (error || !inserted) return { ok: false, error: "登録に失敗しました。" };
 
   revalidatePath("/staff/mypage");
   revalidatePath(`/staff/admin/staff/${acting.id}`);
   revalidatePath("/staff/admin/schedule");
-  return { ok: true, data: undefined };
+  return { ok: true, data: inserted as ScheduleSubmission };
 }
 
 export async function deleteScheduleEntry(id: string, staffId?: string): Promise<ActionResult> {

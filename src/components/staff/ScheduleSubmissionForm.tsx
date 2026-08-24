@@ -42,6 +42,7 @@ export default function ScheduleSubmissionForm({
   const [endTime, setEndTime] = useState("13:00");
   const [lessonName, setLessonName] = useState(lessonOptions[0]?.name ?? "");
   const [note, setNote] = useState("");
+  const [partialUnavailable, setPartialUnavailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -49,6 +50,15 @@ export default function ScheduleSubmissionForm({
   const [applyMessage, setApplyMessage] = useState<string | null>(null);
   const [ngMode, setNgMode] = useState(false);
   const [togglingDate, setTogglingDate] = useState<string | null>(null);
+  // サーバーの再取得(router.refresh)が反映されるまでの間、連打で二重登録されないように
+  // ローカルでも即座に反映しておく。propsが更新されたら、そちらを正として同期する
+  // (レンダー中にsetStateする、Reactが推奨する「propsからstateを導出し直す」パターン)。
+  const [prevEntries, setPrevEntries] = useState(entries);
+  const [localEntries, setLocalEntries] = useState(entries);
+  if (entries !== prevEntries) {
+    setPrevEntries(entries);
+    setLocalEntries(entries);
+  }
 
   function resetForm() {
     setEntryDate(monthStart);
@@ -56,17 +66,19 @@ export default function ScheduleSubmissionForm({
     setEndTime("13:00");
     setLessonName(lessonOptions[0]?.name ?? "");
     setNote("");
+    setPartialUnavailable(false);
   }
 
   async function handleSubmit() {
     setSubmitting(true);
     setError(null);
+    const unavailableWithTime = kind === "unavailable" && partialUnavailable;
     const result = await addScheduleEntry(
       {
         entryDate,
         kind,
-        startTime: kind === "unavailable" ? undefined : startTime,
-        endTime: kind === "reception" ? endTime : undefined,
+        startTime: kind === "unavailable" ? (unavailableWithTime ? startTime : undefined) : startTime,
+        endTime: kind === "reception" || unavailableWithTime ? endTime : undefined,
         lessonName: kind === "lesson" ? lessonName : undefined,
         note: note || undefined,
       },
@@ -77,6 +89,7 @@ export default function ScheduleSubmissionForm({
       setError(result.error);
       return;
     }
+    setLocalEntries((prev) => [...prev, result.data]);
     resetForm();
     router.refresh();
   }
@@ -89,11 +102,12 @@ export default function ScheduleSubmissionForm({
       setError(result.error);
       return;
     }
+    setLocalEntries((prev) => prev.filter((e) => e.id !== id));
     router.refresh();
   }
 
   const entriesByDate = new Map<string, ScheduleSubmission[]>();
-  for (const e of entries) {
+  for (const e of localEntries) {
     const list = entriesByDate.get(e.entry_date) ?? [];
     list.push(e);
     entriesByDate.set(e.entry_date, list);
@@ -110,14 +124,25 @@ export default function ScheduleSubmissionForm({
     setTogglingDate(dateStr);
     setError(null);
     const existingUnavailable = (entriesByDate.get(dateStr) ?? []).find((e) => e.kind === "unavailable");
-    const result = existingUnavailable
-      ? await deleteScheduleEntry(existingUnavailable.id, staffId)
-      : await addScheduleEntry({ entryDate: dateStr, kind: "unavailable" }, staffId);
+    if (existingUnavailable) {
+      const result = await deleteScheduleEntry(existingUnavailable.id, staffId);
+      setTogglingDate(null);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setLocalEntries((prev) => prev.filter((e) => e.id !== existingUnavailable.id));
+      router.refresh();
+      return;
+    }
+
+    const result = await addScheduleEntry({ entryDate: dateStr, kind: "unavailable" }, staffId);
     setTogglingDate(null);
     if (!result.ok) {
       setError(result.error);
       return;
     }
+    setLocalEntries((prev) => [...prev, result.data]);
     router.refresh();
   }
 
@@ -242,7 +267,17 @@ export default function ScheduleSubmissionForm({
             className="rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
           />
         </label>
-        {kind !== "unavailable" && (
+        {kind === "unavailable" && (
+          <label className="flex items-center gap-1 self-end pb-2 text-sm">
+            <input
+              type="checkbox"
+              checked={partialUnavailable}
+              onChange={(e) => setPartialUnavailable(e.target.checked)}
+            />
+            時間帯を指定する(空欄なら終日休み)
+          </label>
+        )}
+        {(kind !== "unavailable" || partialUnavailable) && (
           <label className="flex flex-col gap-1 text-sm">
             開始時刻
             <input
@@ -253,7 +288,7 @@ export default function ScheduleSubmissionForm({
             />
           </label>
         )}
-        {kind === "reception" && (
+        {(kind === "reception" || (kind === "unavailable" && partialUnavailable)) && (
           <label className="flex flex-col gap-1 text-sm">
             終了時刻
             <input
@@ -311,11 +346,14 @@ export default function ScheduleSubmissionForm({
       </button>
 
       <div className="flex flex-col gap-2 border-t border-neutral-100 pt-4 dark:border-neutral-900">
-        {entries.length === 0 ? (
-          <p className="text-sm text-neutral-400">まだ提出されたスケジュールはありません。</p>
-        ) : (
-          <ul className="flex flex-col gap-2 text-sm">
-            {entries.map((e) => (
+        {(() => {
+          const visibleEntries = localEntries.filter((e) => e.kind !== "unavailable");
+          if (visibleEntries.length === 0) {
+            return <p className="text-sm text-neutral-400">まだ提出されたスケジュールはありません。</p>;
+          }
+          return (
+            <ul className="flex flex-col gap-2 text-sm">
+              {visibleEntries.map((e) => (
               <li key={e.id} className="flex flex-wrap items-center gap-3 border-b border-neutral-100 pb-2 dark:border-neutral-900">
                 <span>{e.entry_date}</span>
                 {e.start_time && (
@@ -338,9 +376,10 @@ export default function ScheduleSubmissionForm({
                   </button>
                 )}
               </li>
-            ))}
-          </ul>
-        )}
+              ))}
+            </ul>
+          );
+        })()}
       </div>
     </div>
   );
