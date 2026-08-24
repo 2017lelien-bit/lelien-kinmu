@@ -41,11 +41,9 @@ export default async function StaffLayout({ children }: { children: React.ReactN
           <span>{staff.name} さん</span>
           <SignOutButton />
         </div>
-        {staff.role === "admin" && (
-          <div className="w-full border-t border-neutral-100 pt-2 dark:border-neutral-900">
-            <NotificationOptIn />
-          </div>
-        )}
+        <div className="w-full border-t border-neutral-100 pt-2 dark:border-neutral-900">
+          <NotificationOptIn label={staff.role === "admin" ? "スタッフの提出通知" : "スケジュール締切のお知らせ"} />
+        </div>
       </header>
       <main className="flex-1 px-6 py-8">{children}</main>
     </div>

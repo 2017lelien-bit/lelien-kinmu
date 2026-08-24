@@ -46,30 +46,24 @@ export async function removePushSubscription(endpoint: string): Promise<ActionRe
   return { ok: true, data: undefined };
 }
 
-// 管理者権限を持つ全スタッフの、登録済み端末すべてにプッシュ通知を送る。
-export async function notifyAdmins(payload: { title: string; body: string; url: string }): Promise<void> {
+async function sendToStaffIds(
+  staffIds: string[],
+  payload: { title: string; body: string; url: string; badgeCount?: number },
+): Promise<void> {
   configureWebPush();
+  if (staffIds.length === 0) return;
 
   const admin = createAdminClient();
-  const { data: admins } = await admin.from("staff_profiles").select("id").eq("role", "admin");
-  const adminIds = (admins ?? []).map((a) => a.id);
-  if (adminIds.length === 0) return;
-
   const { data: subscriptions } = await admin
     .from("push_subscriptions")
     .select("id, endpoint, p256dh, auth")
-    .in("staff_id", adminIds);
-
-  const { count: badgeCount } = await admin
-    .from("period_submissions")
-    .select("id", { count: "exact", head: true })
-    .is("acknowledged_at", null);
+    .in("staff_id", staffIds);
 
   for (const sub of subscriptions ?? []) {
     try {
       await webpush.sendNotification(
         { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-        JSON.stringify({ ...payload, badgeCount: badgeCount ?? 0 }),
+        JSON.stringify({ ...payload, badgeCount: payload.badgeCount ?? 0 }),
       );
     } catch (error) {
       const statusCode = (error as { statusCode?: number }).statusCode;
@@ -81,4 +75,27 @@ export async function notifyAdmins(payload: { title: string; body: string; url: 
       }
     }
   }
+}
+
+// 管理者権限を持つ全スタッフの、登録済み端末すべてにプッシュ通知を送る。
+export async function notifyAdmins(payload: { title: string; body: string; url: string }): Promise<void> {
+  const admin = createAdminClient();
+  const { data: admins } = await admin.from("staff_profiles").select("id").eq("role", "admin");
+  const adminIds = (admins ?? []).map((a) => a.id);
+
+  const { count: badgeCount } = await admin
+    .from("period_submissions")
+    .select("id", { count: "exact", head: true })
+    .is("acknowledged_at", null);
+
+  await sendToStaffIds(adminIds, { ...payload, badgeCount: badgeCount ?? 0 });
+}
+
+// 管理者ではないスタッフ全員の、登録済み端末すべてにプッシュ通知を送る(スケジュール提出の締切連絡など)。
+export async function notifyStaff(payload: { title: string; body: string; url: string }): Promise<void> {
+  const admin = createAdminClient();
+  const { data: staffRows } = await admin.from("staff_profiles").select("id").eq("role", "staff").eq("is_active", true);
+  const staffIds = (staffRows ?? []).map((s) => s.id);
+
+  await sendToStaffIds(staffIds, payload);
 }

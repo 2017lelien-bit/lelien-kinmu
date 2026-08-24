@@ -12,7 +12,7 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 
 type Status = "checking" | "unsupported" | "not-installed" | "off" | "on";
 
-export default function NotificationOptIn() {
+export default function NotificationOptIn({ label = "通知" }: { label?: string }) {
   const [status, setStatus] = useState<Status>("checking");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -109,14 +109,14 @@ export default function NotificationOptIn() {
       {error && <span className="text-red-600">{error}</span>}
       {status === "on" ? (
         <>
-          <span className="text-neutral-500">スタッフの提出通知: オン</span>
+          <span className="text-neutral-500">{label}: オン</span>
           <button onClick={handleDisable} disabled={busy} className="underline disabled:opacity-40">
             オフにする
           </button>
         </>
       ) : (
         <button onClick={handleEnable} disabled={busy} className="underline disabled:opacity-40">
-          {busy ? "設定中..." : "この端末で提出通知を受け取る"}
+          {busy ? "設定中..." : `この端末で${label}を受け取る`}
         </button>
       )}
     </div>
