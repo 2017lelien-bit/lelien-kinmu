@@ -61,13 +61,19 @@ export default function ScheduleReviewPanel({
     router.refresh();
   }
 
-  const entriesByDate = new Map<string, EntryWithName[]>();
+  // 日付ごとではなく、1人ずつまとめて見やすくする。
+  const entriesByStaff = new Map<string, { staffName: string; entries: EntryWithName[] }>();
   for (const e of entries) {
-    const list = entriesByDate.get(e.entry_date) ?? [];
-    list.push(e);
-    entriesByDate.set(e.entry_date, list);
+    const group = entriesByStaff.get(e.staff_id) ?? { staffName: e.staffName, entries: [] };
+    group.entries.push(e);
+    entriesByStaff.set(e.staff_id, group);
   }
-  const dates = Array.from(entriesByDate.keys()).sort();
+  for (const group of entriesByStaff.values()) {
+    group.entries.sort((a, b) => a.entry_date.localeCompare(b.entry_date));
+  }
+  const staffIds = Array.from(entriesByStaff.keys()).sort((a, b) =>
+    (entriesByStaff.get(a)?.staffName ?? "").localeCompare(entriesByStaff.get(b)?.staffName ?? "", "ja"),
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -110,39 +116,51 @@ export default function ScheduleReviewPanel({
         </ul>
       </div>
 
-      {dates.length === 0 ? (
+      {staffIds.length === 0 ? (
         <p className="text-sm text-neutral-400">この月の提出はまだありません。</p>
       ) : (
         <div className="flex flex-col gap-4">
-          {dates.map((date) => (
-            <div key={date} className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
-              <p className="mb-2 text-sm font-semibold">{date}</p>
-              <ul className="flex flex-col gap-2 text-sm">
-                {(entriesByDate.get(date) ?? []).map((e) => (
-                  <li key={e.id} className="flex flex-wrap items-center gap-3">
-                    <span className="font-semibold">{e.staffName}</span>
-                    {e.start_time && (
-                      <span>
-                        {e.start_time.slice(0, 5)}
-                        {e.end_time ? `〜${e.end_time.slice(0, 5)}` : ""}
-                      </span>
-                    )}
-                    <span>{e.kind === "lesson" ? e.lesson_name : SCHEDULE_KIND_LABEL[e.kind]}</span>
-                    {e.note && <span className="text-neutral-400">{e.note}</span>}
-                    <label className="ml-auto flex items-center gap-1 text-xs">
-                      <input
-                        type="checkbox"
-                        checked={e.confirmed}
-                        disabled={savingId === e.id}
-                        onChange={() => handleToggleConfirmed(e)}
-                      />
-                      確定
-                    </label>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+          {staffIds.map((staffId) => {
+            const group = entriesByStaff.get(staffId)!;
+            const status = statusList.find((s) => s.staffId === staffId);
+            return (
+              <div key={staffId} className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-semibold">{group.staffName}</p>
+                  <span className="text-xs text-neutral-400">({group.entries.length}件)</span>
+                  {status?.submittedAt ? (
+                    <span className="text-xs text-neutral-400">提出済み</span>
+                  ) : (
+                    <span className="text-xs text-red-600">未提出</span>
+                  )}
+                </div>
+                <ul className="flex flex-col gap-2 text-sm">
+                  {group.entries.map((e) => (
+                    <li key={e.id} className="flex flex-wrap items-center gap-3">
+                      <span className="text-neutral-400">{e.entry_date}</span>
+                      {e.start_time && (
+                        <span>
+                          {e.start_time.slice(0, 5)}
+                          {e.end_time ? `〜${e.end_time.slice(0, 5)}` : ""}
+                        </span>
+                      )}
+                      <span>{e.kind === "lesson" ? e.lesson_name : SCHEDULE_KIND_LABEL[e.kind]}</span>
+                      {e.note && <span className="text-neutral-400">{e.note}</span>}
+                      <label className="ml-auto flex items-center gap-1 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={e.confirmed}
+                          disabled={savingId === e.id}
+                          onChange={() => handleToggleConfirmed(e)}
+                        />
+                        確定
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
