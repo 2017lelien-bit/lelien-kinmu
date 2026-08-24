@@ -5,7 +5,8 @@ import { getPayslipsForStaff, getTodaySummary } from "@/lib/payroll";
 import { getOwnPayEntries } from "@/lib/staff-self";
 import { getOwnLessonLogEntries } from "@/lib/lesson-log";
 import { getOwnTimeLogEntries } from "@/lib/time-log";
-import { currentPayPeriod } from "@/lib/date";
+import { getOwnScheduleSubmissions } from "@/lib/schedule-submissions";
+import { currentPayPeriod, nextMonthStart, monthEnd } from "@/lib/date";
 import TaxSettingsForm from "@/components/staff/TaxSettingsForm";
 import CommuteSettingsForm from "@/components/staff/CommuteSettingsForm";
 import PayCategoryManager from "@/components/staff/PayCategoryManager";
@@ -15,6 +16,7 @@ import TodaySummaryPanel from "@/components/staff/TodaySummaryPanel";
 import PayEntryForm from "@/components/staff/PayEntryForm";
 import LessonLogForm from "@/components/staff/LessonLogForm";
 import TimeLogForm from "@/components/staff/TimeLogForm";
+import ScheduleSubmissionForm from "@/components/staff/ScheduleSubmissionForm";
 import SubmissionStatusPanel from "@/components/staff/SubmissionStatusPanel";
 
 export default async function StaffAdminDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -23,7 +25,8 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
   if (!staff || staff.role !== "admin") notFound();
 
   const { periodStart, periodEnd } = currentPayPeriod();
-  const [detail, payslips, todaySummary, currentPayEntries, currentLessonLogEntries, submission] =
+  const scheduleMonthStart = nextMonthStart();
+  const [detail, payslips, todaySummary, currentPayEntries, currentLessonLogEntries, submission, scheduleEntries] =
     await Promise.all([
       getStaffDetail(id),
       getPayslipsForStaff(id),
@@ -31,6 +34,7 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
       getOwnPayEntries(periodStart, id),
       getOwnLessonLogEntries(periodStart, periodEnd, id),
       getSubmissionStatus(id),
+      getOwnScheduleSubmissions(scheduleMonthStart, monthEnd(scheduleMonthStart), id),
     ]);
   if (!detail) notFound();
 
@@ -61,6 +65,8 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
         shifts={todaySummary.shifts}
         headcountMatters={headcountMatters}
       />
+
+      <ScheduleSubmissionForm entries={scheduleEntries} monthStart={scheduleMonthStart} staffId={profile.id} />
 
       <dl className="grid grid-cols-[10rem_1fr] gap-y-2 text-sm">
         <dt className="text-neutral-500">権限</dt>

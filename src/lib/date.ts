@@ -38,6 +38,18 @@ export function currentPayPeriod(): { periodStart: string; periodEnd: string } {
   return payPeriodForDate(todayJstDateString());
 }
 
+// スケジュール提出用。基準日の翌月の月初(YYYY-MM-01)を返す。
+export function nextMonthStart(dateStr: string = todayJstDateString()): string {
+  const [y, m] = dateStr.split("-").map(Number);
+  return new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10);
+}
+
+// 月初(YYYY-MM-01)から、その月の月末の日付を返す。
+export function monthEnd(monthStart: string): string {
+  const [y, m] = monthStart.split("-").map(Number);
+  return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+}
+
 function minutesSinceMidnight(time: string): number {
   const [h, m] = time.split(":").map(Number);
   return h * 60 + m;

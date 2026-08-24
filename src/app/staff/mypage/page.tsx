@@ -3,11 +3,13 @@ import { getOwnPayCategories } from "@/lib/pay-categories";
 import { getOwnHasPayRateRules, getOwnHeadcountMatters, getOwnLessonLogEntries } from "@/lib/lesson-log";
 import { getOwnPayEntries, getOwnPayslips, getOwnStaffProfile, getOwnSubmissionStatus } from "@/lib/staff-self";
 import { getOwnTimeLogEntries } from "@/lib/time-log";
-import { currentPayPeriod } from "@/lib/date";
+import { getOwnScheduleSubmissions } from "@/lib/schedule-submissions";
+import { currentPayPeriod, nextMonthStart, monthEnd } from "@/lib/date";
 import MyStaffProfileForm from "@/components/staff/MyStaffProfileForm";
 import PayEntryForm from "@/components/staff/PayEntryForm";
 import LessonLogForm from "@/components/staff/LessonLogForm";
 import TimeLogForm from "@/components/staff/TimeLogForm";
+import ScheduleSubmissionForm from "@/components/staff/ScheduleSubmissionForm";
 import MyPayslipList from "@/components/staff/MyPayslipList";
 import SubmitPeriodButton from "@/components/staff/SubmitPeriodButton";
 
@@ -17,16 +19,26 @@ export default async function StaffMyPage() {
 
   const { periodStart, periodEnd } = currentPayPeriod();
   const periodLabel = `${periodStart}〜${periodEnd}`;
-  const [payCategories, payEntries, hasPayRateRules, headcountMatters, lessonLogEntries, payslips, submittedAt] =
-    await Promise.all([
-      getOwnPayCategories(),
-      getOwnPayEntries(periodStart),
-      getOwnHasPayRateRules(),
-      getOwnHeadcountMatters(),
-      getOwnLessonLogEntries(periodStart, periodEnd),
-      getOwnPayslips(),
-      getOwnSubmissionStatus(),
-    ]);
+  const scheduleMonthStart = nextMonthStart();
+  const [
+    payCategories,
+    payEntries,
+    hasPayRateRules,
+    headcountMatters,
+    lessonLogEntries,
+    payslips,
+    submittedAt,
+    scheduleEntries,
+  ] = await Promise.all([
+    getOwnPayCategories(),
+    getOwnPayEntries(periodStart),
+    getOwnHasPayRateRules(),
+    getOwnHeadcountMatters(),
+    getOwnLessonLogEntries(periodStart, periodEnd),
+    getOwnPayslips(),
+    getOwnSubmissionStatus(),
+    getOwnScheduleSubmissions(scheduleMonthStart, monthEnd(scheduleMonthStart)),
+  ]);
   const hasEntryInput = payCategories.length > 0 || hasPayRateRules;
   const hourlyCategories = payCategories.filter((c) => c.unit_type === "hourly");
   const timeLogEntriesByCategory = Object.fromEntries(
@@ -40,6 +52,8 @@ export default async function StaffMyPage() {
       <h1 className="text-xl font-semibold">マイページ</h1>
 
       <MyStaffProfileForm profile={profile} />
+
+      <ScheduleSubmissionForm entries={scheduleEntries} monthStart={scheduleMonthStart} />
 
       {payCategories.length > 0 && (
         <section className="flex flex-col gap-2">

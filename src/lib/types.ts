@@ -122,6 +122,20 @@ export interface PayrollBreakdown {
   lessonLines: PayrollBreakdownLessonLine[];
 }
 
+export type ScheduleKind = "reception" | "lesson";
+
+export interface ScheduleSubmission {
+  id: string;
+  staff_id: string;
+  entry_date: string; // "YYYY-MM-DD"
+  kind: ScheduleKind;
+  start_time: string; // "HH:MM:SS"
+  end_time: string | null; // 受付のみ
+  lesson_name: string | null; // レッスンのみ
+  note: string | null;
+  confirmed: boolean;
+}
+
 export interface StaffPayslip {
   id: string;
   staff_id: string;
