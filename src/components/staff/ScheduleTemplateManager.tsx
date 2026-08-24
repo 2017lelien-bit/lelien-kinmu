@@ -21,8 +21,7 @@ export default function ScheduleTemplateManager({
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("13:00");
   const [lessonName, setLessonName] = useState(lessonOptions[0]?.name ?? "");
-  const [everyWeek, setEveryWeek] = useState(true);
-  const [weeksOfMonth, setWeeksOfMonth] = useState<number[]>([]);
+  const [weeksOfMonth, setWeeksOfMonth] = useState<number[]>([1, 2, 3, 4, 5]);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -34,6 +33,8 @@ export default function ScheduleTemplateManager({
   async function handleAdd() {
     setAdding(true);
     setError(null);
+    // 5週すべて選ばれていれば「毎週」なので、あえて絞り込みなし(null)として保存する。
+    const isEveryWeek = weeksOfMonth.length === 5;
     const result = await addScheduleTemplate(
       {
         dayOfWeek,
@@ -41,7 +42,7 @@ export default function ScheduleTemplateManager({
         startTime,
         endTime: kind === "reception" ? endTime : undefined,
         lessonName: kind === "lesson" ? lessonName : undefined,
-        weeksOfMonth: everyWeek ? undefined : weeksOfMonth,
+        weeksOfMonth: isEveryWeek ? undefined : weeksOfMonth,
       },
       staffId,
     );
@@ -50,8 +51,7 @@ export default function ScheduleTemplateManager({
       setError(result.error);
       return;
     }
-    setWeeksOfMonth([]);
-    setEveryWeek(true);
+    setWeeksOfMonth([1, 2, 3, 4, 5]);
     router.refresh();
   }
 
@@ -101,24 +101,15 @@ export default function ScheduleTemplateManager({
       )}
 
       <div className="flex flex-wrap items-center gap-3 text-sm">
-        <label className="flex items-center gap-1">
-          <input type="radio" checked={everyWeek} onChange={() => setEveryWeek(true)} />
-          毎週
-        </label>
-        <label className="flex items-center gap-1">
-          <input type="radio" checked={!everyWeek} onChange={() => setEveryWeek(false)} />
-          特定の週だけ
-        </label>
-        {!everyWeek && (
-          <div className="flex flex-wrap gap-2">
-            {[1, 2, 3, 4, 5].map((w) => (
-              <label key={w} className="flex items-center gap-1">
-                <input type="checkbox" checked={weeksOfMonth.includes(w)} onChange={() => toggleWeek(w)} />
-                第{w}週
-              </label>
-            ))}
-          </div>
-        )}
+        <span className="text-neutral-500">対象の週(全部チェックで毎週)</span>
+        <div className="flex flex-wrap gap-2">
+          {[1, 2, 3, 4, 5].map((w) => (
+            <label key={w} className="flex items-center gap-1">
+              <input type="checkbox" checked={weeksOfMonth.includes(w)} onChange={() => toggleWeek(w)} />
+              第{w}週
+            </label>
+          ))}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-end gap-2">
@@ -194,7 +185,7 @@ export default function ScheduleTemplateManager({
         )}
         <button
           onClick={handleAdd}
-          disabled={adding || (!everyWeek && weeksOfMonth.length === 0)}
+          disabled={adding || weeksOfMonth.length === 0}
           className="rounded-lg border border-neutral-300 px-4 py-2 text-sm disabled:opacity-40 dark:border-neutral-700"
         >
           {adding ? "追加中..." : "追加する"}
