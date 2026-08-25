@@ -387,6 +387,17 @@ export default function ScheduleSubmissionForm({
             />
           </label>
         )}
+        {(kind === "reception" || kind === "both") && (
+          <button
+            onClick={() => {
+              setStartTime("09:00");
+              setEndTime("21:00");
+            }}
+            className="self-end rounded-lg border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700"
+          >
+            9:00〜21:00
+          </button>
+        )}
         {kind === "both" && (
           <label className="flex items-center gap-1 self-end pb-2 text-sm">
             <input type="checkbox" checked={wantsLesson} onChange={(e) => setWantsLesson(e.target.checked)} />
