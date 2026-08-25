@@ -23,6 +23,13 @@ function formatTime(t: string | null): string {
   return t ? t.slice(0, 5) : "";
 }
 
+// 日付の横に詰めて書くための短い時刻表記("09:00"→"9"、"13:30"→"13:30")。
+function formatTimeCompact(t: string | null): string {
+  if (!t) return "";
+  const [h, min] = t.slice(0, 5).split(":");
+  return min === "00" ? String(Number(h)) : `${Number(h)}:${min}`;
+}
+
 // 実際に店で使っているカレンダー(色分け済み)に合わせた、レッスン名ごとの背景色。
 // 決め打ちできない名前(単発のゲスト講師クラスなど)は、参考カレンダーで一番多く使われていた黄色を既定色にする。
 const FIXED_LESSON_COLORS: Record<string, string> = {
@@ -132,17 +139,21 @@ export default async function SchedulePrintPage({
 
           return (
             <div key={date} className={`flex min-h-28 flex-col gap-0.5 p-1 ${isClosedDay ? "bg-neutral-100" : "bg-white"}`}>
-              <p className={`font-semibold ${dow === 0 ? "text-red-600" : ""}`}>{day}</p>
+              <div className="flex flex-wrap items-baseline gap-x-1">
+                <p className={`font-semibold ${dow === 0 ? "text-red-600" : ""}`}>{day}</p>
+                {!isClosedDay &&
+                  type === "staff" &&
+                  reception.map((e) => (
+                    <span key={e.id} className="text-neutral-600">
+                      {e.staffName}
+                      {formatTimeCompact(e.start_time)}-{formatTimeCompact(e.end_time)}
+                    </span>
+                  ))}
+              </div>
               {isClosedDay ? (
                 <p className="text-neutral-400">定休日</p>
               ) : (
                 <>
-                  {type === "staff" &&
-                    reception.map((e) => (
-                      <p key={e.id} className="text-neutral-600">
-                        {formatTime(e.start_time)}〜{formatTime(e.end_time)} {e.staffName}
-                      </p>
-                    ))}
                   {lessons.map((e) => (
                     <p key={e.id} className="rounded px-1 py-0.5 leading-tight" style={lessonStyle(e.lesson_name!)}>
                       {formatTime(e.start_time)} {e.lesson_name}
