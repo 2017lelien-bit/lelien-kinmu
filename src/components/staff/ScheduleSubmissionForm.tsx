@@ -382,7 +382,7 @@ export default function ScheduleSubmissionForm({
         {kind === "both" && (
           <label className="flex items-center gap-1 self-end pb-2 text-sm">
             <input type="checkbox" checked={wantsLesson} onChange={(e) => setWantsLesson(e.target.checked)} />
-            レッスンも希望する(任意)
+            レッスンの希望も入力する
           </label>
         )}
         {kind === "both" && wantsLesson && (
