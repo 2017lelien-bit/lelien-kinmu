@@ -44,10 +44,12 @@ export default function ScheduleSubmissionForm({
   const maxMonthStart = addMonthsToMonthStart(monthStart, 12);
   const [viewMonth, setViewMonth] = useState(monthStart);
   const [loadingMonth, setLoadingMonth] = useState(false);
-  const [kind, setKind] = useState<"reception" | "lesson" | "unavailable">("reception");
+  const [kind, setKind] = useState<"reception" | "lesson" | "both" | "unavailable">("reception");
   const [entryDate, setEntryDate] = useState(monthStart);
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("13:00");
+  // 「両方可能」のときは、受付の時間(startTime/endTime)とは別にレッスンの開始時刻を持つ。
+  const [lessonStartTime, setLessonStartTime] = useState("10:00");
   const [lessonName, setLessonName] = useState(lessonOptions[0]?.name ?? "");
   const [note, setNote] = useState("");
   const [partialUnavailable, setPartialUnavailable] = useState(false);
@@ -74,6 +76,7 @@ export default function ScheduleSubmissionForm({
     setEntryDate(viewMonth);
     setStartTime("09:00");
     setEndTime("13:00");
+    setLessonStartTime("10:00");
     setLessonName(lessonOptions[0]?.name ?? "");
     setNote("");
     setPartialUnavailable(false);
@@ -93,6 +96,33 @@ export default function ScheduleSubmissionForm({
   async function handleSubmit() {
     setSubmitting(true);
     setError(null);
+
+    if (kind === "both") {
+      const receptionResult = await addScheduleEntry(
+        { entryDate, kind: "reception", startTime, endTime, note: note || undefined },
+        staffId,
+      );
+      if (!receptionResult.ok) {
+        setSubmitting(false);
+        setError(receptionResult.error);
+        return;
+      }
+      const lessonResult = await addScheduleEntry(
+        { entryDate, kind: "lesson", startTime: lessonStartTime, lessonName, note: note || undefined },
+        staffId,
+      );
+      setSubmitting(false);
+      if (!lessonResult.ok) {
+        setError(lessonResult.error);
+        setLocalEntries((prev) => [...prev, receptionResult.data]);
+        return;
+      }
+      setLocalEntries((prev) => [...prev, receptionResult.data, lessonResult.data]);
+      resetForm();
+      router.refresh();
+      return;
+    }
+
     const unavailableWithTime = kind === "unavailable" && partialUnavailable;
     const result = await addScheduleEntry(
       {
@@ -287,11 +317,12 @@ export default function ScheduleSubmissionForm({
           種別
           <select
             value={kind}
-            onChange={(e) => setKind(e.target.value as "reception" | "lesson" | "unavailable")}
+            onChange={(e) => setKind(e.target.value as "reception" | "lesson" | "both" | "unavailable")}
             className="rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
           >
             <option value="reception">受付</option>
             <option value="lesson">レッスン</option>
+            <option value="both">受付・レッスンどちらも可能</option>
             <option value="unavailable">休み希望(NG日)</option>
           </select>
         </label>
@@ -318,7 +349,7 @@ export default function ScheduleSubmissionForm({
         )}
         {(kind !== "unavailable" || partialUnavailable) && (
           <label className="flex flex-col gap-1 text-sm">
-            開始時刻
+            {kind === "both" ? "受付 開始時刻" : "開始時刻"}
             <input
               type="time"
               value={startTime}
@@ -327,9 +358,9 @@ export default function ScheduleSubmissionForm({
             />
           </label>
         )}
-        {(kind === "reception" || (kind === "unavailable" && partialUnavailable)) && (
+        {(kind === "reception" || kind === "both" || (kind === "unavailable" && partialUnavailable)) && (
           <label className="flex flex-col gap-1 text-sm">
-            終了時刻
+            {kind === "both" ? "受付 終了時刻" : "終了時刻"}
             <input
               type="time"
               value={endTime}
@@ -338,7 +369,18 @@ export default function ScheduleSubmissionForm({
             />
           </label>
         )}
-        {kind === "lesson" &&
+        {kind === "both" && (
+          <label className="flex flex-col gap-1 text-sm">
+            レッスン開始時刻
+            <input
+              type="time"
+              value={lessonStartTime}
+              onChange={(e) => setLessonStartTime(e.target.value)}
+              className="rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
+            />
+          </label>
+        )}
+        {(kind === "lesson" || kind === "both") &&
           (lessonOptions.length > 0 ? (
             <label className="flex flex-col gap-1 text-sm">
               レッスン名
