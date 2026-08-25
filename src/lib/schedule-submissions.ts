@@ -102,14 +102,19 @@ export async function getAllScheduleSubmissions(
   const admin = createAdminClient();
   const { data } = await admin
     .from("schedule_submissions")
-    .select("*, staff_profiles(name)")
+    .select("*, staff_profiles(name, schedule_display_name)")
     .gte("entry_date", monthStart)
     .lte("entry_date", monthEnd)
     .order("entry_date", { ascending: true });
 
-  return ((data ?? []) as unknown as (ScheduleSubmission & { staff_profiles: { name: string } | null })[]).map(
-    (e) => ({ ...e, staffName: e.staff_profiles?.name ?? "(不明)" }),
-  );
+  return (
+    (data ?? []) as unknown as (ScheduleSubmission & {
+      staff_profiles: { name: string; schedule_display_name: string | null } | null;
+    })[]
+  ).map((e) => ({
+    ...e,
+    staffName: e.staff_profiles?.schedule_display_name || e.staff_profiles?.name || "(不明)",
+  }));
 }
 
 export async function setScheduleEntryConfirmed(id: string, confirmed: boolean): Promise<ActionResult> {
@@ -347,14 +352,19 @@ export async function getScheduleSubmissionStatusList(
 
   const admin = createAdminClient();
   const [{ data: staffRows }, { data: statusRows }] = await Promise.all([
-    admin.from("staff_profiles").select("id, name").eq("role", "staff").eq("is_active", true).order("name"),
+    admin
+      .from("staff_profiles")
+      .select("id, name, schedule_display_name")
+      .eq("role", "staff")
+      .eq("is_active", true)
+      .order("name"),
     admin.from("schedule_submission_status").select("staff_id, submitted_at").eq("month_start", monthStart),
   ]);
 
   const statusByStaff = new Map((statusRows ?? []).map((r) => [r.staff_id, r.submitted_at as string]));
   return (staffRows ?? []).map((s) => ({
     staffId: s.id,
-    staffName: s.name,
+    staffName: s.schedule_display_name || s.name,
     submittedAt: statusByStaff.get(s.id) ?? null,
   }));
 }

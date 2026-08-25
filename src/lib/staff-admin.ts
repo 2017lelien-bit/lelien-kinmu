@@ -163,6 +163,23 @@ export async function setStaffActive(staffId: string, isActive: boolean): Promis
   return { ok: true, data: undefined };
 }
 
+// スケジュール作成画面(カレンダー)で使う短い表示名(例: "Miho")。空欄なら通常のスタッフ名を使う。
+export async function updateScheduleDisplayName(staffId: string, name: string): Promise<ActionResult> {
+  const staff = await getStaffUser();
+  if (!staff || staff.role !== "admin") return { ok: false, error: "管理者としてログインしてください。" };
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("staff_profiles")
+    .update({ schedule_display_name: name.trim() || null })
+    .eq("id", staffId);
+  if (error) return { ok: false, error: "更新に失敗しました。" };
+
+  revalidatePath(`/staff/admin/staff/${staffId}`);
+  revalidatePath("/staff/admin/schedule");
+  return { ok: true, data: undefined };
+}
+
 // Supabase Authの招待メール(パスワード設定リンク)を送信し、staff_profilesにレコードを作成する。
 // パスワード自体はこの経路では一切扱わず、本人がメール内リンクから/staff/set-passwordで設定する。
 // メールでの招待は届かないことがあるため、URLを直接発行してLINEなどで共有できるようにする

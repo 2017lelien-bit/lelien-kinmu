@@ -23,6 +23,7 @@ export interface StaffProfile {
   phone: string | null;
   contact_email: string | null;
   address: string | null;
+  schedule_display_name: string | null; // スケジュール作成画面で使う短い表示名(例: "Miho")。未設定なら name を使う
   is_active: boolean;
   dependent_count: number;
   has_spouse_deduction: boolean;

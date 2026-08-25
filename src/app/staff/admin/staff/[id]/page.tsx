@@ -25,6 +25,7 @@ import ScheduleSubmissionForm from "@/components/staff/ScheduleSubmissionForm";
 import ScheduleTemplateManager from "@/components/staff/ScheduleTemplateManager";
 import LessonOptionsManager from "@/components/staff/LessonOptionsManager";
 import SubmitScheduleButton from "@/components/staff/SubmitScheduleButton";
+import ScheduleDisplayNameForm from "@/components/staff/ScheduleDisplayNameForm";
 import SubmissionStatusPanel from "@/components/staff/SubmissionStatusPanel";
 
 export default async function StaffAdminDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -86,6 +87,8 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
         shifts={todaySummary.shifts}
         headcountMatters={headcountMatters}
       />
+
+      <ScheduleDisplayNameForm staffId={profile.id} initialName={profile.schedule_display_name} />
 
       <LessonOptionsManager options={lessonOptions} staffId={profile.id} />
 
