@@ -28,7 +28,7 @@ export default async function AdminSchedulePage() {
       <div className="flex flex-col gap-4 border-t border-neutral-200 pt-8 dark:border-neutral-800">
         <h1 className="text-xl font-semibold">② スケジュールの組み立て</h1>
         <p className="text-sm text-neutral-500">
-          全員の提出が揃ったら、日付ごとに提出された候補からプルダウンで選んで、その日の受付・レッスンを決めてください。
+          全員そろっていなくても、提出済みの人だけで先に組み始められます。日付ごとに、その時点で提出された候補からプルダウンで選んで、受付・レッスンを決めてください(後から他のスタッフの提出があれば、候補に追加されます)。
         </p>
         <ScheduleBuilderPanel initialMonthStart={initialMonthStart} initialEntries={entries} />
       </div>
