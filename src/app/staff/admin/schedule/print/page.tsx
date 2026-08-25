@@ -23,21 +23,28 @@ function formatTime(t: string | null): string {
   return t ? t.slice(0, 5) : "";
 }
 
-// レッスン名ごとに色を固定で割り当てる。スタジオでよく使う名前は決め打ち、
-// それ以外(スタッフが自由入力した名前)は名前のハッシュ値でパレットから選ぶ。
+// 実際に店で使っているカレンダー(色分け済み)に合わせた、レッスン名ごとの背景色。
+// 決め打ちできない名前(単発のゲスト講師クラスなど)は、参考カレンダーで一番多く使われていた黄色を既定色にする。
 const FIXED_LESSON_COLORS: Record<string, string> = {
-  フロアクラス: "#FDE68A",
-  ハンモック: "#BFDBFE",
-  ティシュー: "#FBCFE8",
-  "75分クラス": "#BBF7D0",
+  "筋膜リリース75": "#FFFF00",
+  Fアクティブ: "#FFCCFF",
+  Fストレッチ: "#FFCCFF",
+  Fコアバランス: "#FFE8CC",
+  Fアロマリラックス: "#A0FFA0",
+  Fkids: "#FF0066",
+  Kidsティシュー: "#FF0066",
+  "ティシュー初級〜": "#CCE5FF",
+  crystalbowl: "#0070C0",
 };
-const FALLBACK_PALETTE = ["#E9D5FF", "#FED7AA", "#A5F3FC", "#FCA5A5", "#D9F99D", "#C7D2FE"];
+// 色を付けない(参考カレンダーで無色だった)レッスン名。
+const NO_COLOR_LESSONS = new Set(["Fエンジョイ", "4Dpro", "Fシニア", "バンジーフィットネス", "Fデトックス", "Fミックス"]);
+const DEFAULT_COLOR = "#FFFF00";
+const DARK_BG_LESSONS = new Set(["crystalbowl"]);
 
-function lessonColor(name: string): string {
-  if (FIXED_LESSON_COLORS[name]) return FIXED_LESSON_COLORS[name];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
-  return FALLBACK_PALETTE[hash % FALLBACK_PALETTE.length];
+function lessonStyle(name: string): { backgroundColor?: string; color?: string } {
+  if (NO_COLOR_LESSONS.has(name)) return {};
+  const bg = FIXED_LESSON_COLORS[name] ?? DEFAULT_COLOR;
+  return DARK_BG_LESSONS.has(name) ? { backgroundColor: bg, color: "#ffffff" } : { backgroundColor: bg };
 }
 
 export default async function SchedulePrintPage({
@@ -74,8 +81,13 @@ export default async function SchedulePrintPage({
 
   const lessonNamesUsed = Array.from(new Set(confirmed.filter((e) => e.kind === "lesson").map((e) => e.lesson_name!))).sort();
 
+  // カレンダーの見た目に合わせて、月初の曜日分だけ空マスを差し込む。
+  const leadingBlanks: (string | null)[] = Array(dayOfWeekForDate(dates[0])).fill(null);
+  const calendarCells: (string | null)[] = [...leadingBlanks, ...dates];
+  while (calendarCells.length % 7 !== 0) calendarCells.push(null);
+
   return (
-    <div className="flex flex-col gap-4">
+    <div className="print-calendar flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-3 print:hidden">
         <h1 className="text-lg font-semibold">
           {formatMonthLabel(monthStart)}スケジュール({TYPE_LABEL[type]})
@@ -83,13 +95,15 @@ export default async function SchedulePrintPage({
         <PrintButton />
       </div>
 
+      <h2 className="hidden text-center text-xl font-bold print:block">{formatMonthLabel(monthStart)}スケジュール</h2>
+
       {lessonNamesUsed.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 text-xs">
           {lessonNamesUsed.map((name) => (
             <span key={name} className="inline-flex items-center gap-1">
               <span
                 className="inline-block h-3 w-3 rounded-sm border border-black/10"
-                style={{ backgroundColor: lessonColor(name) }}
+                style={{ backgroundColor: lessonStyle(name).backgroundColor ?? "#ffffff" }}
               />
               {name}
             </span>
@@ -97,63 +111,50 @@ export default async function SchedulePrintPage({
         </div>
       )}
 
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr>
-            <th className="border border-neutral-400 px-2 py-1 text-left">日付</th>
-            {type === "staff" && <th className="border border-neutral-400 px-2 py-1 text-left">受付</th>}
-            <th className="border border-neutral-400 px-2 py-1 text-left">レッスン</th>
-          </tr>
-        </thead>
-        <tbody>
-          {dates.map((date) => {
-            const day = Number(date.split("-")[2]);
-            const dow = dayOfWeekForDate(date);
-            const isClosedDay = dow === CLOSED_DAY_OF_WEEK;
-            const dayEntries = byDate.get(date) ?? [];
-            const reception = dayEntries.filter((e) => e.kind === "reception");
-            const lessons = dayEntries.filter((e) => e.kind === "lesson");
+      <div className="grid grid-cols-7 gap-px overflow-hidden rounded border border-neutral-400 bg-neutral-400 text-[10px]">
+        {DAY_OF_WEEK_LABEL.map((label, i) => (
+          <div
+            key={label}
+            className={`bg-neutral-100 py-1 text-center text-xs font-semibold ${i === 0 ? "text-red-600" : ""}`}
+          >
+            {label}
+          </div>
+        ))}
+        {calendarCells.map((date, i) => {
+          if (!date) return <div key={`empty-${i}`} className="min-h-28 bg-white" />;
 
-            return (
-              <tr key={date} className={isClosedDay ? "bg-neutral-100" : undefined}>
-                <td className="border border-neutral-400 px-2 py-1 align-top whitespace-nowrap">
-                  {m}/{day}({DAY_OF_WEEK_LABEL[dow]})
-                </td>
-                {type === "staff" && (
-                  <td className="border border-neutral-400 px-2 py-1 align-top">
-                    {isClosedDay
-                      ? "定休"
-                      : reception
-                          .map((e) => `${formatTime(e.start_time)}〜${formatTime(e.end_time)} ${e.staffName}`)
-                          .join(" / ") || ""}
-                  </td>
-                )}
-                <td className="border border-neutral-400 px-2 py-1 align-top">
-                  {isClosedDay ? (
-                    type !== "staff" && "定休"
-                  ) : (
-                    <div className="flex flex-wrap gap-1">
-                      {lessons.map((e) => {
-                        const time = formatTime(e.start_time);
-                        const text = type === "hp" ? `${time} ${e.lesson_name}` : `${time} ${e.lesson_name}(${e.staffName})`;
-                        return (
-                          <span
-                            key={e.id}
-                            className="rounded px-1.5 py-0.5"
-                            style={{ backgroundColor: lessonColor(e.lesson_name!) }}
-                          >
-                            {text}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+          const day = Number(date.split("-")[2]);
+          const dow = dayOfWeekForDate(date);
+          const isClosedDay = dow === CLOSED_DAY_OF_WEEK;
+          const dayEntries = byDate.get(date) ?? [];
+          const reception = dayEntries.filter((e) => e.kind === "reception");
+          const lessons = dayEntries.filter((e) => e.kind === "lesson");
+
+          return (
+            <div key={date} className={`flex min-h-28 flex-col gap-0.5 p-1 ${isClosedDay ? "bg-neutral-100" : "bg-white"}`}>
+              <p className={`font-semibold ${dow === 0 ? "text-red-600" : ""}`}>{day}</p>
+              {isClosedDay ? (
+                <p className="text-neutral-400">定休日</p>
+              ) : (
+                <>
+                  {type === "staff" &&
+                    reception.map((e) => (
+                      <p key={e.id} className="text-neutral-600">
+                        {formatTime(e.start_time)}〜{formatTime(e.end_time)} {e.staffName}
+                      </p>
+                    ))}
+                  {lessons.map((e) => (
+                    <p key={e.id} className="rounded px-1 py-0.5 leading-tight" style={lessonStyle(e.lesson_name!)}>
+                      {formatTime(e.start_time)} {e.lesson_name}
+                      {type !== "hp" && `(${e.staffName})`}
+                    </p>
+                  ))}
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

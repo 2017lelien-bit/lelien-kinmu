@@ -38,4 +38,13 @@ body {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+  /* 月間カレンダー表は横長のほうが7列収まりが良いため、A4横向きの専用ページ設定を使う */
+  .print-calendar {
+    page: schedule-calendar;
+  }
+}
+
+@page schedule-calendar {
+  size: A4 landscape;
+  margin: 10mm;
 }
