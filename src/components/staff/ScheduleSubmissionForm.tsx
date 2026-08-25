@@ -47,7 +47,7 @@ export default function ScheduleSubmissionForm({
   const [kind, setKind] = useState<"reception" | "lesson" | "both" | "unavailable">("reception");
   const [entryDate, setEntryDate] = useState(monthStart);
   const [startTime, setStartTime] = useState("09:00");
-  const [endTime, setEndTime] = useState("13:00");
+  const [endTime, setEndTime] = useState("21:00");
   // 「両方可能」のときは、受付の時間(startTime/endTime)とは別にレッスンの希望を持つ。
   // レッスンは任意なので、希望する人だけチェックを入れて入力する。2本連続などにも対応できるよう、
   // 複数のレッスン(開始時刻+名前)を追加できる形にしている。
@@ -80,7 +80,7 @@ export default function ScheduleSubmissionForm({
   function resetForm() {
     setEntryDate(viewMonth);
     setStartTime("09:00");
-    setEndTime("13:00");
+    setEndTime("21:00");
     setWantsLesson(false);
     setLessonSlots([{ startTime: "10:00", name: lessonOptions[0]?.name ?? "" }]);
     setLessonName(lessonOptions[0]?.name ?? "");
