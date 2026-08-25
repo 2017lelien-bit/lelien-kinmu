@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { getAllScheduleSubmissions, setScheduleEntryConfirmed } from "@/lib/schedule-submissions";
 import { dayOfWeekForDate, monthEnd } from "@/lib/date";
-import { CLOSED_DAY_OF_WEEK } from "@/lib/types";
+import { CLOSED_DAY_OF_WEEK, DAY_OF_WEEK_LABEL } from "@/lib/types";
 import type { ScheduleSubmission } from "@/lib/types";
 
 type EntryWithName = ScheduleSubmission & { staffName: string };
@@ -112,7 +112,7 @@ export default function ScheduleBuilderPanel({
               key={i}
               value={selectedId}
               onChange={(e) => handleSelect(key, selectedId, e.target.value)}
-              className="rounded-lg border border-neutral-200 px-2 py-1 text-sm dark:border-neutral-800"
+              className="w-full max-w-full rounded-lg border border-neutral-200 px-2 py-1 text-xs dark:border-neutral-800"
             >
               <option value="">-- 未選択 --</option>
               {options.map((c) => (
@@ -135,12 +135,15 @@ export default function ScheduleBuilderPanel({
     );
   }
 
-  const visibleDates = dates.filter(
+  const hasAnyCandidates = dates.some(
     (date) =>
-      dayOfWeekForDate(date) !== CLOSED_DAY_OF_WEEK &&
-      ((entriesByDateKind.get(`${date}|reception`)?.length ?? 0) > 0 ||
-        (entriesByDateKind.get(`${date}|lesson`)?.length ?? 0) > 0),
+      (entriesByDateKind.get(`${date}|reception`)?.length ?? 0) > 0 ||
+      (entriesByDateKind.get(`${date}|lesson`)?.length ?? 0) > 0,
   );
+
+  // カレンダーの見た目に合わせて、月初の曜日分だけ空マスを差し込む。
+  const leadingBlanks = Array(dayOfWeekForDate(dates[0])).fill(null);
+  const calendarCells: (string | null)[] = [...leadingBlanks, ...dates];
 
   return (
     <div className="flex flex-col gap-4">
@@ -169,19 +172,44 @@ export default function ScheduleBuilderPanel({
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      {visibleDates.length === 0 ? (
+      {!hasAnyCandidates ? (
         <p className="text-sm text-neutral-400">この月の提出はまだありません。</p>
       ) : (
-        <div className="flex flex-col gap-3">
-          {visibleDates.map((date) => (
-            <div key={date} className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
-              <p className="mb-2 text-sm font-semibold">{date}</p>
-              <div className="flex flex-col gap-3">
-                {renderKindSection(date, "reception", "受付")}
-                {renderKindSection(date, "lesson", "レッスン")}
+        <div className="overflow-x-auto">
+          <div className="grid min-w-[980px] grid-cols-7 gap-2">
+            {DAY_OF_WEEK_LABEL.map((label) => (
+              <div key={label} className="text-center text-xs text-neutral-400">
+                {label}
               </div>
-            </div>
-          ))}
+            ))}
+            {calendarCells.map((date, i) => {
+              if (!date) return <div key={`empty-${i}`} />;
+              const day = Number(date.split("-")[2]);
+              const isClosedDay = dayOfWeekForDate(date) === CLOSED_DAY_OF_WEEK;
+              const reception = renderKindSection(date, "reception", "受付");
+              const lesson = renderKindSection(date, "lesson", "レッスン");
+              return (
+                <div
+                  key={date}
+                  className={`flex min-h-24 flex-col gap-2 rounded-lg border p-2 ${
+                    isClosedDay
+                      ? "border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-950"
+                      : "border-neutral-200 dark:border-neutral-800"
+                  }`}
+                >
+                  <p className={`text-xs font-semibold ${isClosedDay ? "text-neutral-400" : ""}`}>{day}</p>
+                  {isClosedDay ? (
+                    <p className="text-xs text-neutral-400">定休</p>
+                  ) : (
+                    <>
+                      {reception}
+                      {lesson}
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
