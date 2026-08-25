@@ -49,7 +49,9 @@ export default function ScheduleSubmissionForm({
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("13:00");
   // 「両方可能」のときは、受付の時間(startTime/endTime)とは別にレッスンの開始時刻を持つ。
+  // レッスンは任意なので、希望する人だけチェックを入れて入力する。
   const [lessonStartTime, setLessonStartTime] = useState("10:00");
+  const [wantsLesson, setWantsLesson] = useState(false);
   const [lessonName, setLessonName] = useState(lessonOptions[0]?.name ?? "");
   const [note, setNote] = useState("");
   const [partialUnavailable, setPartialUnavailable] = useState(false);
@@ -77,6 +79,7 @@ export default function ScheduleSubmissionForm({
     setStartTime("09:00");
     setEndTime("13:00");
     setLessonStartTime("10:00");
+    setWantsLesson(false);
     setLessonName(lessonOptions[0]?.name ?? "");
     setNote("");
     setPartialUnavailable(false);
@@ -105,6 +108,13 @@ export default function ScheduleSubmissionForm({
       if (!receptionResult.ok) {
         setSubmitting(false);
         setError(receptionResult.error);
+        return;
+      }
+      if (!wantsLesson) {
+        setSubmitting(false);
+        setLocalEntries((prev) => [...prev, receptionResult.data]);
+        resetForm();
+        router.refresh();
         return;
       }
       const lessonResult = await addScheduleEntry(
@@ -370,6 +380,12 @@ export default function ScheduleSubmissionForm({
           </label>
         )}
         {kind === "both" && (
+          <label className="flex items-center gap-1 self-end pb-2 text-sm">
+            <input type="checkbox" checked={wantsLesson} onChange={(e) => setWantsLesson(e.target.checked)} />
+            レッスンも希望する(任意)
+          </label>
+        )}
+        {kind === "both" && wantsLesson && (
           <label className="flex flex-col gap-1 text-sm">
             レッスン開始時刻
             <input
@@ -380,7 +396,7 @@ export default function ScheduleSubmissionForm({
             />
           </label>
         )}
-        {(kind === "lesson" || kind === "both") &&
+        {(kind === "lesson" || (kind === "both" && wantsLesson)) &&
           (lessonOptions.length > 0 ? (
             <label className="flex flex-col gap-1 text-sm">
               レッスン名
