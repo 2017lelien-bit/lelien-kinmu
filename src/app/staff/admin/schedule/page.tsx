@@ -4,6 +4,7 @@ import { getAllScheduleSubmissions, getScheduleSubmissionStatusList } from "@/li
 import { nextMonthStart, monthEnd } from "@/lib/date";
 import ScheduleReviewPanel from "@/components/staff/ScheduleReviewPanel";
 import ScheduleBuilderPanel from "@/components/staff/ScheduleBuilderPanel";
+import SchedulePrintLinks from "@/components/staff/SchedulePrintLinks";
 
 export default async function AdminSchedulePage() {
   const staff = await getStaffUser();
@@ -31,6 +32,14 @@ export default async function AdminSchedulePage() {
           全員そろっていなくても、提出済みの人だけで先に組み始められます。日付ごとに、その時点で提出された候補からプルダウンで選んで、受付・レッスンを決めてください(後から他のスタッフの提出があれば、候補に追加されます)。
         </p>
         <ScheduleBuilderPanel initialMonthStart={initialMonthStart} initialEntries={entries} />
+      </div>
+
+      <div className="flex flex-col gap-4 border-t border-neutral-200 pt-8 dark:border-neutral-800">
+        <h1 className="text-xl font-semibold">③ 印刷</h1>
+        <p className="text-sm text-neutral-500">
+          「確定」にチェックが入っている予定だけが印刷対象になります。用途に合わせて3種類から選んでください。
+        </p>
+        <SchedulePrintLinks initialMonthStart={initialMonthStart} />
       </div>
     </div>
   );

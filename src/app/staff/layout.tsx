@@ -18,7 +18,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
   return (
     <div className="flex min-h-screen flex-col">
       {staff.role === "admin" && <AppBadgeSync pendingCount={pendingCount} />}
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-neutral-200 px-6 py-4 dark:border-neutral-800">
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-neutral-200 px-6 py-4 print:hidden dark:border-neutral-800">
         <div className="flex items-center gap-4">
           <span className="text-lg font-semibold tracking-wide">Le lien</span>
           <nav className="flex flex-wrap gap-4 text-sm">
