@@ -23,6 +23,23 @@ function formatTime(t: string | null): string {
   return t ? t.slice(0, 5) : "";
 }
 
+// レッスン名ごとに色を固定で割り当てる。スタジオでよく使う名前は決め打ち、
+// それ以外(スタッフが自由入力した名前)は名前のハッシュ値でパレットから選ぶ。
+const FIXED_LESSON_COLORS: Record<string, string> = {
+  フロアクラス: "#FDE68A",
+  ハンモック: "#BFDBFE",
+  ティシュー: "#FBCFE8",
+  "75分クラス": "#BBF7D0",
+};
+const FALLBACK_PALETTE = ["#E9D5FF", "#FED7AA", "#A5F3FC", "#FCA5A5", "#D9F99D", "#C7D2FE"];
+
+function lessonColor(name: string): string {
+  if (FIXED_LESSON_COLORS[name]) return FIXED_LESSON_COLORS[name];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  return FALLBACK_PALETTE[hash % FALLBACK_PALETTE.length];
+}
+
 export default async function SchedulePrintPage({
   searchParams,
 }: {
@@ -55,6 +72,8 @@ export default async function SchedulePrintPage({
     list.sort((a, b) => (a.start_time ?? "").localeCompare(b.start_time ?? ""));
   }
 
+  const lessonNamesUsed = Array.from(new Set(confirmed.filter((e) => e.kind === "lesson").map((e) => e.lesson_name!))).sort();
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3 print:hidden">
@@ -63,6 +82,20 @@ export default async function SchedulePrintPage({
         </h1>
         <PrintButton />
       </div>
+
+      {lessonNamesUsed.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 text-xs">
+          {lessonNamesUsed.map((name) => (
+            <span key={name} className="inline-flex items-center gap-1">
+              <span
+                className="inline-block h-3 w-3 rounded-sm border border-black/10"
+                style={{ backgroundColor: lessonColor(name) }}
+              />
+              {name}
+            </span>
+          ))}
+        </div>
+      )}
 
       <table className="w-full border-collapse text-sm">
         <thead>
@@ -96,17 +129,25 @@ export default async function SchedulePrintPage({
                   </td>
                 )}
                 <td className="border border-neutral-400 px-2 py-1 align-top">
-                  {isClosedDay
-                    ? type === "staff"
-                      ? ""
-                      : "定休"
-                    : lessons
-                        .map((e) => {
-                          const time = formatTime(e.start_time);
-                          if (type === "hp") return `${time} ${e.lesson_name}`;
-                          return `${time} ${e.lesson_name}(${e.staffName})`;
-                        })
-                        .join(" / ") || ""}
+                  {isClosedDay ? (
+                    type !== "staff" && "定休"
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {lessons.map((e) => {
+                        const time = formatTime(e.start_time);
+                        const text = type === "hp" ? `${time} ${e.lesson_name}` : `${time} ${e.lesson_name}(${e.staffName})`;
+                        return (
+                          <span
+                            key={e.id}
+                            className="rounded px-1.5 py-0.5"
+                            style={{ backgroundColor: lessonColor(e.lesson_name!) }}
+                          >
+                            {text}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
                 </td>
               </tr>
             );
