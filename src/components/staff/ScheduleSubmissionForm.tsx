@@ -48,10 +48,13 @@ export default function ScheduleSubmissionForm({
   const [entryDate, setEntryDate] = useState(monthStart);
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("13:00");
-  // 「両方可能」のときは、受付の時間(startTime/endTime)とは別にレッスンの開始時刻を持つ。
-  // レッスンは任意なので、希望する人だけチェックを入れて入力する。
-  const [lessonStartTime, setLessonStartTime] = useState("10:00");
+  // 「両方可能」のときは、受付の時間(startTime/endTime)とは別にレッスンの希望を持つ。
+  // レッスンは任意なので、希望する人だけチェックを入れて入力する。2本連続などにも対応できるよう、
+  // 複数のレッスン(開始時刻+名前)を追加できる形にしている。
   const [wantsLesson, setWantsLesson] = useState(false);
+  const [lessonSlots, setLessonSlots] = useState<{ startTime: string; name: string }[]>([
+    { startTime: "10:00", name: lessonOptions[0]?.name ?? "" },
+  ]);
   const [lessonName, setLessonName] = useState(lessonOptions[0]?.name ?? "");
   const [note, setNote] = useState("");
   const [partialUnavailable, setPartialUnavailable] = useState(false);
@@ -78,8 +81,8 @@ export default function ScheduleSubmissionForm({
     setEntryDate(viewMonth);
     setStartTime("09:00");
     setEndTime("13:00");
-    setLessonStartTime("10:00");
     setWantsLesson(false);
+    setLessonSlots([{ startTime: "10:00", name: lessonOptions[0]?.name ?? "" }]);
     setLessonName(lessonOptions[0]?.name ?? "");
     setNote("");
     setPartialUnavailable(false);
@@ -117,17 +120,22 @@ export default function ScheduleSubmissionForm({
         router.refresh();
         return;
       }
-      const lessonResult = await addScheduleEntry(
-        { entryDate, kind: "lesson", startTime: lessonStartTime, lessonName, note: note || undefined },
-        staffId,
-      );
-      setSubmitting(false);
-      if (!lessonResult.ok) {
-        setError(lessonResult.error);
-        setLocalEntries((prev) => [...prev, receptionResult.data]);
-        return;
+      const createdLessons: ScheduleSubmission[] = [];
+      for (const slot of lessonSlots) {
+        const lessonResult = await addScheduleEntry(
+          { entryDate, kind: "lesson", startTime: slot.startTime, lessonName: slot.name, note: note || undefined },
+          staffId,
+        );
+        if (!lessonResult.ok) {
+          setSubmitting(false);
+          setError(lessonResult.error);
+          setLocalEntries((prev) => [...prev, receptionResult.data, ...createdLessons]);
+          return;
+        }
+        createdLessons.push(lessonResult.data);
       }
-      setLocalEntries((prev) => [...prev, receptionResult.data, lessonResult.data]);
+      setSubmitting(false);
+      setLocalEntries((prev) => [...prev, receptionResult.data, ...createdLessons]);
       resetForm();
       router.refresh();
       return;
@@ -382,21 +390,10 @@ export default function ScheduleSubmissionForm({
         {kind === "both" && (
           <label className="flex items-center gap-1 self-end pb-2 text-sm">
             <input type="checkbox" checked={wantsLesson} onChange={(e) => setWantsLesson(e.target.checked)} />
-            レッスンの希望も入力する
+            レッスン内容を希望する
           </label>
         )}
-        {kind === "both" && wantsLesson && (
-          <label className="flex flex-col gap-1 text-sm">
-            レッスン開始時刻
-            <input
-              type="time"
-              value={lessonStartTime}
-              onChange={(e) => setLessonStartTime(e.target.value)}
-              className="rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
-            />
-          </label>
-        )}
-        {(kind === "lesson" || (kind === "both" && wantsLesson)) &&
+        {kind === "lesson" &&
           (lessonOptions.length > 0 ? (
             <label className="flex flex-col gap-1 text-sm">
               レッスン名
@@ -424,6 +421,69 @@ export default function ScheduleSubmissionForm({
             </label>
           ))}
       </div>
+
+      {kind === "both" && wantsLesson && (
+        <div className="flex flex-col gap-2">
+          {lessonSlots.map((slot, i) => (
+            <div key={i} className="flex flex-wrap items-end gap-3">
+              <label className="flex flex-col gap-1 text-sm">
+                {i === 0 ? "レッスン開始時刻" : `レッスン開始時刻(${i + 1}本目)`}
+                <input
+                  type="time"
+                  value={slot.startTime}
+                  onChange={(e) =>
+                    setLessonSlots((prev) => prev.map((s, j) => (j === i ? { ...s, startTime: e.target.value } : s)))
+                  }
+                  className="rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-sm">
+                レッスン名
+                {lessonOptions.length > 0 ? (
+                  <select
+                    value={slot.name}
+                    onChange={(e) =>
+                      setLessonSlots((prev) => prev.map((s, j) => (j === i ? { ...s, name: e.target.value } : s)))
+                    }
+                    className="rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
+                  >
+                    {lessonOptions.map((o) => (
+                      <option key={o.id} value={o.name}>
+                        {o.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    value={slot.name}
+                    onChange={(e) =>
+                      setLessonSlots((prev) => prev.map((s, j) => (j === i ? { ...s, name: e.target.value } : s)))
+                    }
+                    placeholder="例: 筋膜リリース75"
+                    className="w-40 rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
+                  />
+                )}
+              </label>
+              {lessonSlots.length > 1 && (
+                <button
+                  onClick={() => setLessonSlots((prev) => prev.filter((_, j) => j !== i))}
+                  className="text-xs text-red-600 underline"
+                >
+                  削除
+                </button>
+              )}
+            </div>
+          ))}
+          <button
+            onClick={() =>
+              setLessonSlots((prev) => [...prev, { startTime: "11:00", name: lessonOptions[0]?.name ?? "" }])
+            }
+            className="self-start text-xs underline"
+          >
+            + もう1本追加(2本連続など)
+          </button>
+        </div>
+      )}
 
       <label className="flex flex-col gap-1 text-sm">
         メモ(任意)
