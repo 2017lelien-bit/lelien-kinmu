@@ -1,7 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { getAllScheduleSubmissions, setScheduleEntryConfirmed } from "@/lib/schedule-submissions";
+import {
+  getAllScheduleSubmissions,
+  setScheduleEntryConfirmed,
+  updateScheduleEntryTime,
+} from "@/lib/schedule-submissions";
 import { dayOfWeekForDate, monthEnd } from "@/lib/date";
 import { CLOSED_DAY_OF_WEEK, DAY_OF_WEEK_LABEL } from "@/lib/types";
 import type { ScheduleSubmission } from "@/lib/types";
@@ -73,6 +77,21 @@ export default function ScheduleBuilderPanel({
     }
   }
 
+  async function handleTimeEdit(entry: EntryWithName, startTime: string, endTime: string) {
+    setError(null);
+    const prevStart = entry.start_time;
+    const prevEnd = entry.end_time;
+    // 通信を待たず、まず画面を即座に反映する(体感速度のため)。失敗したら元に戻す。
+    setEntries((prev) =>
+      prev.map((e) => (e.id === entry.id ? { ...e, start_time: startTime, end_time: endTime || null } : e)),
+    );
+    const result = await updateScheduleEntryTime(entry.id, { startTime, endTime: endTime || undefined });
+    if (!result.ok) {
+      setError(result.error);
+      setEntries((prev) => (prev.map((e) => (e.id === entry.id ? { ...e, start_time: prevStart, end_time: prevEnd } : e))));
+    }
+  }
+
   const [y, m] = monthStart.split("-").map(Number);
   const daysInMonth = Number(monthEnd(monthStart).split("-")[2]);
   const dates = Array.from(
@@ -107,20 +126,43 @@ export default function ScheduleBuilderPanel({
         {slots.map((selectedId, i) => {
           const usedElsewhere = new Set(slots.filter((_, j) => j !== i).filter(Boolean));
           const options = candidates.filter((c) => !usedElsewhere.has(c.id) || c.id === selectedId);
+          const selected = candidates.find((c) => c.id === selectedId);
           return (
-            <select
-              key={i}
-              value={selectedId}
-              onChange={(e) => handleSelect(key, selectedId, e.target.value)}
-              className="w-full max-w-full rounded-lg border border-neutral-200 px-2 py-1 text-xs dark:border-neutral-800"
-            >
-              <option value="">-- 未選択 --</option>
-              {options.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {candidateLabel(c)}
-                </option>
-              ))}
-            </select>
+            <div key={i} className="flex flex-col gap-1">
+              <select
+                value={selectedId}
+                onChange={(e) => handleSelect(key, selectedId, e.target.value)}
+                className="w-full max-w-full rounded-lg border border-neutral-200 px-2 py-1 text-xs dark:border-neutral-800"
+              >
+                <option value="">-- 未選択 --</option>
+                {options.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {candidateLabel(c)}
+                  </option>
+                ))}
+              </select>
+              {selected && (
+                <div className="flex items-center gap-1">
+                  <input
+                    type="time"
+                    value={selected.start_time?.slice(0, 5) ?? ""}
+                    onChange={(e) => handleTimeEdit(selected, e.target.value, selected.end_time?.slice(0, 5) ?? "")}
+                    className="w-20 rounded-lg border border-neutral-200 px-1 py-0.5 text-xs dark:border-neutral-800"
+                  />
+                  {kind === "reception" && (
+                    <>
+                      〜
+                      <input
+                        type="time"
+                        value={selected.end_time?.slice(0, 5) ?? ""}
+                        onChange={(e) => handleTimeEdit(selected, selected.start_time?.slice(0, 5) ?? "", e.target.value)}
+                        className="w-20 rounded-lg border border-neutral-200 px-1 py-0.5 text-xs dark:border-neutral-800"
+                      />
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
           );
         })}
         {slotCount < candidates.length && (

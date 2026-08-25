@@ -129,6 +129,26 @@ export async function setScheduleEntryConfirmed(id: string, confirmed: boolean):
   return { ok: true, data: undefined };
 }
 
+// 管理者がスケジュール組み立て中に、確定した予定の時間を微調整できるようにする
+// (元の提出内容そのものを上書きする。組み立て済みの最終スケジュールとして扱うため)。
+export async function updateScheduleEntryTime(
+  id: string,
+  input: { startTime: string; endTime?: string },
+): Promise<ActionResult> {
+  const adminCheck = await requireAdmin();
+  if (adminCheck) return adminCheck;
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("schedule_submissions")
+    .update({ start_time: input.startTime, end_time: input.endTime || null })
+    .eq("id", id);
+  if (error) return { ok: false, error: "更新に失敗しました。" };
+
+  revalidatePath("/staff/admin/schedule");
+  return { ok: true, data: undefined };
+}
+
 // 担当できるレッスンの一覧(スケジュール提出時のレッスン名の選択肢になる)。
 export async function getOwnLessonOptions(staffId?: string): Promise<LessonOption[]> {
   const acting = await resolveActingStaffId(staffId);
