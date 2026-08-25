@@ -23,7 +23,9 @@ async function requireAdmin(): Promise<{ ok: false; error: string } | null> {
 }
 
 // レッスン実績(日付・レッスン名・時間・人数)に対して、最も条件の合う単価ルールを1件選ぶ。
-// 1. レッスン名が一致するルール(人数は問わない、業務委託の定額レッスン用)を優先
+// 1. レッスン名が一致するルールを優先(人数上下限が未設定なら人数を問わない定額レッスン用だが、
+//    同じレッスン名に人数ごとの段階(例: 1〜3名/4〜9名/満員)が設定されていることもあるため、
+//    人数の範囲もあわせて絞り込む)
 // 2. レッスン名を問わないルール(時間・人数の範囲で決まる通常クラス用)
 function matchPayRateRule(rules: PayRateRule[], entry: { lessonName: string; durationMinutes: number; headcount: number }): PayRateRule | null {
   const normalizedName = entry.lessonName.trim().toLowerCase();
@@ -31,7 +33,9 @@ function matchPayRateRule(rules: PayRateRule[], entry: { lessonName: string; dur
     (r) =>
       r.lesson_name &&
       r.lesson_name.trim().toLowerCase() === normalizedName &&
-      (r.duration_minutes === null || r.duration_minutes === entry.durationMinutes),
+      (r.duration_minutes === null || r.duration_minutes === entry.durationMinutes) &&
+      (r.min_headcount === null || entry.headcount >= r.min_headcount) &&
+      (r.max_headcount === null || entry.headcount <= r.max_headcount),
   );
   if (named) return named;
 
