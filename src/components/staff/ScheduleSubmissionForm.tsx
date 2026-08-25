@@ -9,7 +9,7 @@ import {
   getOwnScheduleSubmissions,
 } from "@/lib/schedule-submissions";
 import { addMonthsToMonthStart, dayOfWeekForDate, monthEnd as monthEndOf } from "@/lib/date";
-import { DAY_OF_WEEK_LABEL, SCHEDULE_KIND_LABEL } from "@/lib/types";
+import { CLOSED_DAY_OF_WEEK, DAY_OF_WEEK_LABEL, SCHEDULE_KIND_LABEL } from "@/lib/types";
 import type { LessonOption, ScheduleSubmission } from "@/lib/types";
 
 function formatMonthLabel(monthStart: string): string {
@@ -254,6 +254,7 @@ export default function ScheduleSubmissionForm({
             const isUnavailable = dayEntries.some((e) => e.kind === "unavailable");
             const otherCount = dayEntries.filter((e) => e.kind !== "unavailable").length;
             const day = Number(dateStr.split("-")[2]);
+            const isClosedDay = dayOfWeekForDate(dateStr) === CLOSED_DAY_OF_WEEK;
             return (
               <button
                 key={dateStr}
@@ -264,12 +265,15 @@ export default function ScheduleSubmissionForm({
                 } ${
                   isUnavailable
                     ? "bg-red-50 dark:bg-red-950"
-                    : dayEntries.length > 0
-                      ? "bg-neutral-100 dark:bg-neutral-900"
-                      : ""
+                    : isClosedDay
+                      ? "bg-neutral-50 dark:bg-neutral-950"
+                      : dayEntries.length > 0
+                        ? "bg-neutral-100 dark:bg-neutral-900"
+                        : ""
                 }`}
               >
-                <span>{day}</span>
+                <span className={isClosedDay ? "text-neutral-400" : ""}>{day}</span>
+                {isClosedDay && !isUnavailable && <span className="text-neutral-400">定休</span>}
                 {isUnavailable && <span className="text-red-600">休</span>}
                 {otherCount > 0 && <span className="text-neutral-500">{otherCount}件</span>}
               </button>

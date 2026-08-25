@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStaffUser, resolveActingStaffId } from "@/lib/auth";
 import { addDaysToDateString, dayOfWeekForDate } from "@/lib/date";
+import { CLOSED_DAY_OF_WEEK } from "@/lib/types";
 import type { ActionResult, LessonOption, ScheduleSubmission, ScheduleTemplate } from "@/lib/types";
 
 async function requireAdmin(): Promise<{ ok: false; error: string } | null> {
@@ -269,6 +270,10 @@ export async function applyTemplatesToMonth(
   while (cursor <= monthEndDate) {
     const dow = dayOfWeekForDate(cursor);
     const weekOfMonth = Math.ceil(Number(cursor.split("-")[2]) / 7); // 1〜5(第何週か)
+    if (dow === CLOSED_DAY_OF_WEEK) {
+      cursor = addDaysToDateString(cursor, 1);
+      continue;
+    }
     for (const t of templates as ScheduleTemplate[]) {
       if (t.day_of_week !== dow) continue;
       if (t.weeks_of_month && t.weeks_of_month.length > 0 && !t.weeks_of_month.includes(weekOfMonth)) continue;

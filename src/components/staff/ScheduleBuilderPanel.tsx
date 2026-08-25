@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { getAllScheduleSubmissions, setScheduleEntryConfirmed } from "@/lib/schedule-submissions";
-import { monthEnd } from "@/lib/date";
+import { dayOfWeekForDate, monthEnd } from "@/lib/date";
+import { CLOSED_DAY_OF_WEEK } from "@/lib/types";
 import type { ScheduleSubmission } from "@/lib/types";
 
 type EntryWithName = ScheduleSubmission & { staffName: string };
@@ -135,7 +136,10 @@ export default function ScheduleBuilderPanel({
   }
 
   const visibleDates = dates.filter(
-    (date) => (entriesByDateKind.get(`${date}|reception`)?.length ?? 0) > 0 || (entriesByDateKind.get(`${date}|lesson`)?.length ?? 0) > 0,
+    (date) =>
+      dayOfWeekForDate(date) !== CLOSED_DAY_OF_WEEK &&
+      ((entriesByDateKind.get(`${date}|reception`)?.length ?? 0) > 0 ||
+        (entriesByDateKind.get(`${date}|lesson`)?.length ?? 0) > 0),
   );
 
   return (
