@@ -24,8 +24,6 @@ export default function SchedulePrintLinks({ initialMonthStart }: { initialMonth
         <a
           key={type}
           href={`/staff/admin/schedule/print?month=${month}&type=${type}`}
-          target="_blank"
-          rel="noopener noreferrer"
           className="rounded-lg border border-neutral-300 px-4 py-2 text-sm dark:border-neutral-700"
         >
           {label}を開く
