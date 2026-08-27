@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStaffUser, resolveActingStaffId } from "@/lib/auth";
 import { resyncLeLienCategoriesForPeriod } from "@/lib/time-log";
+import { isEntryDateLocked } from "@/lib/staff-self";
 import { payPeriodForDate } from "@/lib/date";
 import type { ActionResult, LessonLogEntry } from "@/lib/types";
 
@@ -72,12 +73,17 @@ export async function addLessonLogEntry(
   },
   staffId?: string,
 ): Promise<ActionResult> {
+  const staffUser = await getStaffUser();
   const acting = await resolveActingStaffId(staffId);
   if ("error" in acting) return { ok: false, error: acting.error };
 
   if (!input.lessonName.trim()) return { ok: false, error: "レッスン名を入力してください。" };
   if (input.durationMinutes <= 0) return { ok: false, error: "時間は1分以上で入力してください。" };
   if (input.headcount <= 0) return { ok: false, error: "参加人数は1人以上で入力してください。" };
+
+  if (staffUser?.role !== "admin" && (await isEntryDateLocked(acting.id, input.entryDate))) {
+    return { ok: false, error: "その日はすでに「本日の勤務」を提出済みのため、追加できません。管理者に修正を依頼してください。" };
+  }
 
   const admin = createAdminClient();
   const { error } = await admin.from("lesson_log_entries").insert({
@@ -131,6 +137,14 @@ export async function updateLessonLogEntry(
   if (existing.approved && staffUser?.role !== "admin") {
     return { ok: false, error: "承認済みの実績は変更できません。管理者に訂正を依頼してください。" };
   }
+  if (staffUser?.role !== "admin") {
+    const dateToCheck = existing.entry_date !== input.entryDate ? [existing.entry_date, input.entryDate] : [existing.entry_date];
+    for (const d of dateToCheck) {
+      if (await isEntryDateLocked(acting.id, d)) {
+        return { ok: false, error: "その日はすでに「本日の勤務」を提出済みのため、変更できません。管理者に訂正を依頼してください。" };
+      }
+    }
+  }
 
   const { error } = await admin
     .from("lesson_log_entries")
@@ -175,6 +189,9 @@ export async function deleteLessonLogEntry(id: string, staffId?: string): Promis
   if (!existing) return { ok: false, error: "実績が見つかりません。" };
   if (existing.approved && staffUser?.role !== "admin") {
     return { ok: false, error: "承認済みの実績は削除できません。管理者に訂正を依頼してください。" };
+  }
+  if (staffUser?.role !== "admin" && (await isEntryDateLocked(acting.id, existing.entry_date))) {
+    return { ok: false, error: "その日はすでに「本日の勤務」を提出済みのため、削除できません。管理者に訂正を依頼してください。" };
   }
 
   const { error } = await admin.from("lesson_log_entries").delete().eq("id", id).eq("staff_id", acting.id);

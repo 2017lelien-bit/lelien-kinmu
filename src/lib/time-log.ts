@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { resolveActingStaffId } from "@/lib/auth";
+import { getStaffUser, resolveActingStaffId } from "@/lib/auth";
+import { isEntryDateLocked } from "@/lib/staff-self";
 import { computeWorkedMinutes } from "@/lib/date";
 import type { ActionResult, TimeLogEntry } from "@/lib/types";
 
@@ -156,12 +157,16 @@ export async function addTimeLogEntry(
   },
   staffId?: string,
 ): Promise<ActionResult> {
+  const staffUser = await getStaffUser();
   const acting = await resolveActingStaffId(staffId);
   if ("error" in acting) return { ok: false, error: acting.error };
 
   if (input.endTime <= input.startTime) return { ok: false, error: "終了時刻は開始時刻より後にしてください。" };
   if (input.breakStart && input.breakEnd && input.breakEnd <= input.breakStart) {
     return { ok: false, error: "休憩の終了時刻は開始時刻より後にしてください。" };
+  }
+  if (staffUser?.role !== "admin" && (await isEntryDateLocked(acting.id, input.entryDate))) {
+    return { ok: false, error: "その日はすでに「本日の勤務」を提出済みのため、追加できません。管理者に修正を依頼してください。" };
   }
 
   const admin = createAdminClient();
@@ -199,6 +204,7 @@ export async function updateTimeLogEntry(
   },
   staffId?: string,
 ): Promise<ActionResult> {
+  const staffUser = await getStaffUser();
   const acting = await resolveActingStaffId(staffId);
   if ("error" in acting) return { ok: false, error: acting.error };
 
@@ -208,6 +214,23 @@ export async function updateTimeLogEntry(
   }
 
   const admin = createAdminClient();
+
+  if (staffUser?.role !== "admin") {
+    const { data: existing } = await admin
+      .from("time_log_entries")
+      .select("entry_date")
+      .eq("id", id)
+      .eq("staff_id", acting.id)
+      .maybeSingle();
+    if (!existing) return { ok: false, error: "記録が見つかりません。" };
+    const datesToCheck = existing.entry_date !== input.entryDate ? [existing.entry_date, input.entryDate] : [existing.entry_date];
+    for (const d of datesToCheck) {
+      if (await isEntryDateLocked(acting.id, d)) {
+        return { ok: false, error: "その日はすでに「本日の勤務」を提出済みのため、変更できません。管理者に訂正を依頼してください。" };
+      }
+    }
+  }
+
   const { error } = await admin
     .from("time_log_entries")
     .update({
@@ -236,10 +259,25 @@ export async function deleteTimeLogEntry(
   periodEnd: string,
   staffId?: string,
 ): Promise<ActionResult> {
+  const staffUser = await getStaffUser();
   const acting = await resolveActingStaffId(staffId);
   if ("error" in acting) return { ok: false, error: acting.error };
 
   const admin = createAdminClient();
+
+  if (staffUser?.role !== "admin") {
+    const { data: existing } = await admin
+      .from("time_log_entries")
+      .select("entry_date")
+      .eq("id", id)
+      .eq("staff_id", acting.id)
+      .maybeSingle();
+    if (!existing) return { ok: false, error: "記録が見つかりません。" };
+    if (await isEntryDateLocked(acting.id, existing.entry_date)) {
+      return { ok: false, error: "その日はすでに「本日の勤務」を提出済みのため、削除できません。管理者に訂正を依頼してください。" };
+    }
+  }
+
   const { error } = await admin.from("time_log_entries").delete().eq("id", id).eq("staff_id", acting.id);
   if (error) return { ok: false, error: "削除に失敗しました。" };
 

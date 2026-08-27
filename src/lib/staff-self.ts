@@ -114,6 +114,20 @@ export async function getOwnSubmissionStatus(): Promise<string | null> {
   return data?.submitted_at ?? null;
 }
 
+// 指定日がすでに「本日の勤務を提出する」で提出済みかどうか。提出済みの日は、本人はレッスン実績・
+// 出退勤を追加/訂正/削除できないようにする(管理者だけが訂正できる)。
+export async function isEntryDateLocked(staffId: string, entryDate: string): Promise<boolean> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("period_submissions")
+    .select("submitted_at")
+    .eq("staff_id", staffId)
+    .eq("submission_date", entryDate)
+    .maybeSingle();
+
+  return data?.submitted_at != null;
+}
+
 export async function submitPeriodEntries(): Promise<ActionResult> {
   const staff = await getStaffUser();
   if (!staff) return { ok: false, error: "スタッフとしてログインしてください。" };
