@@ -17,7 +17,7 @@ export default async function AdminSchedulePage() {
   ]);
 
   return (
-    <div className="flex max-w-3xl flex-col gap-8">
+    <div className="flex max-w-6xl flex-col gap-8">
       <div className="flex flex-col gap-4">
         <h1 className="text-xl font-semibold">① 提出内容の確認</h1>
         <p className="text-sm text-neutral-500">

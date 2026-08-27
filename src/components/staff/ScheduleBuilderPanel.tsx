@@ -118,8 +118,8 @@ export default function ScheduleBuilderPanel({
     const slots = Array.from({ length: slotCount }, (_, i) => confirmedIds[i] ?? "");
 
     return (
-      <div className="flex flex-col gap-1">
-        <p className="text-xs text-neutral-500">
+      <div className="flex flex-col gap-0.5">
+        <p className="text-[10px] text-neutral-500">
           {label}
           {savingKey === key && <span className="ml-1 text-neutral-400">保存中...</span>}
         </p>
@@ -128,11 +128,11 @@ export default function ScheduleBuilderPanel({
           const options = candidates.filter((c) => !usedElsewhere.has(c.id) || c.id === selectedId);
           const selected = candidates.find((c) => c.id === selectedId);
           return (
-            <div key={i} className="flex flex-col gap-1">
+            <div key={i} className="flex flex-col gap-0.5">
               <select
                 value={selectedId}
                 onChange={(e) => handleSelect(key, selectedId, e.target.value)}
-                className="w-full max-w-full rounded-lg border border-neutral-200 px-2 py-1 text-xs dark:border-neutral-800"
+                className="w-full max-w-full rounded border border-neutral-200 px-1 py-0.5 text-[10px] dark:border-neutral-800"
               >
                 <option value="">-- 未選択 --</option>
                 {options.map((c) => (
@@ -142,12 +142,12 @@ export default function ScheduleBuilderPanel({
                 ))}
               </select>
               {selected && (
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-0.5 text-[10px]">
                   <input
                     type="time"
                     value={selected.start_time?.slice(0, 5) ?? ""}
                     onChange={(e) => handleTimeEdit(selected, e.target.value, selected.end_time?.slice(0, 5) ?? "")}
-                    className="w-20 rounded-lg border border-neutral-200 px-1 py-0.5 text-xs dark:border-neutral-800"
+                    className="w-14 rounded border border-neutral-200 px-0.5 py-0.5 text-[10px] dark:border-neutral-800"
                   />
                   {kind === "reception" && (
                     <>
@@ -156,7 +156,7 @@ export default function ScheduleBuilderPanel({
                         type="time"
                         value={selected.end_time?.slice(0, 5) ?? ""}
                         onChange={(e) => handleTimeEdit(selected, selected.start_time?.slice(0, 5) ?? "", e.target.value)}
-                        className="w-20 rounded-lg border border-neutral-200 px-1 py-0.5 text-xs dark:border-neutral-800"
+                        className="w-14 rounded border border-neutral-200 px-0.5 py-0.5 text-[10px] dark:border-neutral-800"
                       />
                     </>
                   )}
@@ -168,7 +168,7 @@ export default function ScheduleBuilderPanel({
         {slotCount < candidates.length && (
           <button
             onClick={() => setExtraSlots((prev) => ({ ...prev, [key]: slotCount + 1 }))}
-            className="self-start text-xs underline"
+            className="self-start text-[10px] underline"
           >
             + 追加
           </button>
@@ -218,7 +218,7 @@ export default function ScheduleBuilderPanel({
         <p className="text-sm text-neutral-400">この月の提出はまだありません。</p>
       ) : (
         <div className="overflow-x-auto">
-          <div className="grid min-w-[980px] grid-cols-7 gap-2">
+          <div className="grid min-w-[700px] grid-cols-7 gap-1">
             {DAY_OF_WEEK_LABEL.map((label) => (
               <div key={label} className="text-center text-xs text-neutral-400">
                 {label}
@@ -233,7 +233,7 @@ export default function ScheduleBuilderPanel({
               return (
                 <div
                   key={date}
-                  className={`flex min-h-24 flex-col gap-2 rounded-lg border p-2 ${
+                  className={`flex min-h-16 flex-col gap-1 rounded-lg border p-1 ${
                     isClosedDay
                       ? "border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-950"
                       : "border-neutral-200 dark:border-neutral-800"
@@ -241,7 +241,7 @@ export default function ScheduleBuilderPanel({
                 >
                   <p className={`text-xs font-semibold ${isClosedDay ? "text-neutral-400" : ""}`}>{day}</p>
                   {isClosedDay ? (
-                    <p className="text-xs text-neutral-400">定休</p>
+                    <p className="text-[10px] text-neutral-400">定休</p>
                   ) : (
                     <>
                       {reception}
