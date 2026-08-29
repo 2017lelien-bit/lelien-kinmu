@@ -1,56 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-
-// 招待・パスワード再設定メールのリンクは、セッション情報をURLのハッシュ(#access_token=...)に
-// 付けてこのページへリダイレクトしてくる。ハッシュはサーバーには送られずクライアントでしか読めない上、
-// createBrowserClientは自動検出しないため、ここで明示的に読み取ってセッションを張る。
-function useSessionFromUrlHash(): { ready: boolean; error: string | null } {
-  const [ready, setReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function run() {
-      const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "";
-      const params = new URLSearchParams(hash);
-      const accessToken = params.get("access_token");
-      const refreshToken = params.get("refresh_token");
-
-      if (!accessToken || !refreshToken) {
-        setError("リンクが無効か、有効期限が切れています。もう一度リンクを発行してもらってください。");
-        setReady(true);
-        return;
-      }
-
-      const supabase = createClient();
-      const { error: sessionError } = await supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-      });
-
-      if (sessionError) {
-        setError("リンクが無効か、有効期限が切れています。もう一度リンクを発行してもらってください。");
-      } else {
-        // ハッシュに認証情報が残ったままだと再読み込み時に混乱するため消しておく。
-        window.history.replaceState(null, "", window.location.pathname);
-      }
-      setReady(true);
-    }
-    run();
-  }, []);
-
-  return { ready, error };
-}
 
 export default function SetPasswordForm() {
   const router = useRouter();
-  const { ready, error: sessionError } = useSessionFromUrlHash();
+  const searchParams = useSearchParams();
+  const tokenHash = searchParams.get("token_hash");
+  const type = searchParams.get("type");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  if (!tokenHash || !type) {
+    return <p className="text-sm text-red-600">リンクが無効です。もう一度リンクを発行してもらってください。</p>;
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -67,6 +33,20 @@ export default function SetPasswordForm() {
 
     setSubmitting(true);
     const supabase = createClient();
+
+    // トークンの消費(verifyOtp)は、本人がボタンを押した瞬間まで行わない。
+    // リンクをそのままLINEなどに貼ると、トーク側の自動プレビュー取得でリンクが先に開かれてしまい、
+    // 1回しか使えないトークンが本人が開く前に無効になってしまうため。
+    const { error: verifyError } = await supabase.auth.verifyOtp({
+      token_hash: tokenHash!,
+      type: type as "invite" | "recovery",
+    });
+    if (verifyError) {
+      setSubmitting(false);
+      setError("リンクが無効か、有効期限が切れています。もう一度リンクを発行してもらってください。");
+      return;
+    }
+
     const { error: updateError } = await supabase.auth.updateUser({ password });
     setSubmitting(false);
 
@@ -77,14 +57,6 @@ export default function SetPasswordForm() {
 
     router.replace("/staff");
     router.refresh();
-  }
-
-  if (!ready) {
-    return <p className="text-sm text-neutral-500">確認中...</p>;
-  }
-
-  if (sessionError) {
-    return <p className="text-sm text-red-600">{sessionError}</p>;
   }
 
   return (

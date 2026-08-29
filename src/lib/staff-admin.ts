@@ -219,7 +219,11 @@ export async function inviteStaff(input: {
   }
 
   revalidatePath("/staff/admin/staff");
-  return { ok: true, data: { id: linkData.user.id, inviteLink: linkData.properties.action_link } };
+  // action_linkをそのまま渡すと、LINEなどのトーク画面でリンクのプレビューを作るために自動でアクセスされ、
+  // 1回しか使えないトークンがその時点で消費されてしまう(=本人が開いたときには「無効」になる)。
+  // token_hashだけを自前のURLに載せ、実際にフォームを送信した瞬間にverifyOtpするようにして回避する。
+  const inviteLink = `${siteUrl()}/staff/set-password?token_hash=${linkData.properties.hashed_token}&type=invite`;
+  return { ok: true, data: { id: linkData.user.id, inviteLink } };
 }
 
 // パスワードを忘れたスタッフのために、再設定用リンクを発行する。招待と同じ理由(メールが届かないことがある)で
@@ -244,5 +248,9 @@ export async function resetStaffPassword(staffId: string): Promise<ActionResult<
     return { ok: false, error: "再設定リンクの発行に失敗しました。" };
   }
 
-  return { ok: true, data: { resetLink: linkData.properties.action_link } };
+  // action_linkをそのまま渡すと、LINEなどのトーク画面でリンクのプレビューを作るために自動でアクセスされ、
+  // 1回しか使えないトークンがその時点で消費されてしまう(=本人が開いたときには「無効」になる)。
+  // token_hashだけを自前のURLに載せ、実際にフォームを送信した瞬間にverifyOtpするようにして回避する。
+  const resetLink = `${siteUrl()}/staff/set-password?token_hash=${linkData.properties.hashed_token}&type=recovery`;
+  return { ok: true, data: { resetLink } };
 }
