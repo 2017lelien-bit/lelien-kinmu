@@ -2,7 +2,6 @@ import { notFound } from "next/navigation";
 import { getOwnPayCategories } from "@/lib/pay-categories";
 import { getOwnHasPayRateRules, getOwnHeadcountMatters, getOwnLessonLogEntries } from "@/lib/lesson-log";
 import { getOwnPayEntries, getOwnPayslips, getOwnStaffProfile, getOwnSubmissionStatus } from "@/lib/staff-self";
-import { getOwnTimeLogEntries } from "@/lib/time-log";
 import {
   getOwnLessonOptions,
   getOwnScheduleSubmissions,
@@ -13,7 +12,6 @@ import { currentPayPeriod, nextMonthStart, monthEnd } from "@/lib/date";
 import MyStaffProfileForm from "@/components/staff/MyStaffProfileForm";
 import PayEntryForm from "@/components/staff/PayEntryForm";
 import LessonLogForm from "@/components/staff/LessonLogForm";
-import TimeLogForm from "@/components/staff/TimeLogForm";
 import ScheduleSubmissionForm from "@/components/staff/ScheduleSubmissionForm";
 import ScheduleTemplateManager from "@/components/staff/ScheduleTemplateManager";
 import LessonOptionsManager from "@/components/staff/LessonOptionsManager";
@@ -55,11 +53,6 @@ export default async function StaffMyPage() {
   ]);
   const hasEntryInput = payCategories.length > 0 || hasPayRateRules;
   const hourlyCategories = payCategories.filter((c) => c.unit_type === "hourly");
-  const timeLogEntriesByCategory = Object.fromEntries(
-    await Promise.all(
-      hourlyCategories.map(async (c) => [c.id, await getOwnTimeLogEntries(c.id, periodStart, periodEnd)] as const),
-    ),
-  );
 
   const scheduleMonthLabel = `${Number(scheduleMonthStart.slice(5, 7))}月`;
 
@@ -83,20 +76,13 @@ export default async function StaffMyPage() {
 
       {hourlyCategories.length > 0 && (
         <section className="flex flex-col gap-2">
-          <h2 className="text-lg font-semibold">今期の出退勤記録({periodLabel})</h2>
-          <p className="text-xs text-neutral-400">
-            出勤・退勤・休憩の時刻を入れると、労働時間が自動計算されて上の実績入力に反映されます。
-          </p>
-          {hourlyCategories.map((c) => (
-            <TimeLogForm
-              key={c.id}
-              payCategoryId={c.id}
-              categoryName={c.name}
-              entries={timeLogEntriesByCategory[c.id]}
-              periodStart={periodStart}
-              periodEnd={periodEnd}
-            />
-          ))}
+          <h2 className="text-lg font-semibold">出退勤</h2>
+          <a
+            href="/staff/mypage/attendance"
+            className="self-start rounded-lg bg-neutral-900 px-4 py-2 text-sm text-white dark:bg-white dark:text-black"
+          >
+            出退勤を記録する →
+          </a>
         </section>
       )}
 
