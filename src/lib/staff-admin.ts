@@ -221,3 +221,28 @@ export async function inviteStaff(input: {
   revalidatePath("/staff/admin/staff");
   return { ok: true, data: { id: linkData.user.id, inviteLink: linkData.properties.action_link } };
 }
+
+// パスワードを忘れたスタッフのために、再設定用リンクを発行する。招待と同じ理由(メールが届かないことがある)で
+// Supabaseからの自動送信は行わず、URLを直接発行してLINEなどで共有できるようにする。
+export async function resetStaffPassword(staffId: string): Promise<ActionResult<{ resetLink: string }>> {
+  const staff = await getStaffUser();
+  if (!staff || staff.role !== "admin") return { ok: false, error: "管理者としてログインしてください。" };
+
+  const admin = createAdminClient();
+  const { data: userData, error: userError } = await admin.auth.admin.getUserById(staffId);
+  if (userError || !userData.user?.email) {
+    return { ok: false, error: "このスタッフのメールアドレスが見つかりませんでした。" };
+  }
+
+  const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
+    type: "recovery",
+    email: userData.user.email,
+    options: { redirectTo: `${siteUrl()}/staff/set-password` },
+  });
+
+  if (linkError || !linkData) {
+    return { ok: false, error: "再設定リンクの発行に失敗しました。" };
+  }
+
+  return { ok: true, data: { resetLink: linkData.properties.action_link } };
+}

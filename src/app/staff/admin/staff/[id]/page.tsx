@@ -26,6 +26,7 @@ import LessonOptionsManager from "@/components/staff/LessonOptionsManager";
 import SubmitScheduleButton from "@/components/staff/SubmitScheduleButton";
 import ScheduleDisplayNameForm from "@/components/staff/ScheduleDisplayNameForm";
 import SubmissionStatusPanel from "@/components/staff/SubmissionStatusPanel";
+import ResetPasswordButton from "@/components/staff/ResetPasswordButton";
 
 export default async function StaffAdminDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -105,6 +106,8 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
         <dt className="text-neutral-500">住所</dt>
         <dd>{profile.address ?? "-"}</dd>
       </dl>
+
+      <ResetPasswordButton staffId={profile.id} />
 
       <TaxSettingsForm
         staffId={profile.id}
