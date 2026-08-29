@@ -4,7 +4,6 @@ import { getStaffDetail, getSubmissionStatus } from "@/lib/staff-admin";
 import { getPayslipsForStaff, getTodaySummary } from "@/lib/payroll";
 import { getOwnPayEntries } from "@/lib/staff-self";
 import { getOwnLessonLogEntries } from "@/lib/lesson-log";
-import { getOwnTimeLogEntries } from "@/lib/time-log";
 import {
   getOwnLessonOptions,
   getOwnScheduleSubmissions,
@@ -20,7 +19,6 @@ import PayrollPanel from "@/components/staff/PayrollPanel";
 import TodaySummaryPanel from "@/components/staff/TodaySummaryPanel";
 import PayEntryForm from "@/components/staff/PayEntryForm";
 import LessonLogForm from "@/components/staff/LessonLogForm";
-import TimeLogForm from "@/components/staff/TimeLogForm";
 import ScheduleSubmissionForm from "@/components/staff/ScheduleSubmissionForm";
 import ScheduleTemplateManager from "@/components/staff/ScheduleTemplateManager";
 import LessonOptionsManager from "@/components/staff/LessonOptionsManager";
@@ -63,13 +61,6 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
   const { profile, payCategories, payRateRules } = detail;
   const headcountMatters = payRateRules.some((r) => r.min_headcount !== null || r.max_headcount !== null);
   const hourlyCategories = payCategories.filter((c) => c.unit_type === "hourly");
-  const timeLogEntriesByCategory = Object.fromEntries(
-    await Promise.all(
-      hourlyCategories.map(
-        async (c) => [c.id, await getOwnTimeLogEntries(c.id, periodStart, periodEnd, id)] as const,
-      ),
-    ),
-  );
 
   return (
     <div className="flex max-w-2xl flex-col gap-6">
@@ -149,17 +140,14 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
               staffId={profile.id}
             />
           )}
-          {hourlyCategories.map((c) => (
-            <TimeLogForm
-              key={c.id}
-              payCategoryId={c.id}
-              categoryName={c.name}
-              entries={timeLogEntriesByCategory[c.id]}
-              periodStart={periodStart}
-              periodEnd={periodEnd}
-              staffId={profile.id}
-            />
-          ))}
+          {hourlyCategories.length > 0 && (
+            <a
+              href={`/staff/mypage/attendance?staffId=${profile.id}`}
+              className="self-start rounded-lg border border-neutral-300 px-4 py-2 text-sm dark:border-neutral-700"
+            >
+              出退勤を見る/入力する →
+            </a>
+          )}
         </section>
       )}
 
