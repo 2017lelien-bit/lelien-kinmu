@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { getStaffUser, resolveActingStaffId } from "@/lib/auth";
 import { getOwnPayCategories } from "@/lib/pay-categories";
 import { getStaffDetail } from "@/lib/staff-admin";
@@ -43,9 +44,9 @@ export default async function StaffAttendancePage({
 
   return (
     <div className="flex max-w-2xl flex-col gap-6">
-      <a href={targetStaffId ? `/staff/admin/staff/${targetStaffId}` : "/staff/mypage"} className="text-sm underline">
+      <Link href={targetStaffId ? `/staff/admin/staff/${targetStaffId}` : "/staff/mypage"} className="text-sm underline">
         ← {targetStaffId ? `${staffName} さんのページに戻る` : "マイページに戻る"}
-      </a>
+      </Link>
       <h1 className="text-xl font-semibold">
         {staffName ? `${staffName} さんの出退勤記録` : "出退勤記録"}({periodLabel})
       </h1>

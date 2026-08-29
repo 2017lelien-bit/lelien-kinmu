@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { getOwnPayCategories } from "@/lib/pay-categories";
 import { getOwnHasPayRateRules, getOwnHeadcountMatters, getOwnLessonLogEntries } from "@/lib/lesson-log";
 import { getOwnPayEntries, getOwnPayslips, getOwnStaffProfile, getOwnSubmissionStatus } from "@/lib/staff-self";
@@ -77,12 +78,12 @@ export default async function StaffMyPage() {
       {hourlyCategories.length > 0 && (
         <section className="flex flex-col gap-2">
           <h2 className="text-lg font-semibold">出退勤</h2>
-          <a
+          <Link
             href="/staff/mypage/attendance"
             className="self-start rounded-lg bg-neutral-900 px-4 py-2 text-sm text-white dark:bg-white dark:text-black"
           >
             出退勤を記録する →
-          </a>
+          </Link>
         </section>
       )}
 

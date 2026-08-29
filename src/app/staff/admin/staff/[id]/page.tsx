@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { getStaffUser } from "@/lib/auth";
 import { getStaffDetail, getSubmissionStatus } from "@/lib/staff-admin";
 import { getPayslipsForStaff, getTodaySummary } from "@/lib/payroll";
@@ -141,12 +142,12 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
             />
           )}
           {hourlyCategories.length > 0 && (
-            <a
+            <Link
               href={`/staff/mypage/attendance?staffId=${profile.id}`}
               className="self-start rounded-lg border border-neutral-300 px-4 py-2 text-sm dark:border-neutral-700"
             >
               出退勤を見る/入力する →
-            </a>
+            </Link>
           )}
         </section>
       )}

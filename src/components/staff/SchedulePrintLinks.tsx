@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 
 export default function SchedulePrintLinks({ initialMonthStart }: { initialMonthStart: string }) {
   const [month, setMonth] = useState(initialMonthStart.slice(0, 7));
@@ -21,13 +22,13 @@ export default function SchedulePrintLinks({ initialMonthStart }: { initialMonth
         { type: "customer", label: "お客様用" },
         { type: "hp", label: "HP用" },
       ].map(({ type, label }) => (
-        <a
+        <Link
           key={type}
           href={`/staff/admin/schedule/print?month=${month}&type=${type}`}
           className="rounded-lg border border-neutral-300 px-4 py-2 text-sm dark:border-neutral-700"
         >
           {label}を開く
-        </a>
+        </Link>
       ))}
     </div>
   );

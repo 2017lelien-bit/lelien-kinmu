@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { getStaffUser } from "@/lib/auth";
 import { getAllScheduleSubmissions } from "@/lib/schedule-submissions";
 import { nextMonthStart, monthEnd, dayOfWeekForDate } from "@/lib/date";
@@ -95,9 +96,9 @@ export default async function SchedulePrintPage({
 
   return (
     <div className="print-calendar flex flex-col gap-3">
-      <a href="/staff/admin/schedule" className="text-sm underline print:hidden">
+      <Link href="/staff/admin/schedule" className="text-sm underline print:hidden">
         ← スケジュール管理に戻る
-      </a>
+      </Link>
       <div className="flex flex-wrap items-center gap-3 print:hidden">
         <h1 className="text-lg font-semibold">
           {formatMonthLabel(monthStart)}スケジュール({TYPE_LABEL[type]})
