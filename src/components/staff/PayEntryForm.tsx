@@ -74,20 +74,28 @@ export default function PayEntryForm({
                   {isHourly ? "時給" : "1回あたり"} ¥{c.rate.toLocaleString()}
                 </span>
               </div>
-              <label className="mt-2 flex flex-col gap-1 text-sm">
-                {isHourly ? "働いた時間(合計・時間)" : "行った回数"}
-                <input
-                  type="number"
-                  min={0}
-                  step={isHourly ? 0.25 : 1}
-                  value={quantity}
-                  onFocus={(e) => e.target.select()}
-                  onChange={(e) =>
-                    setQuantities((prev) => ({ ...prev, [c.id]: Number(e.target.value) }))
-                  }
-                  className="w-32 rounded-lg border border-neutral-200 px-3 py-2 text-base dark:border-neutral-800"
-                />
-              </label>
+              {isHourly ? (
+                <div className="mt-2 flex flex-col gap-1 text-sm">
+                  <span>働いた時間(合計)</span>
+                  <span className="text-base font-semibold">{quantity}時間</span>
+                  <span className="text-xs text-neutral-400">下の「出退勤」の記録から自動で計算されます。ここでは入力できません。</span>
+                </div>
+              ) : (
+                <label className="mt-2 flex flex-col gap-1 text-sm">
+                  行った回数
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={quantity}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) =>
+                      setQuantities((prev) => ({ ...prev, [c.id]: Number(e.target.value) }))
+                    }
+                    className="w-32 rounded-lg border border-neutral-200 px-3 py-2 text-base dark:border-neutral-800"
+                  />
+                </label>
+              )}
               <p className="mt-2 text-sm text-neutral-500">
                 小計: ¥{(quantity * c.rate).toLocaleString()}
               </p>

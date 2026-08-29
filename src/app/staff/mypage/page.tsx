@@ -61,19 +61,18 @@ export default async function StaffMyPage() {
     ),
   );
 
+  const scheduleMonthLabel = `${Number(scheduleMonthStart.slice(5, 7))}月`;
+
   return (
     <div className="flex max-w-2xl flex-col gap-6">
       <h1 className="text-xl font-semibold">マイページ</h1>
 
-      <MyStaffProfileForm profile={profile} />
-
-      <LessonOptionsManager options={lessonOptions} />
-
-      <ScheduleTemplateManager templates={scheduleTemplates} lessonOptions={lessonOptions} />
-
-      <ScheduleSubmissionForm entries={scheduleEntries} monthStart={scheduleMonthStart} lessonOptions={lessonOptions} />
-
-      <SubmitScheduleButton monthStart={scheduleMonthStart} submittedAt={scheduleSubmittedAt} />
+      <details className="rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
+        <summary className="cursor-pointer font-semibold">プロフィール設定</summary>
+        <div className="mt-4">
+          <MyStaffProfileForm profile={profile} />
+        </div>
+      </details>
 
       {payCategories.length > 0 && (
         <section className="flex flex-col gap-2">
@@ -109,6 +108,16 @@ export default async function StaffMyPage() {
       )}
 
       {hasEntryInput && <SubmitPeriodButton submittedAt={submittedAt} />}
+
+      <details className="rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
+        <summary className="cursor-pointer font-semibold">{scheduleMonthLabel}のスケジュールを提出する</summary>
+        <div className="mt-4 flex flex-col gap-4">
+          <LessonOptionsManager options={lessonOptions} />
+          <ScheduleTemplateManager templates={scheduleTemplates} lessonOptions={lessonOptions} />
+          <ScheduleSubmissionForm entries={scheduleEntries} monthStart={scheduleMonthStart} lessonOptions={lessonOptions} />
+          <SubmitScheduleButton monthStart={scheduleMonthStart} submittedAt={scheduleSubmittedAt} />
+        </div>
+      </details>
 
       <section className="flex flex-col gap-2">
         <h2 className="text-lg font-semibold">給与明細</h2>
