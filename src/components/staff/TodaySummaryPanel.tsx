@@ -91,6 +91,11 @@ export default function TodaySummaryPanel({
   const shiftsTotal = displayShifts.reduce((sum, s) => sum + s.amount, 0);
   const hasLeLienShift = displayShifts.some((s) => s.categoryName.toLowerCase().replace(/\s+/g, "").includes("lelien"));
 
+  // 期間表示のときは、日付ごとにまとめて見やすくする(新しい日付が上)。
+  const datesInPeriod = Array.from(
+    new Set([...displayLessons.map((l) => l.entryDate), ...displayShifts.map((s) => s.entryDate)]),
+  ).sort((a, b) => b.localeCompare(a));
+
   // 同じ日・同じレッスン名・同じ時間/人数の実績は、1行の「○本」表示にまとめる。
   interface LessonGroup {
     key: string;
@@ -338,184 +343,41 @@ export default function TodaySummaryPanel({
         <p className="text-sm text-neutral-400">{viewingPeriod ? "この期間の入力はありません。" : "本日の入力はまだありません。"}</p>
       )}
 
-      {displayLessons.length > 0 && (
+      {displayLessons.length > 0 && !viewingPeriod && (
         <div className="flex flex-col gap-2">
           <p className="text-xs text-neutral-500">レッスン {displayLessons.length}本(合計 ¥{lessonsTotal.toLocaleString()})</p>
-          <ul className="flex flex-col gap-2 text-sm">
-            {lessonGroups.map((g) =>
-              editingId === g.key ? (
-                <li key={g.key} className="flex flex-wrap items-center gap-2 border-b border-neutral-100 pb-2 dark:border-neutral-900">
-                  <input
-                    type="date"
-                    value={editValues.entryDate}
-                    onChange={(e) => setEditValues((v) => ({ ...v, entryDate: e.target.value }))}
-                    className="rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
-                  />
-                  <input
-                    type="time"
-                    value={editValues.startTime}
-                    onChange={(e) => setEditValues((v) => ({ ...v, startTime: e.target.value }))}
-                    className="rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
-                  />
-                  <select
-                    value={editValues.lessonName}
-                    onChange={(e) => setEditValues((v) => ({ ...v, lessonName: e.target.value }))}
-                    className="rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
-                  >
-                    {LESSON_NAMES.map((name) => (
-                      <option key={name} value={name}>
-                        {name}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    min={1}
-                    value={editValues.durationMinutes}
-                    onFocus={(e) => e.target.select()}
-                    onChange={(e) => setEditValues((v) => ({ ...v, durationMinutes: Number(e.target.value) }))}
-                    className="w-16 rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
-                  />
-                  分
-                  {headcountMatters && (
-                    <>
-                      <input
-                        type="number"
-                        min={1}
-                        value={editValues.headcount}
-                        onFocus={(e) => e.target.select()}
-                        onChange={(e) => setEditValues((v) => ({ ...v, headcount: Number(e.target.value) }))}
-                        className="w-16 rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
-                      />
-                      人
-                    </>
-                  )}
-                  <input
-                    type="number"
-                    min={1}
-                    value={editValues.count}
-                    onFocus={(e) => e.target.select()}
-                    onChange={(e) => setEditValues((v) => ({ ...v, count: Number(e.target.value) }))}
-                    className="w-16 rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
-                  />
-                  本
-                  <button
-                    onClick={() => handleSaveGroupEdit(g)}
-                    disabled={savingId === g.key}
-                    className="rounded-lg bg-neutral-900 px-3 py-1 text-xs text-white disabled:opacity-40 dark:bg-white dark:text-black"
-                  >
-                    {savingId === g.key ? "保存中..." : "保存"}
-                  </button>
-                  <button onClick={() => setEditingId(null)} className="text-xs underline">
-                    キャンセル
-                  </button>
-                </li>
-              ) : (
-                <li key={g.key} className="flex flex-wrap items-center gap-3 border-b border-neutral-100 pb-2 dark:border-neutral-900">
-                  {viewingPeriod && <span className="text-neutral-400">{g.entryDate}</span>}
-                  {g.startTime && <span>{g.startTime.slice(0, 5)}〜</span>}
-                  <span>{g.lessonName}</span>
-                  {headcountMatters ? <span>{g.headcount}人</span> : <span>{g.count}本</span>}
-                  <span className="font-semibold">
-                    {g.total > 0 ? `¥${g.total.toLocaleString()}` : "該当ルールなし"}
-                  </span>
-                  {g.allApproved ? (
-                    <span className="text-neutral-400">承認済み</span>
-                  ) : (
-                    <button
-                      onClick={() => handleApproveGroup(g)}
-                      disabled={savingId === g.key}
-                      className="rounded-lg bg-neutral-900 px-3 py-1 text-xs text-white disabled:opacity-40 dark:bg-white dark:text-black"
-                    >
-                      {savingId === g.key ? "更新中..." : "承認する"}
-                    </button>
-                  )}
-                  <button onClick={() => startEditGroup(g)} className="ml-auto text-xs underline">
-                    訂正する
-                  </button>
-                  <button
-                    onClick={() => handleDeleteGroup(g)}
-                    disabled={deletingId === g.key}
-                    className="text-xs text-red-600 underline disabled:opacity-40"
-                  >
-                    {deletingId === g.key ? "削除中..." : "削除"}
-                  </button>
-                </li>
-              ),
-            )}
-          </ul>
+          <ul className="flex flex-col gap-2 text-sm">{lessonGroups.map(renderLessonRow)}</ul>
         </div>
       )}
 
-      {displayShifts.length > 0 && (
+      {displayShifts.length > 0 && !viewingPeriod && (
         <div className="flex flex-col gap-2 border-t border-neutral-100 pt-3 dark:border-neutral-900">
           <p className="text-xs text-neutral-500">出退勤(合計 ¥{shiftsTotal.toLocaleString()})</p>
-          <ul className="flex flex-col gap-2 text-sm">
-            {displayShifts.map((s) =>
-              editingShiftId === s.id ? (
-                <li key={s.id} className="flex flex-wrap items-center gap-2 border-b border-neutral-100 pb-2 dark:border-neutral-900">
-                  <span>{s.categoryName}</span>
-                  出勤
-                  <input
-                    type="time"
-                    value={shiftEditValues.startTime}
-                    onChange={(e) => setShiftEditValues((v) => ({ ...v, startTime: e.target.value }))}
-                    className="rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
-                  />
-                  退勤
-                  <input
-                    type="time"
-                    value={shiftEditValues.endTime}
-                    onChange={(e) => setShiftEditValues((v) => ({ ...v, endTime: e.target.value }))}
-                    className="rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
-                  />
-                  休憩
-                  <input
-                    type="time"
-                    value={shiftEditValues.breakStart}
-                    onChange={(e) => setShiftEditValues((v) => ({ ...v, breakStart: e.target.value }))}
-                    className="rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
-                  />
-                  〜
-                  <input
-                    type="time"
-                    value={shiftEditValues.breakEnd}
-                    onChange={(e) => setShiftEditValues((v) => ({ ...v, breakEnd: e.target.value }))}
-                    className="rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
-                  />
-                  <button
-                    onClick={() => handleSaveShiftEdit(s)}
-                    disabled={savingId === s.id}
-                    className="rounded-lg bg-neutral-900 px-3 py-1 text-xs text-white disabled:opacity-40 dark:bg-white dark:text-black"
-                  >
-                    {savingId === s.id ? "保存中..." : "保存"}
-                  </button>
-                  <button onClick={() => setEditingShiftId(null)} className="text-xs underline">
-                    キャンセル
-                  </button>
-                </li>
-              ) : (
-                <li key={s.id} className="flex flex-wrap items-center gap-3">
-                  {viewingPeriod && <span className="text-neutral-400">{s.entryDate}</span>}
-                  <span>{s.categoryName}</span>
-                  <span>
-                    {s.startTime.slice(0, 5)}〜{s.endTime.slice(0, 5)}({s.hours}時間)
-                  </span>
-                  <span className="font-semibold">¥{s.amount.toLocaleString()}</span>
-                  <button onClick={() => startEditShift(s)} className="ml-auto text-xs underline">
-                    訂正する
-                  </button>
-                  <button
-                    onClick={() => handleDeleteShift(s)}
-                    disabled={deletingId === s.id}
-                    className="text-xs text-red-600 underline disabled:opacity-40"
-                  >
-                    {deletingId === s.id ? "削除中..." : "削除"}
-                  </button>
-                </li>
-              ),
-            )}
-          </ul>
+          <ul className="flex flex-col gap-2 text-sm">{displayShifts.map(renderShiftRow)}</ul>
+          {hasLeLienShift && (
+            <p className="text-xs text-neutral-400">
+              「Le lien」区分は、同じ日にレッスンと時間が重なっていた場合、1レッスンにつき2時間分が実際の反映額から差し引かれます(むすひなど他の区分には適用されません)。
+            </p>
+          )}
+        </div>
+      )}
+
+      {viewingPeriod && datesInPeriod.length > 0 && (
+        <div className="flex flex-col gap-4">
+          <p className="text-xs text-neutral-500">
+            レッスン {displayLessons.length}本(¥{lessonsTotal.toLocaleString()}) / 出退勤 合計 ¥{shiftsTotal.toLocaleString()}
+          </p>
+          {datesInPeriod.map((date) => {
+            const dayLessons = lessonGroups.filter((g) => g.entryDate === date);
+            const dayShifts = displayShifts.filter((s) => s.entryDate === date);
+            return (
+              <div key={date} className="flex flex-col gap-2 rounded-lg border border-neutral-100 p-3 dark:border-neutral-900">
+                <p className="text-sm font-semibold">{date}</p>
+                {dayLessons.length > 0 && <ul className="flex flex-col gap-2 text-sm">{dayLessons.map(renderLessonRow)}</ul>}
+                {dayShifts.length > 0 && <ul className="flex flex-col gap-2 text-sm">{dayShifts.map(renderShiftRow)}</ul>}
+              </div>
+            );
+          })}
           {hasLeLienShift && (
             <p className="text-xs text-neutral-400">
               「Le lien」区分は、同じ日にレッスンと時間が重なっていた場合、1レッスンにつき2時間分が実際の反映額から差し引かれます(むすひなど他の区分には適用されません)。
@@ -525,4 +387,173 @@ export default function TodaySummaryPanel({
       )}
     </div>
   );
+
+  function renderLessonRow(g: LessonGroup) {
+    if (editingId === g.key) {
+      return (
+        <li key={g.key} className="flex flex-wrap items-center gap-2 border-b border-neutral-100 pb-2 dark:border-neutral-900">
+          <input
+            type="date"
+            value={editValues.entryDate}
+            onChange={(e) => setEditValues((v) => ({ ...v, entryDate: e.target.value }))}
+            className="rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
+          />
+          <input
+            type="time"
+            value={editValues.startTime}
+            onChange={(e) => setEditValues((v) => ({ ...v, startTime: e.target.value }))}
+            className="rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
+          />
+          <select
+            value={editValues.lessonName}
+            onChange={(e) => setEditValues((v) => ({ ...v, lessonName: e.target.value }))}
+            className="rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
+          >
+            {LESSON_NAMES.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+          <input
+            type="number"
+            min={1}
+            value={editValues.durationMinutes}
+            onFocus={(e) => e.target.select()}
+            onChange={(e) => setEditValues((v) => ({ ...v, durationMinutes: Number(e.target.value) }))}
+            className="w-16 rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
+          />
+          分
+          {headcountMatters && (
+            <>
+              <input
+                type="number"
+                min={1}
+                value={editValues.headcount}
+                onFocus={(e) => e.target.select()}
+                onChange={(e) => setEditValues((v) => ({ ...v, headcount: Number(e.target.value) }))}
+                className="w-16 rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
+              />
+              人
+            </>
+          )}
+          <input
+            type="number"
+            min={1}
+            value={editValues.count}
+            onFocus={(e) => e.target.select()}
+            onChange={(e) => setEditValues((v) => ({ ...v, count: Number(e.target.value) }))}
+            className="w-16 rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
+          />
+          本
+          <button
+            onClick={() => handleSaveGroupEdit(g)}
+            disabled={savingId === g.key}
+            className="rounded-lg bg-neutral-900 px-3 py-1 text-xs text-white disabled:opacity-40 dark:bg-white dark:text-black"
+          >
+            {savingId === g.key ? "保存中..." : "保存"}
+          </button>
+          <button onClick={() => setEditingId(null)} className="text-xs underline">
+            キャンセル
+          </button>
+        </li>
+      );
+    }
+    return (
+      <li key={g.key} className="flex flex-wrap items-center gap-3 border-b border-neutral-100 pb-2 dark:border-neutral-900">
+        {g.startTime && <span>{g.startTime.slice(0, 5)}〜</span>}
+        <span>{g.lessonName}</span>
+        {headcountMatters ? <span>{g.headcount}人</span> : <span>{g.count}本</span>}
+        <span className="font-semibold">{g.total > 0 ? `¥${g.total.toLocaleString()}` : "該当ルールなし"}</span>
+        {g.allApproved ? (
+          <span className="text-neutral-400">承認済み</span>
+        ) : (
+          <button
+            onClick={() => handleApproveGroup(g)}
+            disabled={savingId === g.key}
+            className="rounded-lg bg-neutral-900 px-3 py-1 text-xs text-white disabled:opacity-40 dark:bg-white dark:text-black"
+          >
+            {savingId === g.key ? "更新中..." : "承認する"}
+          </button>
+        )}
+        <button onClick={() => startEditGroup(g)} className="ml-auto text-xs underline">
+          訂正する
+        </button>
+        <button
+          onClick={() => handleDeleteGroup(g)}
+          disabled={deletingId === g.key}
+          className="text-xs text-red-600 underline disabled:opacity-40"
+        >
+          {deletingId === g.key ? "削除中..." : "削除"}
+        </button>
+      </li>
+    );
+  }
+
+  function renderShiftRow(s: TodayShiftSummary) {
+    if (editingShiftId === s.id) {
+      return (
+        <li key={s.id} className="flex flex-wrap items-center gap-2 border-b border-neutral-100 pb-2 dark:border-neutral-900">
+          <span>{s.categoryName}</span>
+          出勤
+          <input
+            type="time"
+            value={shiftEditValues.startTime}
+            onChange={(e) => setShiftEditValues((v) => ({ ...v, startTime: e.target.value }))}
+            className="rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
+          />
+          退勤
+          <input
+            type="time"
+            value={shiftEditValues.endTime}
+            onChange={(e) => setShiftEditValues((v) => ({ ...v, endTime: e.target.value }))}
+            className="rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
+          />
+          休憩
+          <input
+            type="time"
+            value={shiftEditValues.breakStart}
+            onChange={(e) => setShiftEditValues((v) => ({ ...v, breakStart: e.target.value }))}
+            className="rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
+          />
+          〜
+          <input
+            type="time"
+            value={shiftEditValues.breakEnd}
+            onChange={(e) => setShiftEditValues((v) => ({ ...v, breakEnd: e.target.value }))}
+            className="rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
+          />
+          <button
+            onClick={() => handleSaveShiftEdit(s)}
+            disabled={savingId === s.id}
+            className="rounded-lg bg-neutral-900 px-3 py-1 text-xs text-white disabled:opacity-40 dark:bg-white dark:text-black"
+          >
+            {savingId === s.id ? "保存中..." : "保存"}
+          </button>
+          <button onClick={() => setEditingShiftId(null)} className="text-xs underline">
+            キャンセル
+          </button>
+        </li>
+      );
+    }
+    return (
+      <li key={s.id} className="flex flex-wrap items-center gap-3">
+        <span>{s.categoryName}</span>
+        <span>
+          {s.startTime.slice(0, 5)}〜{s.endTime.slice(0, 5)}({s.hours}時間)
+        </span>
+        <span className="font-semibold">¥{s.amount.toLocaleString()}</span>
+        <button onClick={() => startEditShift(s)} className="ml-auto text-xs underline">
+          訂正する
+        </button>
+        <button
+          onClick={() => handleDeleteShift(s)}
+          disabled={deletingId === s.id}
+          className="text-xs text-red-600 underline disabled:opacity-40"
+        >
+          {deletingId === s.id ? "削除中..." : "削除"}
+        </button>
+      </li>
+    );
+  }
 }
