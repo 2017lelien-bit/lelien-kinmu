@@ -1,13 +1,13 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getStaffUser } from "@/lib/auth";
-import { getAllStaff, getSubmissionStatusMap } from "@/lib/staff-admin";
+import { getAllStaff, getPendingSubmissionMap } from "@/lib/staff-admin";
 
 export default async function StaffAdminStaffListPage() {
   const staff = await getStaffUser();
   if (!staff || staff.role !== "admin") notFound();
 
-  const [allStaff, submissionMap] = await Promise.all([getAllStaff(), getSubmissionStatusMap()]);
+  const [allStaff, pendingMap] = await Promise.all([getAllStaff(), getPendingSubmissionMap()]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -29,21 +29,20 @@ export default async function StaffAdminStaffListPage() {
               <th className="py-2 pr-4">権限</th>
               <th className="py-2 pr-4">連絡先</th>
               <th className="py-2 pr-4">状態</th>
-              <th className="py-2 pr-4">本日の確認</th>
+              <th className="py-2 pr-4">提出確認</th>
             </tr>
           </thead>
           <tbody>
             {allStaff.map((s) => {
-              const submission = submissionMap[s.id];
-              const pending = submission?.submittedAt && !submission.acknowledgedAt;
+              const pending = pendingMap[s.id] ?? [];
               return (
                 <tr key={s.id} className="border-b border-neutral-100 dark:border-neutral-900">
                   <td className="py-2 pr-4">
                     <Link href={`/staff/admin/staff/${s.id}`} className="inline-flex items-center gap-1 underline">
                       {s.name}
-                      {pending && (
+                      {pending.length > 0 && (
                         <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-xs font-semibold text-white">
-                          1
+                          {pending.length}
                         </span>
                       )}
                     </Link>
@@ -56,10 +55,8 @@ export default async function StaffAdminStaffListPage() {
                     )}
                   </td>
                   <td className="py-2 pr-4">
-                    {pending ? (
-                      <span className="font-semibold text-red-600">未確認</span>
-                    ) : submission?.submittedAt ? (
-                      <span className="text-neutral-400">確認済み</span>
+                    {pending.length > 0 ? (
+                      <span className="font-semibold text-red-600">未確認 {pending.length}件</span>
                     ) : (
                       <span className="text-neutral-400">-</span>
                     )}

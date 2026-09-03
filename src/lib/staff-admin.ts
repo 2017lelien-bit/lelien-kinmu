@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStaffUser } from "@/lib/auth";
-import { todayJstDateString } from "@/lib/date";
 import type { ActionResult, CommuteType, PayCategory, PayRateRule, StaffProfile } from "@/lib/types";
 
 function siteUrl(): string {
@@ -23,46 +22,50 @@ export async function getPendingSubmissionCount(): Promise<number> {
   return count ?? 0;
 }
 
-export interface SubmissionStatus {
-  submittedAt: string | null;
-  acknowledgedAt: string | null;
+export interface PendingSubmission {
+  date: string;
+  submittedAt: string;
 }
 
-// 「本日の確認」は日ごとに管理する。締め期間をまたいでも古い提出の確認状態が残らないようにするため、
-// 常に今日の日付の行だけを見る。
-export async function getSubmissionStatus(staffId: string): Promise<SubmissionStatus> {
+// 「本日の確認」ではなく、まだ確認していない提出を日付を問わず全部返す。
+// (以前は今日の日付の行だけを見ていたが、確認する前に日付をまたぐと、その提出が
+// 画面上どこにも出てこなくなり、通知の件数だけが減らずに残ってしまう不具合があった。)
+export async function getPendingSubmissions(staffId: string): Promise<PendingSubmission[]> {
   const staff = await getStaffUser();
-  if (!staff || staff.role !== "admin") return { submittedAt: null, acknowledgedAt: null };
+  if (!staff || staff.role !== "admin") return [];
 
   const admin = createAdminClient();
   const { data } = await admin
     .from("period_submissions")
-    .select("submitted_at, acknowledged_at")
+    .select("submission_date, submitted_at")
     .eq("staff_id", staffId)
-    .eq("submission_date", todayJstDateString())
-    .maybeSingle();
+    .is("acknowledged_at", null)
+    .order("submission_date", { ascending: true });
 
-  return { submittedAt: data?.submitted_at ?? null, acknowledgedAt: data?.acknowledged_at ?? null };
+  return (data ?? []).map((row) => ({ date: row.submission_date, submittedAt: row.submitted_at }));
 }
 
-export async function getSubmissionStatusMap(): Promise<Record<string, SubmissionStatus>> {
+export async function getPendingSubmissionMap(): Promise<Record<string, PendingSubmission[]>> {
   const staff = await getStaffUser();
   if (!staff || staff.role !== "admin") return {};
 
   const admin = createAdminClient();
   const { data } = await admin
     .from("period_submissions")
-    .select("staff_id, submitted_at, acknowledged_at")
-    .eq("submission_date", todayJstDateString());
+    .select("staff_id, submission_date, submitted_at")
+    .is("acknowledged_at", null)
+    .order("submission_date", { ascending: true });
 
-  const map: Record<string, SubmissionStatus> = {};
+  const map: Record<string, PendingSubmission[]> = {};
   for (const row of data ?? []) {
-    map[row.staff_id] = { submittedAt: row.submitted_at, acknowledgedAt: row.acknowledged_at };
+    const list = map[row.staff_id] ?? [];
+    list.push({ date: row.submission_date, submittedAt: row.submitted_at });
+    map[row.staff_id] = list;
   }
   return map;
 }
 
-export async function acknowledgeSubmission(staffId: string): Promise<ActionResult> {
+export async function acknowledgeSubmission(staffId: string, date: string): Promise<ActionResult> {
   const staff = await getStaffUser();
   if (!staff || staff.role !== "admin") return { ok: false, error: "管理者としてログインしてください。" };
 
@@ -71,7 +74,7 @@ export async function acknowledgeSubmission(staffId: string): Promise<ActionResu
     .from("period_submissions")
     .update({ acknowledged_at: new Date().toISOString() })
     .eq("staff_id", staffId)
-    .eq("submission_date", todayJstDateString());
+    .eq("submission_date", date);
   if (error) return { ok: false, error: "更新に失敗しました。" };
 
   revalidatePath(`/staff/admin/staff/${staffId}`);

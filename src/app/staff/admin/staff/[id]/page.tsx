@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getStaffUser } from "@/lib/auth";
-import { getStaffDetail, getSubmissionStatus } from "@/lib/staff-admin";
+import { getStaffDetail, getPendingSubmissions } from "@/lib/staff-admin";
 import { getPayslipsForStaff, getTodaySummary } from "@/lib/payroll";
 import { getOwnPayEntries } from "@/lib/staff-self";
 import { getOwnLessonLogEntries } from "@/lib/lesson-log";
@@ -41,7 +41,7 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
     todaySummary,
     currentPayEntries,
     currentLessonLogEntries,
-    submission,
+    pendingSubmissions,
     scheduleEntries,
     lessonOptions,
     scheduleTemplates,
@@ -52,7 +52,7 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
     getTodaySummary(id),
     getOwnPayEntries(periodStart, id),
     getOwnLessonLogEntries(periodStart, periodEnd, id),
-    getSubmissionStatus(id),
+    getPendingSubmissions(id),
     getOwnScheduleSubmissions(scheduleMonthStart, monthEnd(scheduleMonthStart), id),
     getOwnLessonOptions(id),
     getOwnScheduleTemplates(id),
@@ -68,11 +68,7 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
     <div className="flex max-w-2xl flex-col gap-6">
       <h1 className="text-xl font-semibold">{profile.name} さん</h1>
 
-      <SubmissionStatusPanel
-        staffId={profile.id}
-        submittedAt={submission.submittedAt}
-        acknowledgedAt={submission.acknowledgedAt}
-      />
+      <SubmissionStatusPanel staffId={profile.id} pending={pendingSubmissions} />
 
       <TodaySummaryPanel
         staffId={profile.id}

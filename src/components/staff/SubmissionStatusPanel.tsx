@@ -2,44 +2,46 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { acknowledgeSubmission } from "@/lib/staff-admin";
+import { acknowledgeSubmission, type PendingSubmission } from "@/lib/staff-admin";
 import { formatDateTimeJst } from "@/lib/date";
 
 export default function SubmissionStatusPanel({
   staffId,
-  submittedAt,
-  acknowledgedAt,
+  pending,
 }: {
   staffId: string;
-  submittedAt: string | null;
-  acknowledgedAt: string | null;
+  pending: PendingSubmission[];
 }) {
   const router = useRouter();
-  const [submitting, setSubmitting] = useState(false);
+  const [submittingDate, setSubmittingDate] = useState<string | null>(null);
 
-  if (!submittedAt) {
-    return <p className="text-sm text-neutral-400">本日の確認: まだありません</p>;
+  if (pending.length === 0) {
+    return <p className="text-sm text-neutral-400">確認待ちの提出はありません</p>;
   }
 
-  const pending = !acknowledgedAt;
-
-  async function handleAcknowledge() {
-    setSubmitting(true);
-    await acknowledgeSubmission(staffId);
-    setSubmitting(false);
+  async function handleAcknowledge(date: string) {
+    setSubmittingDate(date);
+    await acknowledgeSubmission(staffId, date);
+    setSubmittingDate(null);
     router.refresh();
   }
 
   return (
-    <p className="flex flex-wrap items-center gap-3 text-sm">
-      <span className={pending ? "font-semibold text-red-600" : "text-neutral-500"}>
-        本日の確認: {formatDateTimeJst(submittedAt)}{pending ? "(未確認)" : "(確認済み)"}
-      </span>
-      {pending && (
-        <button onClick={handleAcknowledge} disabled={submitting} className="underline disabled:opacity-40">
-          {submitting ? "更新中..." : "確認済みにする"}
-        </button>
-      )}
-    </p>
+    <div className="flex flex-col gap-1">
+      {pending.map((p) => (
+        <p key={p.date} className="flex flex-wrap items-center gap-3 text-sm">
+          <span className="font-semibold text-red-600">
+            {p.date}の提出: {formatDateTimeJst(p.submittedAt)}(未確認)
+          </span>
+          <button
+            onClick={() => handleAcknowledge(p.date)}
+            disabled={submittingDate === p.date}
+            className="underline disabled:opacity-40"
+          >
+            {submittingDate === p.date ? "更新中..." : "確認済みにする"}
+          </button>
+        </p>
+      ))}
+    </div>
   );
 }
