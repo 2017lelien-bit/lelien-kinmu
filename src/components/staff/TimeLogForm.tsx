@@ -96,6 +96,11 @@ export default function TimeLogForm({
     router.refresh();
   }
 
+  // 同じ日に同じ時刻の記録がすでにある場合は、二重登録に気づけるよう警告する。
+  const duplicateExisting =
+    !editingId &&
+    entries.find((e) => e.entry_date === entryDate && e.start_time.slice(0, 5) === startTime && e.end_time.slice(0, 5) === endTime);
+
   const totalMinutes = entries.reduce(
     (sum, e) =>
       sum +
@@ -169,6 +174,12 @@ export default function TimeLogForm({
           className="rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
         />
       </label>
+
+      {duplicateExisting && (
+        <p className="rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
+          ⚠️ {entryDate}に同じ時刻({startTime}〜{endTime})の記録が、すでに登録されています。二重登録ではないか確認してから登録してください。
+        </p>
+      )}
 
       <div className="flex gap-3">
         <button

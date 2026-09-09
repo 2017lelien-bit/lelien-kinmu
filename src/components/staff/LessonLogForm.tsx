@@ -34,6 +34,18 @@ export default function LessonLogForm({
   // 承認済みのものは管理者側でのみ確認できればよく、ここに残すと画面が見づらくなるため表示しない。
   const visibleEntries = entries.filter((e) => !e.approved);
 
+  // 同じ日に同じ内容(レッスン名・時間・人数)がすでに登録されている場合は、二重登録に気づけるよう警告する。
+  // (前日以前の分を翌日にもう一度入力してしまう、といった間違いが実際に起きたため)
+  const duplicateExisting =
+    !editingId &&
+    entries.find(
+      (e) =>
+        e.entry_date === entryDate &&
+        e.lesson_name === lessonName &&
+        e.duration_minutes === durationMinutes &&
+        e.headcount === (headcountMatters ? headcount : 1),
+    );
+
   function resetForm() {
     setEditingId(null);
     setEntryDate(todayJstDateString());
@@ -205,6 +217,12 @@ export default function LessonLogForm({
           className="rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
         />
       </label>
+
+      {duplicateExisting && (
+        <p className="rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
+          ⚠️ {entryDate}に同じ内容({lessonName}・{durationMinutes}分{headcountMatters ? `・${headcount}人` : ""})の実績が、すでに登録されています。二重登録ではないか確認してから登録してください。
+        </p>
+      )}
 
       <div className="flex gap-3">
         <button
