@@ -50,8 +50,12 @@ export async function addScheduleEntry(
   if (input.kind === "reception" && (!input.startTime || !input.endTime)) {
     return { ok: false, error: "受付は開始・終了時刻を入力してください。" };
   }
-  if (input.kind === "lesson" && (!input.startTime || !input.lessonName?.trim())) {
-    return { ok: false, error: "レッスンは開始時刻とレッスン名を入力してください。" };
+  if (input.kind === "lesson") {
+    if (!input.startTime) return { ok: false, error: "レッスンは開始時刻を入力してください。" };
+    // レッスン名を決めない場合は、代わりに終了時刻(可能な時間帯)を必須にする。
+    if (!input.lessonName?.trim() && !input.endTime) {
+      return { ok: false, error: "レッスン名か、終了時刻(時間帯だけ伝える場合)のどちらかを入力してください。" };
+    }
   }
 
   const admin = createAdminClient();
@@ -63,8 +67,9 @@ export async function addScheduleEntry(
       kind: input.kind,
       // 休み希望(unavailable)は、時刻を空欄にすれば終日休み、指定すればその時間帯だけの休みになる。
       start_time: input.kind === "unavailable" ? input.startTime || null : input.startTime,
-      end_time: input.kind === "lesson" ? null : input.endTime || null,
-      lesson_name: input.kind === "lesson" ? input.lessonName?.trim() : null,
+      // レッスン名を決めている場合は開始時刻だけ、決めていない場合(時間帯だけ伝える)は終了時刻も持つ。
+      end_time: input.kind === "lesson" ? (input.lessonName?.trim() ? null : input.endTime || null) : input.endTime || null,
+      lesson_name: input.kind === "lesson" ? input.lessonName?.trim() || null : null,
       note: input.note || null,
     })
     .select()
@@ -131,18 +136,22 @@ export async function setScheduleEntryConfirmed(id: string, confirmed: boolean):
 
 // 管理者がスケジュール組み立て中に、確定した予定の時間を微調整できるようにする
 // (元の提出内容そのものを上書きする。組み立て済みの最終スケジュールとして扱うため)。
+// レッスン名を決めずに時間帯だけ提出された候補には、ここでレッスン名を割り当てられるようにする。
 export async function updateScheduleEntryTime(
   id: string,
-  input: { startTime: string; endTime?: string },
+  input: { startTime: string; endTime?: string; lessonName?: string },
 ): Promise<ActionResult> {
   const adminCheck = await requireAdmin();
   if (adminCheck) return adminCheck;
 
   const admin = createAdminClient();
-  const { error } = await admin
-    .from("schedule_submissions")
-    .update({ start_time: input.startTime, end_time: input.endTime || null })
-    .eq("id", id);
+  const update: { start_time: string; end_time: string | null; lesson_name?: string | null } = {
+    start_time: input.startTime,
+    end_time: input.endTime || null,
+  };
+  if (input.lessonName !== undefined) update.lesson_name = input.lessonName.trim() || null;
+
+  const { error } = await admin.from("schedule_submissions").update(update).eq("id", id);
   if (error) return { ok: false, error: "更新に失敗しました。" };
 
   revalidatePath("/staff/admin/schedule");

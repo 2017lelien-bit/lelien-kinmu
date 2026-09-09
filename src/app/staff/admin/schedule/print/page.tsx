@@ -87,7 +87,9 @@ export default async function SchedulePrintPage({
     list.sort((a, b) => (a.start_time ?? "").localeCompare(b.start_time ?? ""));
   }
 
-  const lessonNamesUsed = Array.from(new Set(confirmed.filter((e) => e.kind === "lesson").map((e) => e.lesson_name!))).sort();
+  const lessonNamesUsed = Array.from(
+    new Set(confirmed.filter((e) => e.kind === "lesson").map((e) => e.lesson_name ?? "(レッスン名未定)")),
+  ).sort();
 
   // カレンダーの見た目に合わせて、月初の曜日分だけ空マスを差し込む。
   const leadingBlanks: (string | null)[] = Array(dayOfWeekForDate(dates[0])).fill(null);
@@ -158,12 +160,15 @@ export default async function SchedulePrintPage({
                 <p className="text-neutral-400">定休日</p>
               ) : (
                 <>
-                  {lessons.map((e) => (
-                    <p key={e.id} className="rounded px-1 py-0.5 leading-tight" style={lessonStyle(e.lesson_name!)}>
-                      {formatTime(e.start_time)} {e.lesson_name}
-                      {type !== "hp" && `(${e.staffName})`}
-                    </p>
-                  ))}
+                  {lessons.map((e) => {
+                    const name = e.lesson_name ?? "(レッスン名未定)";
+                    return (
+                      <p key={e.id} className="rounded px-1 py-0.5 leading-tight" style={lessonStyle(name)}>
+                        {formatTime(e.start_time)} {name}
+                        {type !== "hp" && `(${e.staffName})`}
+                      </p>
+                    );
+                  })}
                 </>
               )}
             </div>

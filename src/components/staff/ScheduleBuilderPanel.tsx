@@ -19,7 +19,7 @@ function formatMonthLabel(monthStart: string): string {
 
 function candidateLabel(e: EntryWithName): string {
   const time = e.start_time ? `${e.start_time.slice(0, 5)}${e.end_time ? `〜${e.end_time.slice(0, 5)}` : ""}` : "";
-  const what = e.kind === "lesson" ? e.lesson_name : "受付";
+  const what = e.kind === "lesson" ? (e.lesson_name ?? "レッスン希望(未定)") : "受付";
   return [e.staffName, time, what].filter(Boolean).join(" ");
 }
 
@@ -92,6 +92,22 @@ export default function ScheduleBuilderPanel({
     }
   }
 
+  // レッスン名を決めずに時間帯だけ提出された候補に、実際に担当するレッスン名を割り当てる。
+  async function handleAssignLesson(entry: EntryWithName, lessonName: string) {
+    setError(null);
+    const prevName = entry.lesson_name;
+    setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, lesson_name: lessonName || null } : e)));
+    const result = await updateScheduleEntryTime(entry.id, {
+      startTime: entry.start_time ?? "",
+      endTime: entry.end_time ?? undefined,
+      lessonName,
+    });
+    if (!result.ok) {
+      setError(result.error);
+      setEntries((prev) => (prev.map((e) => (e.id === entry.id ? { ...e, lesson_name: prevName } : e))));
+    }
+  }
+
   const [y, m] = monthStart.split("-").map(Number);
   const daysInMonth = Number(monthEnd(monthStart).split("-")[2]);
   const dates = Array.from(
@@ -149,7 +165,7 @@ export default function ScheduleBuilderPanel({
                     onChange={(e) => handleTimeEdit(selected, e.target.value, selected.end_time?.slice(0, 5) ?? "")}
                     className="w-14 rounded border border-neutral-200 px-0.5 py-0.5 text-[10px] dark:border-neutral-800"
                   />
-                  {kind === "reception" && (
+                  {(kind === "reception" || (kind === "lesson" && !selected.lesson_name)) && (
                     <>
                       〜
                       <input
@@ -161,6 +177,14 @@ export default function ScheduleBuilderPanel({
                     </>
                   )}
                 </div>
+              )}
+              {selected && kind === "lesson" && !selected.lesson_name && (
+                <input
+                  defaultValue=""
+                  placeholder="レッスン名を入力して確定"
+                  onBlur={(e) => e.target.value.trim() && handleAssignLesson(selected, e.target.value.trim())}
+                  className="w-full rounded border border-amber-400 bg-amber-50 px-1 py-0.5 text-[10px] dark:border-amber-700 dark:bg-amber-950"
+                />
               )}
             </div>
           );

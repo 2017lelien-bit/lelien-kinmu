@@ -56,6 +56,8 @@ export default function ScheduleSubmissionForm({
     { startTime: "10:00", name: lessonOptions[0]?.name ?? "" },
   ]);
   const [lessonName, setLessonName] = useState(lessonOptions[0]?.name ?? "");
+  // レッスン名をまだ決めず、可能な時間帯だけ伝えたい場合。管理者が組み立て時にレッスン名を割り当てる。
+  const [lessonFlexible, setLessonFlexible] = useState(false);
   const [note, setNote] = useState("");
   const [partialUnavailable, setPartialUnavailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,6 +86,7 @@ export default function ScheduleSubmissionForm({
     setWantsLesson(false);
     setLessonSlots([{ startTime: "10:00", name: lessonOptions[0]?.name ?? "" }]);
     setLessonName(lessonOptions[0]?.name ?? "");
+    setLessonFlexible(false);
     setNote("");
     setPartialUnavailable(false);
   }
@@ -142,13 +145,14 @@ export default function ScheduleSubmissionForm({
     }
 
     const unavailableWithTime = kind === "unavailable" && partialUnavailable;
+    const lessonWithoutName = kind === "lesson" && lessonFlexible;
     const result = await addScheduleEntry(
       {
         entryDate,
         kind,
         startTime: kind === "unavailable" ? (unavailableWithTime ? startTime : undefined) : startTime,
-        endTime: kind === "reception" || unavailableWithTime ? endTime : undefined,
-        lessonName: kind === "lesson" ? lessonName : undefined,
+        endTime: kind === "reception" || unavailableWithTime || lessonWithoutName ? endTime : undefined,
+        lessonName: kind === "lesson" && !lessonFlexible ? lessonName : undefined,
         note: note || undefined,
       },
       staffId,
@@ -376,7 +380,10 @@ export default function ScheduleSubmissionForm({
             />
           </label>
         )}
-        {(kind === "reception" || kind === "both" || (kind === "unavailable" && partialUnavailable)) && (
+        {(kind === "reception" ||
+          kind === "both" ||
+          (kind === "unavailable" && partialUnavailable) ||
+          (kind === "lesson" && lessonFlexible)) && (
           <label className="flex flex-col gap-1 text-sm">
             {kind === "both" ? "受付 終了時刻" : "終了時刻"}
             <input
@@ -393,7 +400,18 @@ export default function ScheduleSubmissionForm({
             レッスン内容を希望する
           </label>
         )}
+        {kind === "lesson" && (
+          <label className="flex items-center gap-1 self-end pb-2 text-sm">
+            <input
+              type="checkbox"
+              checked={lessonFlexible}
+              onChange={(e) => setLessonFlexible(e.target.checked)}
+            />
+            レッスン名はまだ決めない(時間帯だけ伝える)
+          </label>
+        )}
         {kind === "lesson" &&
+          !lessonFlexible &&
           (lessonOptions.length > 0 ? (
             <label className="flex flex-col gap-1 text-sm">
               レッスン名
@@ -519,7 +537,7 @@ export default function ScheduleSubmissionForm({
                     {e.end_time ? `〜${e.end_time.slice(0, 5)}` : ""}
                   </span>
                 )}
-                <span>{e.kind === "lesson" ? e.lesson_name : SCHEDULE_KIND_LABEL[e.kind]}</span>
+                <span>{e.kind === "lesson" ? (e.lesson_name ?? "レッスン希望(内容は未定)") : SCHEDULE_KIND_LABEL[e.kind]}</span>
                 {e.note && <span className="text-neutral-400">{e.note}</span>}
                 {e.confirmed ? (
                   <span className="text-neutral-400">確定済み</span>

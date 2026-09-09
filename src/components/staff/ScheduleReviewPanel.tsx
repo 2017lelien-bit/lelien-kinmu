@@ -143,7 +143,7 @@ export default function ScheduleReviewPanel({
                           {e.end_time ? `〜${e.end_time.slice(0, 5)}` : ""}
                         </span>
                       )}
-                      <span>{e.kind === "lesson" ? e.lesson_name : SCHEDULE_KIND_LABEL[e.kind]}</span>
+                      <span>{e.kind === "lesson" ? (e.lesson_name ?? "レッスン希望(内容は未定)") : SCHEDULE_KIND_LABEL[e.kind]}</span>
                       {e.note && <span className="text-neutral-400">{e.note}</span>}
                       <label className="ml-auto flex items-center gap-1 text-xs">
                         <input
