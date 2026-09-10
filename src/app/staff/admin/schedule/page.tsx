@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getStaffUser } from "@/lib/auth";
 import { getAllScheduleSubmissions, getScheduleSubmissionStatusList } from "@/lib/schedule-submissions";
+import { getScheduleNotes } from "@/lib/schedule-notes";
 import { getMusuhiShifts } from "@/lib/musuhi-schedule";
 import { getAllStaff } from "@/lib/staff-admin";
 import { nextMonthStart, monthEnd } from "@/lib/date";
@@ -14,11 +15,12 @@ export default async function AdminSchedulePage() {
   if (!staff || staff.role !== "admin") notFound();
 
   const initialMonthStart = nextMonthStart();
-  const [entries, statusList, allStaff, musuhiShifts] = await Promise.all([
+  const [entries, statusList, allStaff, musuhiShifts, scheduleNotes] = await Promise.all([
     getAllScheduleSubmissions(initialMonthStart, monthEnd(initialMonthStart)),
     getScheduleSubmissionStatusList(initialMonthStart),
     getAllStaff(),
     getMusuhiShifts(initialMonthStart, monthEnd(initialMonthStart)),
+    getScheduleNotes(initialMonthStart, monthEnd(initialMonthStart)),
   ]);
   const staffList = allStaff
     .filter((s) => s.is_active)
@@ -39,7 +41,12 @@ export default async function AdminSchedulePage() {
         <p className="text-sm text-neutral-500">
           全員そろっていなくても、提出済みの人だけで先に組み始められます。日付ごとに、その時点で提出された候補からプルダウンで選んで、受付・レッスンを決めてください(後から他のスタッフの提出があれば、候補に追加されます)。
         </p>
-        <ScheduleBuilderPanel initialMonthStart={initialMonthStart} initialEntries={entries} staffList={staffList} />
+        <ScheduleBuilderPanel
+          initialMonthStart={initialMonthStart}
+          initialEntries={entries}
+          initialNotes={scheduleNotes}
+          staffList={staffList}
+        />
       </div>
 
       <div className="flex flex-col gap-4 border-t border-neutral-200 pt-8 dark:border-neutral-800">

@@ -1,3 +1,5 @@
+import { dayOfWeekForDate } from "@/lib/date";
+
 export type ActionResult<T = undefined> = { ok: true; data: T } | { ok: false; error: string };
 
 // スタジオで開催しているレッスンの名前一覧(レッスン実績入力のプルダウンに使う)。
@@ -5,6 +7,13 @@ export const LESSON_NAMES = ["フロアクラス", "ハンモック", "ティシ
 
 // 定休日(曜日)。0=日曜〜6=土曜。スケジュール関連の画面でこの曜日は「定休日」として扱う。
 export const CLOSED_DAY_OF_WEEK = 1; // 月曜日
+
+// 通常は曜日で定休日を判定するが、schedule_notesの上書き(臨時休業/臨時営業)があればそちらを優先する。
+export function isClosedOnDate(dateStr: string, override?: boolean | null): boolean {
+  if (override === true) return true;
+  if (override === false) return false;
+  return dayOfWeekForDate(dateStr) === CLOSED_DAY_OF_WEEK;
+}
 
 // 給与明細に記録する、その月の収入内訳の分類(税計算方法は収入の出どころ(区分 or レッスン実績)によって
 // 自動で決まるため、スタッフ本人の設定項目ではない。record-keeping用の表示ラベル)。

@@ -9,6 +9,7 @@ import {
   getOwnScheduleSubmissionStatus,
   getOwnScheduleTemplates,
 } from "@/lib/schedule-submissions";
+import { getScheduleNotes } from "@/lib/schedule-notes";
 import { currentPayPeriod, nextMonthStart, monthEnd } from "@/lib/date";
 import MyStaffProfileForm from "@/components/staff/MyStaffProfileForm";
 import PayEntryForm from "@/components/staff/PayEntryForm";
@@ -39,6 +40,7 @@ export default async function StaffMyPage() {
     lessonOptions,
     scheduleTemplates,
     scheduleSubmittedAt,
+    scheduleNotes,
   ] = await Promise.all([
     getOwnPayCategories(),
     getOwnPayEntries(periodStart),
@@ -51,6 +53,7 @@ export default async function StaffMyPage() {
     getOwnLessonOptions(),
     getOwnScheduleTemplates(),
     getOwnScheduleSubmissionStatus(scheduleMonthStart),
+    getScheduleNotes(scheduleMonthStart, monthEnd(scheduleMonthStart)),
   ]);
   const hasEntryInput = payCategories.length > 0 || hasPayRateRules;
   const hourlyCategories = payCategories.filter((c) => c.unit_type === "hourly");
@@ -101,7 +104,12 @@ export default async function StaffMyPage() {
         <div className="mt-4 flex flex-col gap-4">
           <LessonOptionsManager options={lessonOptions} />
           <ScheduleTemplateManager templates={scheduleTemplates} lessonOptions={lessonOptions} />
-          <ScheduleSubmissionForm entries={scheduleEntries} monthStart={scheduleMonthStart} lessonOptions={lessonOptions} />
+          <ScheduleSubmissionForm
+            entries={scheduleEntries}
+            monthStart={scheduleMonthStart}
+            lessonOptions={lessonOptions}
+            initialNotes={scheduleNotes}
+          />
           <SubmitScheduleButton monthStart={scheduleMonthStart} submittedAt={scheduleSubmittedAt} />
         </div>
       </details>

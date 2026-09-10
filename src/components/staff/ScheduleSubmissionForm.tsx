@@ -8,8 +8,9 @@ import {
   deleteScheduleEntry,
   getOwnScheduleSubmissions,
 } from "@/lib/schedule-submissions";
+import { getScheduleNotes, type ScheduleNote } from "@/lib/schedule-notes";
 import { addMonthsToMonthStart, dayOfWeekForDate, monthEnd as monthEndOf } from "@/lib/date";
-import { CLOSED_DAY_OF_WEEK, DAY_OF_WEEK_LABEL, SCHEDULE_KIND_LABEL } from "@/lib/types";
+import { DAY_OF_WEEK_LABEL, SCHEDULE_KIND_LABEL, isClosedOnDate } from "@/lib/types";
 import type { LessonOption, ScheduleSubmission } from "@/lib/types";
 
 function formatMonthLabel(monthStart: string): string {
@@ -33,16 +34,19 @@ export default function ScheduleSubmissionForm({
   entries,
   monthStart,
   lessonOptions,
+  initialNotes,
   staffId,
 }: {
   entries: ScheduleSubmission[];
   monthStart: string;
   lessonOptions: LessonOption[];
+  initialNotes: ScheduleNote[];
   staffId?: string;
 }) {
   const router = useRouter();
   const maxMonthStart = addMonthsToMonthStart(monthStart, 12);
   const [viewMonth, setViewMonth] = useState(monthStart);
+  const [notes, setNotes] = useState(initialNotes);
   const [loadingMonth, setLoadingMonth] = useState(false);
   const [kind, setKind] = useState<"reception" | "lesson" | "both" | "unavailable">("reception");
   const [entryDate, setEntryDate] = useState(monthStart);
@@ -96,10 +100,14 @@ export default function ScheduleSubmissionForm({
     setEntryDate(newMonth);
     setLoadingMonth(true);
     setError(null);
-    const data = await getOwnScheduleSubmissions(newMonth, monthEndOf(newMonth), staffId);
+    const [data, notesData] = await Promise.all([
+      getOwnScheduleSubmissions(newMonth, monthEndOf(newMonth), staffId),
+      getScheduleNotes(newMonth, monthEndOf(newMonth)),
+    ]);
     setLoadingMonth(false);
     setLocalEntries(data);
     setPrevEntries(data);
+    setNotes(notesData);
   }
 
   async function handleSubmit() {
@@ -185,6 +193,7 @@ export default function ScheduleSubmissionForm({
     list.push(e);
     entriesByDate.set(e.entry_date, list);
   }
+  const notesByDate = new Map(notes.map((n) => [n.entry_date, n]));
   const calendarCells = buildCalendarCells(viewMonth);
 
   // NG日モード中は、日付をタップするだけで休み希望のON/OFFを切り替える(他の予定はそのまま残す)。
@@ -306,12 +315,14 @@ export default function ScheduleSubmissionForm({
             const isUnavailable = dayEntries.some((e) => e.kind === "unavailable");
             const otherCount = dayEntries.filter((e) => e.kind !== "unavailable").length;
             const day = Number(dateStr.split("-")[2]);
-            const isClosedDay = dayOfWeekForDate(dateStr) === CLOSED_DAY_OF_WEEK;
+            const noteEntry = notesByDate.get(dateStr);
+            const isClosedDay = isClosedOnDate(dateStr, noteEntry?.is_closed_override);
             return (
               <button
                 key={dateStr}
                 onClick={() => handleDayClick(dateStr)}
                 disabled={togglingDate === dateStr}
+                title={noteEntry?.note ?? undefined}
                 className={`flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-lg border p-1 disabled:opacity-40 ${
                   dateStr === entryDate ? "border-neutral-900 dark:border-white" : "border-neutral-200 dark:border-neutral-800"
                 } ${
@@ -328,6 +339,7 @@ export default function ScheduleSubmissionForm({
                 {isClosedDay && !isUnavailable && <span className="text-neutral-400">定休</span>}
                 {isUnavailable && <span className="text-red-600">休</span>}
                 {otherCount > 0 && <span className="text-neutral-500">{otherCount}件</span>}
+                {noteEntry?.note && <span className="truncate text-[9px] text-blue-600">{noteEntry.note}</span>}
               </button>
             );
           })}

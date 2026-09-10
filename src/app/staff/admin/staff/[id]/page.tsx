@@ -11,6 +11,7 @@ import {
   getOwnScheduleSubmissionStatus,
   getOwnScheduleTemplates,
 } from "@/lib/schedule-submissions";
+import { getScheduleNotes } from "@/lib/schedule-notes";
 import { currentPayPeriod, nextMonthStart, monthEnd } from "@/lib/date";
 import TaxSettingsForm from "@/components/staff/TaxSettingsForm";
 import CommuteSettingsForm from "@/components/staff/CommuteSettingsForm";
@@ -46,6 +47,7 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
     lessonOptions,
     scheduleTemplates,
     scheduleSubmittedAt,
+    scheduleNotes,
   ] = await Promise.all([
     getStaffDetail(id),
     getPayslipsForStaff(id),
@@ -57,6 +59,7 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
     getOwnLessonOptions(id),
     getOwnScheduleTemplates(id),
     getOwnScheduleSubmissionStatus(scheduleMonthStart, id),
+    getScheduleNotes(scheduleMonthStart, monthEnd(scheduleMonthStart)),
   ]);
   if (!detail) notFound();
 
@@ -87,6 +90,7 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
         entries={scheduleEntries}
         monthStart={scheduleMonthStart}
         lessonOptions={lessonOptions}
+        initialNotes={scheduleNotes}
         staffId={profile.id}
       />
 

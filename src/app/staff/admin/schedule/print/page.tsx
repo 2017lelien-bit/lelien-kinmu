@@ -3,8 +3,9 @@ import Link from "next/link";
 import { getStaffUser } from "@/lib/auth";
 import { getAllScheduleSubmissions } from "@/lib/schedule-submissions";
 import { getLessonColors, type LessonColor } from "@/lib/lesson-colors";
+import { getScheduleNotes } from "@/lib/schedule-notes";
 import { nextMonthStart, monthEnd, dayOfWeekForDate } from "@/lib/date";
-import { CLOSED_DAY_OF_WEEK, DAY_OF_WEEK_LABEL } from "@/lib/types";
+import { DAY_OF_WEEK_LABEL, isClosedOnDate } from "@/lib/types";
 import PrintButton from "@/components/staff/PrintButton";
 import LessonColorEditor from "@/components/staff/LessonColorEditor";
 
@@ -66,12 +67,14 @@ export default async function SchedulePrintPage({
   const monthStart = params.month ? `${params.month}-01` : nextMonthStart();
   const type: PrintType = PRINT_TYPES.includes(params.type as PrintType) ? (params.type as PrintType) : "staff";
 
-  const [entries, lessonColorRows] = await Promise.all([
+  const [entries, lessonColorRows, scheduleNotes] = await Promise.all([
     getAllScheduleSubmissions(monthStart, monthEnd(monthStart)),
     getLessonColors(),
+    getScheduleNotes(monthStart, monthEnd(monthStart)),
   ]);
   const confirmed = entries.filter((e) => e.confirmed && e.kind !== "unavailable");
   const colorMap = new Map(lessonColorRows.map((c) => [c.lesson_name, c]));
+  const notesByDate = new Map(scheduleNotes.map((n) => [n.entry_date, n]));
 
   const [y, m] = monthStart.split("-").map(Number);
   const daysInMonth = Number(monthEnd(monthStart).split("-")[2]);
@@ -146,7 +149,8 @@ export default async function SchedulePrintPage({
 
           const day = Number(date.split("-")[2]);
           const dow = dayOfWeekForDate(date);
-          const isClosedDay = dow === CLOSED_DAY_OF_WEEK;
+          const noteEntry = notesByDate.get(date);
+          const isClosedDay = isClosedOnDate(date, noteEntry?.is_closed_override);
           const dayEntries = byDate.get(date) ?? [];
           const reception = dayEntries.filter((e) => e.kind === "reception");
           const lessons = dayEntries.filter((e) => e.kind === "lesson");
@@ -165,9 +169,10 @@ export default async function SchedulePrintPage({
                   ))}
               </div>
               {isClosedDay ? (
-                <p className="text-neutral-400">定休日</p>
+                <p className="text-neutral-400">{noteEntry?.note || "定休日"}</p>
               ) : (
                 <>
+                  {noteEntry?.note && <p className="italic text-neutral-500">{noteEntry.note}</p>}
                   {lessons.map((e) => {
                     const name = e.lesson_name ?? "(レッスン名未定)";
                     return (

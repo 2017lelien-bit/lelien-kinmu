@@ -7,8 +7,9 @@ import {
   setScheduleEntryConfirmed,
   updateScheduleEntryTime,
 } from "@/lib/schedule-submissions";
+import { getScheduleNotes, upsertScheduleNote, type ScheduleNote } from "@/lib/schedule-notes";
 import { dayOfWeekForDate, monthEnd } from "@/lib/date";
-import { CLOSED_DAY_OF_WEEK, DAY_OF_WEEK_LABEL } from "@/lib/types";
+import { CLOSED_DAY_OF_WEEK, DAY_OF_WEEK_LABEL, isClosedOnDate } from "@/lib/types";
 import type { ScheduleSubmission } from "@/lib/types";
 
 type EntryWithName = ScheduleSubmission & { staffName: string };
@@ -27,14 +28,17 @@ function candidateLabel(e: EntryWithName): string {
 export default function ScheduleBuilderPanel({
   initialMonthStart,
   initialEntries,
+  initialNotes,
   staffList,
 }: {
   initialMonthStart: string;
   initialEntries: EntryWithName[];
+  initialNotes: ScheduleNote[];
   staffList: { id: string; name: string }[];
 }) {
   const [monthStart, setMonthStart] = useState(initialMonthStart);
   const [entries, setEntries] = useState(initialEntries);
+  const [notes, setNotes] = useState(initialNotes);
   const [loading, setLoading] = useState(false);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -54,10 +58,35 @@ export default function ScheduleBuilderPanel({
   async function handleShowMonth() {
     setLoading(true);
     setError(null);
-    const data = await getAllScheduleSubmissions(monthStart, monthEnd(monthStart));
+    const [data, notesData] = await Promise.all([
+      getAllScheduleSubmissions(monthStart, monthEnd(monthStart)),
+      getScheduleNotes(monthStart, monthEnd(monthStart)),
+    ]);
     setLoading(false);
     setEntries(data);
+    setNotes(notesData);
     setExtraSlots({});
+  }
+
+  // 休館日の上書き(臨時休業/臨時営業)とイベントなどのメモを保存する。
+  async function handleNoteSave(date: string, patch: { isClosedOverride?: boolean | null; note?: string }) {
+    setError(null);
+    const existing = notes.find((n) => n.entry_date === date);
+    const nextNote: ScheduleNote = {
+      entry_date: date,
+      is_closed_override: patch.isClosedOverride !== undefined ? patch.isClosedOverride : (existing?.is_closed_override ?? null),
+      note: patch.note !== undefined ? patch.note : (existing?.note ?? null),
+    };
+    setNotes((prev) => [...prev.filter((n) => n.entry_date !== date), nextNote]);
+    const result = await upsertScheduleNote({
+      entryDate: date,
+      isClosedOverride: nextNote.is_closed_override,
+      note: nextNote.note ?? "",
+    });
+    if (!result.ok) {
+      setError(result.error);
+      if (existing) setNotes((prev) => [...prev.filter((n) => n.entry_date !== date), existing]);
+    }
   }
 
   async function handleSelect(key: string, prevId: string, nextId: string) {
@@ -257,11 +286,7 @@ export default function ScheduleBuilderPanel({
     );
   }
 
-  const hasAnyCandidates = dates.some(
-    (date) =>
-      (entriesByDateKind.get(`${date}|reception`)?.length ?? 0) > 0 ||
-      (entriesByDateKind.get(`${date}|lesson`)?.length ?? 0) > 0,
-  );
+  const notesByDate = new Map(notes.map((n) => [n.entry_date, n]));
 
   // カレンダーの見た目に合わせて、月初の曜日分だけ空マスを差し込む。
   const leadingBlanks = Array(dayOfWeekForDate(dates[0])).fill(null);
@@ -378,10 +403,7 @@ export default function ScheduleBuilderPanel({
         </div>
       </div>
 
-      {!hasAnyCandidates ? (
-        <p className="text-sm text-neutral-400">この月の提出はまだありません。</p>
-      ) : (
-        <div className="overflow-x-auto">
+      <div className="overflow-x-auto">
           <div className="grid min-w-[700px] grid-cols-7 gap-1">
             {DAY_OF_WEEK_LABEL.map((label) => (
               <div key={label} className="text-center text-xs text-neutral-400">
@@ -391,7 +413,9 @@ export default function ScheduleBuilderPanel({
             {calendarCells.map((date, i) => {
               if (!date) return <div key={`empty-${i}`} />;
               const day = Number(date.split("-")[2]);
-              const isClosedDay = dayOfWeekForDate(date) === CLOSED_DAY_OF_WEEK;
+              const noteEntry = notesByDate.get(date);
+              const isClosedDay = isClosedOnDate(date, noteEntry?.is_closed_override);
+              const isDefaultClosed = dayOfWeekForDate(date) === CLOSED_DAY_OF_WEEK;
               const reception = renderKindSection(date, "reception", "受付");
               const lesson = renderKindSection(date, "lesson", "レッスン");
               return (
@@ -404,8 +428,33 @@ export default function ScheduleBuilderPanel({
                   }`}
                 >
                   <p className={`text-xs font-semibold ${isClosedDay ? "text-neutral-400" : ""}`}>{day}</p>
+                  <select
+                    value={
+                      noteEntry?.is_closed_override === true
+                        ? "closed"
+                        : noteEntry?.is_closed_override === false
+                          ? "open"
+                          : "default"
+                    }
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      handleNoteSave(date, { isClosedOverride: v === "closed" ? true : v === "open" ? false : null });
+                    }}
+                    className="w-full rounded border border-neutral-200 text-[9px] dark:border-neutral-800"
+                  >
+                    <option value="default">{isDefaultClosed ? "定休" : "営業"}</option>
+                    <option value="closed">臨時休業</option>
+                    <option value="open">臨時営業</option>
+                  </select>
+                  <input
+                    type="text"
+                    defaultValue={noteEntry?.note ?? ""}
+                    placeholder="イベント等メモ"
+                    onBlur={(e) => handleNoteSave(date, { note: e.target.value })}
+                    className="w-full rounded border border-neutral-200 px-0.5 text-[9px] dark:border-neutral-800"
+                  />
                   {isClosedDay ? (
-                    <p className="text-[10px] text-neutral-400">定休</p>
+                    <p className="text-[10px] text-neutral-400">休館</p>
                   ) : (
                     <>
                       {reception}
@@ -417,7 +466,6 @@ export default function ScheduleBuilderPanel({
             })}
           </div>
         </div>
-      )}
     </div>
   );
 }
