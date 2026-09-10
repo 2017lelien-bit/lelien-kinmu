@@ -173,6 +173,10 @@ export default function ScheduleBuilderPanel({
     list.push(e);
     entriesByDateKind.set(key, list);
   }
+  // 入力した順番ではなく、開始時刻の早い順に並べる(組み立てやすいように)。
+  for (const list of entriesByDateKind.values()) {
+    list.sort((a, b) => (a.start_time ?? "").localeCompare(b.start_time ?? ""));
+  }
 
   function renderKindSection(date: string, kind: "reception" | "lesson", label: string) {
     const key = `${date}|${kind}`;
