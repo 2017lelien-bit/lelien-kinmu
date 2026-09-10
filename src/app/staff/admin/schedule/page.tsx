@@ -1,10 +1,12 @@
 import { notFound } from "next/navigation";
 import { getStaffUser } from "@/lib/auth";
 import { getAllScheduleSubmissions, getScheduleSubmissionStatusList } from "@/lib/schedule-submissions";
+import { getMusuhiShifts } from "@/lib/musuhi-schedule";
 import { getAllStaff } from "@/lib/staff-admin";
 import { nextMonthStart, monthEnd } from "@/lib/date";
 import ScheduleReviewPanel from "@/components/staff/ScheduleReviewPanel";
 import ScheduleBuilderPanel from "@/components/staff/ScheduleBuilderPanel";
+import MusuhiScheduleBuilderPanel from "@/components/staff/MusuhiScheduleBuilderPanel";
 import SchedulePrintLinks from "@/components/staff/SchedulePrintLinks";
 
 export default async function AdminSchedulePage() {
@@ -12,10 +14,11 @@ export default async function AdminSchedulePage() {
   if (!staff || staff.role !== "admin") notFound();
 
   const initialMonthStart = nextMonthStart();
-  const [entries, statusList, allStaff] = await Promise.all([
+  const [entries, statusList, allStaff, musuhiShifts] = await Promise.all([
     getAllScheduleSubmissions(initialMonthStart, monthEnd(initialMonthStart)),
     getScheduleSubmissionStatusList(initialMonthStart),
     getAllStaff(),
+    getMusuhiShifts(initialMonthStart, monthEnd(initialMonthStart)),
   ]);
   const staffList = allStaff
     .filter((s) => s.is_active)
@@ -40,7 +43,15 @@ export default async function AdminSchedulePage() {
       </div>
 
       <div className="flex flex-col gap-4 border-t border-neutral-200 pt-8 dark:border-neutral-800">
-        <h1 className="text-xl font-semibold">③ 印刷</h1>
+        <h1 className="text-xl font-semibold">③ むすひスケジュール</h1>
+        <p className="text-sm text-neutral-500">
+          むすひの受付を、日付ごとに担当者と時間帯で組み立てます(Le lienのスケジュールとは別の予定です)。
+        </p>
+        <MusuhiScheduleBuilderPanel initialMonthStart={initialMonthStart} initialShifts={musuhiShifts} staffList={staffList} />
+      </div>
+
+      <div className="flex flex-col gap-4 border-t border-neutral-200 pt-8 dark:border-neutral-800">
+        <h1 className="text-xl font-semibold">④ 印刷</h1>
         <p className="text-sm text-neutral-500">
           「確定」にチェックが入っている予定だけが印刷対象になります。用途に合わせて3種類から選んでください。
         </p>
