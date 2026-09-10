@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  addScheduleEntry,
   getAllScheduleSubmissions,
   setScheduleEntryConfirmed,
   updateScheduleEntryTime,
@@ -26,9 +27,11 @@ function candidateLabel(e: EntryWithName): string {
 export default function ScheduleBuilderPanel({
   initialMonthStart,
   initialEntries,
+  staffList,
 }: {
   initialMonthStart: string;
   initialEntries: EntryWithName[];
+  staffList: { id: string; name: string }[];
 }) {
   const [monthStart, setMonthStart] = useState(initialMonthStart);
   const [entries, setEntries] = useState(initialEntries);
@@ -37,6 +40,16 @@ export default function ScheduleBuilderPanel({
   const [error, setError] = useState<string | null>(null);
   // 候補の数だけプルダウンを出せば足りるが、最初は1行だけ表示し、「+追加」で増やす。
   const [extraSlots, setExtraSlots] = useState<Record<string, number>>({});
+
+  // 提出を待たずに、管理者が直接「何時から・何のレッスンを・誰が」担当するかを決めて追加できるようにする。
+  const [manualDate, setManualDate] = useState(initialMonthStart);
+  const [manualKind, setManualKind] = useState<"reception" | "lesson">("lesson");
+  const [manualStartTime, setManualStartTime] = useState("10:00");
+  const [manualEndTime, setManualEndTime] = useState("21:00");
+  const [manualLessonName, setManualLessonName] = useState("");
+  const [manualStaffId, setManualStaffId] = useState(staffList[0]?.id ?? "");
+  const [manualSubmitting, setManualSubmitting] = useState(false);
+  const [manualError, setManualError] = useState<string | null>(null);
 
   async function handleShowMonth() {
     setLoading(true);
@@ -108,6 +121,43 @@ export default function ScheduleBuilderPanel({
     }
   }
 
+  async function handleManualAdd() {
+    setManualError(null);
+    if (!manualStaffId) {
+      setManualError("担当スタッフを選んでください。");
+      return;
+    }
+    if (manualKind === "lesson" && !manualLessonName.trim()) {
+      setManualError("レッスン名を入力してください。");
+      return;
+    }
+    setManualSubmitting(true);
+    const result = await addScheduleEntry(
+      {
+        entryDate: manualDate,
+        kind: manualKind,
+        startTime: manualStartTime,
+        endTime: manualKind === "reception" ? manualEndTime : undefined,
+        lessonName: manualKind === "lesson" ? manualLessonName.trim() : undefined,
+      },
+      manualStaffId,
+    );
+    if (!result.ok) {
+      setManualSubmitting(false);
+      setManualError(result.error);
+      return;
+    }
+    const confirmResult = await setScheduleEntryConfirmed(result.data.id, true);
+    setManualSubmitting(false);
+    if (!confirmResult.ok) {
+      setManualError(confirmResult.error);
+      return;
+    }
+    const staffName = staffList.find((s) => s.id === manualStaffId)?.name ?? "";
+    setEntries((prev) => [...prev, { ...result.data, confirmed: true, staffName }]);
+    setManualLessonName("");
+  }
+
   const [y, m] = monthStart.split("-").map(Number);
   const daysInMonth = Number(monthEnd(monthStart).split("-")[2]);
   const dates = Array.from(
@@ -130,7 +180,9 @@ export default function ScheduleBuilderPanel({
     if (candidates.length === 0) return null;
 
     const confirmedIds = candidates.filter((c) => c.confirmed).map((c) => c.id);
-    const slotCount = Math.min(candidates.length, Math.max(confirmedIds.length, 1, extraSlots[key] ?? 0));
+    // レッスンは1日最大5本程度なので、最初から5枠分表示しておく(受付は1〜2人程度なので1枠から)。
+    const defaultSlots = kind === "lesson" ? 5 : 1;
+    const slotCount = Math.min(candidates.length, Math.max(confirmedIds.length, defaultSlots, extraSlots[key] ?? 0));
     const slots = Array.from({ length: slotCount }, (_, i) => confirmedIds[i] ?? "");
 
     return (
@@ -237,6 +289,90 @@ export default function ScheduleBuilderPanel({
       </p>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
+
+      <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
+        <p className="text-sm font-semibold">手動で追加する</p>
+        <p className="text-xs text-neutral-400">
+          提出を待たずに、何時から・何のレッスン(または受付)を・誰が担当するかを直接決めて追加できます。
+        </p>
+        {manualError && <p className="text-sm text-red-600">{manualError}</p>}
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="flex flex-col gap-1 text-xs">
+            日付
+            <input
+              type="date"
+              value={manualDate}
+              min={monthStart}
+              max={monthEnd(monthStart)}
+              onChange={(e) => setManualDate(e.target.value)}
+              className="rounded-lg border border-neutral-200 px-2 py-1.5 text-sm dark:border-neutral-800"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs">
+            種別
+            <select
+              value={manualKind}
+              onChange={(e) => setManualKind(e.target.value as "reception" | "lesson")}
+              className="rounded-lg border border-neutral-200 px-2 py-1.5 text-sm dark:border-neutral-800"
+            >
+              <option value="lesson">レッスン</option>
+              <option value="reception">受付</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-xs">
+            開始時刻
+            <input
+              type="time"
+              value={manualStartTime}
+              onChange={(e) => setManualStartTime(e.target.value)}
+              className="rounded-lg border border-neutral-200 px-2 py-1.5 text-sm dark:border-neutral-800"
+            />
+          </label>
+          {manualKind === "reception" && (
+            <label className="flex flex-col gap-1 text-xs">
+              終了時刻
+              <input
+                type="time"
+                value={manualEndTime}
+                onChange={(e) => setManualEndTime(e.target.value)}
+                className="rounded-lg border border-neutral-200 px-2 py-1.5 text-sm dark:border-neutral-800"
+              />
+            </label>
+          )}
+          {manualKind === "lesson" && (
+            <label className="flex flex-col gap-1 text-xs">
+              レッスン名
+              <input
+                value={manualLessonName}
+                onChange={(e) => setManualLessonName(e.target.value)}
+                placeholder="例: 筋膜リリース75"
+                className="w-40 rounded-lg border border-neutral-200 px-2 py-1.5 text-sm dark:border-neutral-800"
+              />
+            </label>
+          )}
+          <label className="flex flex-col gap-1 text-xs">
+            担当
+            <select
+              value={manualStaffId}
+              onChange={(e) => setManualStaffId(e.target.value)}
+              className="rounded-lg border border-neutral-200 px-2 py-1.5 text-sm dark:border-neutral-800"
+            >
+              {staffList.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            onClick={handleManualAdd}
+            disabled={manualSubmitting}
+            className="rounded-lg bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-40 dark:bg-white dark:text-black"
+          >
+            {manualSubmitting ? "追加中..." : "追加する"}
+          </button>
+        </div>
+      </div>
 
       {!hasAnyCandidates ? (
         <p className="text-sm text-neutral-400">この月の提出はまだありません。</p>
