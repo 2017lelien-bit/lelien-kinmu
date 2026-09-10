@@ -35,22 +35,29 @@ function formatTimeCompact(t: string | null): string {
 // 決め打ちできない名前(単発のゲスト講師クラスなど)は、参考カレンダーで一番多く使われていた黄色を既定色にする。
 const FIXED_LESSON_COLORS: Record<string, string> = {
   "筋膜リリース75": "#FFFF00",
-  Fアクティブ: "#FFCCFF",
+  Fアクティブ: "#E91E63",
   Fストレッチ: "#FFCCFF",
   Fコアバランス: "#FFE8CC",
   Fアロマリラックス: "#A0FFA0",
+  Fミックス: "#2E7D32",
   Fkids: "#FF0066",
   Kidsティシュー: "#FF0066",
-  "ティシュー初級〜": "#CCE5FF",
   crystalbowl: "#0070C0",
 };
 // 色を付けない(参考カレンダーで無色だった)レッスン名。
-const NO_COLOR_LESSONS = new Set(["Fエンジョイ", "4Dpro", "Fシニア", "バンジーフィットネス", "Fデトックス", "Fミックス"]);
+const NO_COLOR_LESSONS = new Set(["Fエンジョイ", "4Dpro", "Fシニア", "バンジーフィットネス", "Fデトックス"]);
+// 背景色ではなく、文字色だけを変えるレッスン名。
+const TEXT_COLOR_LESSONS: Record<string, string> = {
+  ティシュー: "#0070C0",
+  "ティシュー初級〜": "#0070C0",
+};
 const DEFAULT_COLOR = "#FFFF00";
-const DARK_BG_LESSONS = new Set(["crystalbowl"]);
+// 背景が濃い色のため、文字を白にするレッスン名。
+const DARK_BG_LESSONS = new Set(["crystalbowl", "Fアクティブ", "Fミックス"]);
 
 function lessonStyle(name: string): { backgroundColor?: string; color?: string } {
   if (NO_COLOR_LESSONS.has(name)) return {};
+  if (TEXT_COLOR_LESSONS[name]) return { color: TEXT_COLOR_LESSONS[name] };
   const bg = FIXED_LESSON_COLORS[name] ?? DEFAULT_COLOR;
   return DARK_BG_LESSONS.has(name) ? { backgroundColor: bg, color: "#ffffff" } : { backgroundColor: bg };
 }
@@ -116,9 +123,9 @@ export default async function SchedulePrintPage({
             <span key={name} className="inline-flex items-center gap-1">
               <span
                 className="inline-block h-3 w-3 rounded-sm border border-black/10"
-                style={{ backgroundColor: lessonStyle(name).backgroundColor ?? "#ffffff" }}
+                style={{ backgroundColor: lessonStyle(name).backgroundColor ?? lessonStyle(name).color ?? "#ffffff" }}
               />
-              {name}
+              <span style={lessonStyle(name)}>{name}</span>
             </span>
           ))}
         </div>
