@@ -2,9 +2,11 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getStaffUser } from "@/lib/auth";
 import { getAllScheduleSubmissions } from "@/lib/schedule-submissions";
+import { getLessonColors, type LessonColor } from "@/lib/lesson-colors";
 import { nextMonthStart, monthEnd, dayOfWeekForDate } from "@/lib/date";
 import { CLOSED_DAY_OF_WEEK, DAY_OF_WEEK_LABEL } from "@/lib/types";
 import PrintButton from "@/components/staff/PrintButton";
+import LessonColorEditor from "@/components/staff/LessonColorEditor";
 
 const PRINT_TYPES = ["staff", "customer", "hp"] as const;
 type PrintType = (typeof PRINT_TYPES)[number];
@@ -31,35 +33,25 @@ function formatTimeCompact(t: string | null): string {
   return min === "00" ? String(Number(h)) : `${Number(h)}:${min}`;
 }
 
-// 実際に店で使っているカレンダー(色分け済み)に合わせた、レッスン名ごとの背景色。
-// 決め打ちできない名前(単発のゲスト講師クラスなど)は、参考カレンダーで一番多く使われていた黄色を既定色にする。
-const FIXED_LESSON_COLORS: Record<string, string> = {
-  "筋膜リリース75": "#FFFF00",
-  Fアクティブ: "#E91E63",
-  Fストレッチ: "#FFCCFF",
-  Fコアバランス: "#FFE8CC",
-  Fアロマリラックス: "#A0FFA0",
-  Fミックス: "#2E7D32",
-  Fkids: "#FF0066",
-  Kidsティシュー: "#FF0066",
-  crystalbowl: "#0070C0",
-};
-// 色を付けない(参考カレンダーで無色だった)レッスン名。
-const NO_COLOR_LESSONS = new Set(["Fエンジョイ", "4Dpro", "Fシニア", "バンジーフィットネス", "Fデトックス"]);
-// 背景色ではなく、文字色だけを変えるレッスン名。
-const TEXT_COLOR_LESSONS: Record<string, string> = {
-  ティシュー: "#0070C0",
-  "ティシュー初級〜": "#0070C0",
-};
+// レッスン名ごとの色は、管理画面(このページの凡例)から自由に設定できる。まだ設定されていない
+// 名前は、目立つように黄色の帯を既定色として使う。
 const DEFAULT_COLOR = "#FFFF00";
-// 背景が濃い色のため、文字を白にするレッスン名。
-const DARK_BG_LESSONS = new Set(["crystalbowl", "Fアクティブ", "Fミックス"]);
 
-function lessonStyle(name: string): { backgroundColor?: string; color?: string } {
-  if (NO_COLOR_LESSONS.has(name)) return {};
-  if (TEXT_COLOR_LESSONS[name]) return { color: TEXT_COLOR_LESSONS[name] };
-  const bg = FIXED_LESSON_COLORS[name] ?? DEFAULT_COLOR;
-  return DARK_BG_LESSONS.has(name) ? { backgroundColor: bg, color: "#ffffff" } : { backgroundColor: bg };
+// 背景色の明るさから、読みやすい文字色(白 or 黒)を自動で選ぶ。
+function readableTextColor(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16) || 0;
+  const g = parseInt(hex.slice(3, 5), 16) || 0;
+  const b = parseInt(hex.slice(5, 7), 16) || 0;
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.6 ? "#000000" : "#ffffff";
+}
+
+function lessonStyle(name: string, colorMap: Map<string, LessonColor>): { backgroundColor?: string; color?: string } {
+  const config = colorMap.get(name);
+  if (config?.style === "none") return {};
+  if (config?.style === "text") return { color: config.color };
+  const bg = config?.color ?? DEFAULT_COLOR;
+  return { backgroundColor: bg, color: readableTextColor(bg) };
 }
 
 export default async function SchedulePrintPage({
@@ -74,8 +66,12 @@ export default async function SchedulePrintPage({
   const monthStart = params.month ? `${params.month}-01` : nextMonthStart();
   const type: PrintType = PRINT_TYPES.includes(params.type as PrintType) ? (params.type as PrintType) : "staff";
 
-  const entries = await getAllScheduleSubmissions(monthStart, monthEnd(monthStart));
+  const [entries, lessonColorRows] = await Promise.all([
+    getAllScheduleSubmissions(monthStart, monthEnd(monthStart)),
+    getLessonColors(),
+  ]);
   const confirmed = entries.filter((e) => e.confirmed && e.kind !== "unavailable");
+  const colorMap = new Map(lessonColorRows.map((c) => [c.lesson_name, c]));
 
   const [y, m] = monthStart.split("-").map(Number);
   const daysInMonth = Number(monthEnd(monthStart).split("-")[2]);
@@ -119,15 +115,20 @@ export default async function SchedulePrintPage({
 
       {lessonNamesUsed.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 text-xs">
-          {lessonNamesUsed.map((name) => (
-            <span key={name} className="inline-flex items-center gap-1">
-              <span
-                className="inline-block h-3 w-3 rounded-sm border border-black/10"
-                style={{ backgroundColor: lessonStyle(name).backgroundColor ?? lessonStyle(name).color ?? "#ffffff" }}
-              />
-              <span style={lessonStyle(name)}>{name}</span>
-            </span>
-          ))}
+          {lessonNamesUsed.map((name) => {
+            const style = lessonStyle(name, colorMap);
+            const config = colorMap.get(name);
+            return (
+              <span key={name} className="inline-flex items-center gap-1">
+                <span
+                  className="inline-block h-3 w-3 rounded-sm border border-black/10"
+                  style={{ backgroundColor: style.backgroundColor ?? style.color ?? "#ffffff" }}
+                />
+                <span style={style}>{name}</span>
+                <LessonColorEditor lessonName={name} style={config?.style ?? "band"} color={config?.color ?? DEFAULT_COLOR} />
+              </span>
+            );
+          })}
         </div>
       )}
 
@@ -170,7 +171,7 @@ export default async function SchedulePrintPage({
                   {lessons.map((e) => {
                     const name = e.lesson_name ?? "(レッスン名未定)";
                     return (
-                      <p key={e.id} className="rounded px-1 py-0.5 leading-tight" style={lessonStyle(name)}>
+                      <p key={e.id} className="rounded px-1 py-0.5 leading-tight" style={lessonStyle(name, colorMap)}>
                         {formatTime(e.start_time)} {name}
                         {type !== "hp" && `(${e.staffName})`}
                       </p>
