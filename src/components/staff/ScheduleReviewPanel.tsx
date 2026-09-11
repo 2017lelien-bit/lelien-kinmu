@@ -74,6 +74,11 @@ export default function ScheduleReviewPanel({
     (entriesByStaff.get(a)?.staffName ?? "").localeCompare(entriesByStaff.get(b)?.staffName ?? "", "ja"),
   );
 
+  // メモが書かれた提出は見落としやすいので、目立つように月の先頭にまとめて表示する。
+  const notedEntries = entries
+    .filter((e) => e.note)
+    .sort((a, b) => a.entry_date.localeCompare(b.entry_date));
+
   return (
     <div className="flex max-w-2xl flex-col gap-4">
       <div className="flex flex-wrap items-end gap-2">
@@ -96,6 +101,22 @@ export default function ScheduleReviewPanel({
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
+
+      {notedEntries.length > 0 && (
+        <div className="rounded-lg border border-amber-400 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-950">
+          <p className="mb-2 text-sm font-semibold">📝 スタッフからのメモ({notedEntries.length}件)</p>
+          <ul className="flex flex-col gap-1 text-sm">
+            {notedEntries.map((e) => (
+              <li key={e.id} className="flex flex-wrap items-center gap-2">
+                <span className="font-semibold">{e.staffName}</span>
+                <span className="text-neutral-500">{e.entry_date}</span>
+                <span className="text-neutral-500">{SCHEDULE_KIND_LABEL[e.kind]}</span>
+                <span>{e.note}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
         <p className="mb-2 text-sm font-semibold">
@@ -144,7 +165,11 @@ export default function ScheduleReviewPanel({
                         </span>
                       )}
                       <span>{e.kind === "lesson" ? (e.lesson_name ?? "レッスン希望(内容は未定)") : SCHEDULE_KIND_LABEL[e.kind]}</span>
-                      {e.note && <span className="text-neutral-400">{e.note}</span>}
+                      {e.note && (
+                        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-900 dark:bg-amber-900 dark:text-amber-100">
+                          📝 {e.note}
+                        </span>
+                      )}
                       <label className="ml-auto flex items-center gap-1 text-xs">
                         <input
                           type="checkbox"
