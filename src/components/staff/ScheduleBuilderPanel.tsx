@@ -434,7 +434,7 @@ export default function ScheduleBuilderPanel({
                   reception.map((e) => (
                     <span key={e.id} className="text-neutral-600">
                       {e.staffName}
-                      {formatTimeCompact(e.start_time)}
+                      {formatTimeCompact(e.start_time)}-{formatTimeCompact(e.end_time)}
                     </span>
                   ))}
               </div>
