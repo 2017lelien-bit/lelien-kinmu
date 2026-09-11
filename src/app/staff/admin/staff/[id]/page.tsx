@@ -7,6 +7,7 @@ import { getOwnPayEntries } from "@/lib/staff-self";
 import { getOwnLessonLogEntries } from "@/lib/lesson-log";
 import {
   getOwnLessonOptions,
+  getOwnScheduleSubmissionNote,
   getOwnScheduleSubmissions,
   getOwnScheduleSubmissionStatus,
   getOwnScheduleTemplates,
@@ -48,6 +49,7 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
     scheduleTemplates,
     scheduleSubmittedAt,
     scheduleNotes,
+    scheduleSubmissionNote,
   ] = await Promise.all([
     getStaffDetail(id),
     getPayslipsForStaff(id),
@@ -60,6 +62,7 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
     getOwnScheduleTemplates(id),
     getOwnScheduleSubmissionStatus(scheduleMonthStart, id),
     getScheduleNotes(scheduleMonthStart, monthEnd(scheduleMonthStart)),
+    getOwnScheduleSubmissionNote(scheduleMonthStart, id),
   ]);
   if (!detail) notFound();
 
@@ -94,7 +97,12 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
         staffId={profile.id}
       />
 
-      <SubmitScheduleButton monthStart={scheduleMonthStart} submittedAt={scheduleSubmittedAt} staffId={profile.id} />
+      <SubmitScheduleButton
+        monthStart={scheduleMonthStart}
+        submittedAt={scheduleSubmittedAt}
+        initialNote={scheduleSubmissionNote}
+        staffId={profile.id}
+      />
 
       <dl className="grid grid-cols-[10rem_1fr] gap-y-2 text-sm">
         <dt className="text-neutral-500">権限</dt>

@@ -186,6 +186,22 @@ export async function getOwnLessonOptions(staffId?: string): Promise<LessonOptio
   return (data ?? []) as LessonOption[];
 }
 
+// 管理者がスケジュール組み立て時に、担当スタッフを変更したときそのスタッフが担当できる
+// レッスン名をプルダウンで選べるように、全スタッフ分のレッスン選択肢をまとめて取得する。
+export async function getLessonOptionsByStaff(): Promise<Record<string, LessonOption[]>> {
+  const adminCheck = await requireAdmin();
+  if (adminCheck) return {};
+
+  const admin = createAdminClient();
+  const { data } = await admin.from("staff_lesson_options").select("*").order("sort_order", { ascending: true });
+
+  const map: Record<string, LessonOption[]> = {};
+  for (const row of (data ?? []) as LessonOption[]) {
+    (map[row.staff_id] ??= []).push(row);
+  }
+  return map;
+}
+
 export async function addLessonOption(name: string, staffId?: string): Promise<ActionResult> {
   const acting = await resolveActingStaffId(staffId);
   if ("error" in acting) return { ok: false, error: acting.error };
@@ -367,7 +383,23 @@ export async function getOwnScheduleSubmissionStatus(monthStart: string, staffId
   return data?.submitted_at ?? null;
 }
 
-export async function submitSchedule(monthStart: string, staffId?: string): Promise<ActionResult> {
+// 個々の予定に紐づかない、月全体についてのメモ(「今月は入れません」等)。
+// 「提出する」ボタンを押すタイミングで一緒に保存する。
+export async function getOwnScheduleSubmissionNote(monthStart: string, staffId?: string): Promise<string | null> {
+  const acting = await resolveActingStaffId(staffId);
+  if ("error" in acting) return null;
+
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("schedule_submission_status")
+    .select("note")
+    .eq("staff_id", acting.id)
+    .eq("month_start", monthStart)
+    .maybeSingle();
+  return data?.note ?? null;
+}
+
+export async function submitSchedule(monthStart: string, note?: string, staffId?: string): Promise<ActionResult> {
   const acting = await resolveActingStaffId(staffId);
   if ("error" in acting) return { ok: false, error: acting.error };
 
@@ -375,7 +407,7 @@ export async function submitSchedule(monthStart: string, staffId?: string): Prom
   const { error } = await admin
     .from("schedule_submission_status")
     .upsert(
-      { staff_id: acting.id, month_start: monthStart, submitted_at: new Date().toISOString() },
+      { staff_id: acting.id, month_start: monthStart, submitted_at: new Date().toISOString(), note: note?.trim() || null },
       { onConflict: "staff_id,month_start" },
     );
   if (error) return { ok: false, error: "提出に失敗しました。" };
@@ -389,7 +421,7 @@ export async function submitSchedule(monthStart: string, staffId?: string): Prom
 // 管理者が、対象月の全スタッフ分の提出状況を一覧で確認できるようにする。
 export async function getScheduleSubmissionStatusList(
   monthStart: string,
-): Promise<{ staffId: string; staffName: string; submittedAt: string | null }[]> {
+): Promise<{ staffId: string; staffName: string; submittedAt: string | null; note: string | null }[]> {
   const adminCheck = await requireAdmin();
   if (adminCheck) return [];
 
@@ -401,13 +433,14 @@ export async function getScheduleSubmissionStatusList(
       .eq("role", "staff")
       .eq("is_active", true)
       .order("name"),
-    admin.from("schedule_submission_status").select("staff_id, submitted_at").eq("month_start", monthStart),
+    admin.from("schedule_submission_status").select("staff_id, submitted_at, note").eq("month_start", monthStart),
   ]);
 
-  const statusByStaff = new Map((statusRows ?? []).map((r) => [r.staff_id, r.submitted_at as string]));
+  const statusByStaff = new Map((statusRows ?? []).map((r) => [r.staff_id, r]));
   return (staffRows ?? []).map((s) => ({
     staffId: s.id,
     staffName: s.schedule_display_name || s.name,
-    submittedAt: statusByStaff.get(s.id) ?? null,
+    submittedAt: statusByStaff.get(s.id)?.submitted_at ?? null,
+    note: statusByStaff.get(s.id)?.note ?? null,
   }));
 }

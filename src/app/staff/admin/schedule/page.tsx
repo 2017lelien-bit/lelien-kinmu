@@ -1,6 +1,10 @@
 import { notFound } from "next/navigation";
 import { getStaffUser } from "@/lib/auth";
-import { getAllScheduleSubmissions, getScheduleSubmissionStatusList } from "@/lib/schedule-submissions";
+import {
+  getAllScheduleSubmissions,
+  getLessonOptionsByStaff,
+  getScheduleSubmissionStatusList,
+} from "@/lib/schedule-submissions";
 import { getScheduleNotes } from "@/lib/schedule-notes";
 import { getMusuhiShifts } from "@/lib/musuhi-schedule";
 import { getAllStaff } from "@/lib/staff-admin";
@@ -15,12 +19,13 @@ export default async function AdminSchedulePage() {
   if (!staff || staff.role !== "admin") notFound();
 
   const initialMonthStart = nextMonthStart();
-  const [entries, statusList, allStaff, musuhiShifts, scheduleNotes] = await Promise.all([
+  const [entries, statusList, allStaff, musuhiShifts, scheduleNotes, lessonOptionsByStaff] = await Promise.all([
     getAllScheduleSubmissions(initialMonthStart, monthEnd(initialMonthStart)),
     getScheduleSubmissionStatusList(initialMonthStart),
     getAllStaff(),
     getMusuhiShifts(initialMonthStart, monthEnd(initialMonthStart)),
     getScheduleNotes(initialMonthStart, monthEnd(initialMonthStart)),
+    getLessonOptionsByStaff(),
   ]);
   const staffList = allStaff
     .filter((s) => s.is_active)
@@ -46,6 +51,7 @@ export default async function AdminSchedulePage() {
           initialEntries={entries}
           initialNotes={scheduleNotes}
           staffList={staffList}
+          lessonOptionsByStaff={lessonOptionsByStaff}
         />
       </div>
 

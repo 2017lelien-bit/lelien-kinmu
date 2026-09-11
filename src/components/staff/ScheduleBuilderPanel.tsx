@@ -11,7 +11,7 @@ import {
 import { getScheduleNotes, upsertScheduleNote, type ScheduleNote } from "@/lib/schedule-notes";
 import { dayOfWeekForDate, monthEnd } from "@/lib/date";
 import { CLOSED_DAY_OF_WEEK, DAY_OF_WEEK_LABEL, isClosedOnDate } from "@/lib/types";
-import type { ScheduleSubmission } from "@/lib/types";
+import type { LessonOption, ScheduleSubmission } from "@/lib/types";
 
 type EntryWithName = ScheduleSubmission & { staffName: string };
 
@@ -31,11 +31,13 @@ export default function ScheduleBuilderPanel({
   initialEntries,
   initialNotes,
   staffList,
+  lessonOptionsByStaff,
 }: {
   initialMonthStart: string;
   initialEntries: EntryWithName[];
   initialNotes: ScheduleNote[];
   staffList: { id: string; name: string }[];
+  lessonOptionsByStaff: Record<string, LessonOption[]>;
 }) {
   const [monthStart, setMonthStart] = useState(initialMonthStart);
   const [entries, setEntries] = useState(initialEntries);
@@ -45,6 +47,8 @@ export default function ScheduleBuilderPanel({
   const [error, setError] = useState<string | null>(null);
   // 候補の数だけプルダウンを出せば足りるが、最初は1行だけ表示し、「+追加」で増やす。
   const [extraSlots, setExtraSlots] = useState<Record<string, number>>({});
+  // レッスン名の選択肢に無い名前(自由入力済みの名前)を編集中の枠だけ、テキスト入力に切り替える。
+  const [customLessonNameIds, setCustomLessonNameIds] = useState<Set<string>>(new Set());
 
   // 提出を待たずに、管理者が直接「何時から・何のレッスンを・誰が」担当するかを決めて追加できるようにする。
   const [manualDate, setManualDate] = useState(initialMonthStart);
@@ -295,14 +299,54 @@ export default function ScheduleBuilderPanel({
                   )}
                 </div>
               )}
-              {selected && kind === "lesson" && !selected.lesson_name && (
-                <input
-                  defaultValue=""
-                  placeholder="レッスン名を入力して確定"
-                  onBlur={(e) => e.target.value.trim() && handleAssignLesson(selected, e.target.value.trim())}
-                  className="w-full rounded border border-amber-400 bg-amber-50 px-1 py-0.5 text-[10px] dark:border-amber-700 dark:bg-amber-950"
-                />
-              )}
+              {selected &&
+                kind === "lesson" &&
+                (() => {
+                  const lessonOptions = lessonOptionsByStaff[selected.staff_id] ?? [];
+                  const currentName = selected.lesson_name ?? "";
+                  const inOptions = lessonOptions.some((o) => o.name === currentName);
+                  const showCustomInput = customLessonNameIds.has(selected.id) || (currentName !== "" && !inOptions);
+                  return (
+                    <div className="flex flex-col gap-0.5">
+                      <select
+                        value={showCustomInput ? "__custom__" : currentName}
+                        onChange={(e) => {
+                          if (e.target.value === "__custom__") {
+                            setCustomLessonNameIds((prev) => new Set(prev).add(selected.id));
+                            return;
+                          }
+                          setCustomLessonNameIds((prev) => {
+                            const next = new Set(prev);
+                            next.delete(selected.id);
+                            return next;
+                          });
+                          handleAssignLesson(selected, e.target.value);
+                        }}
+                        className={`w-full max-w-full rounded border px-1 py-0.5 text-[10px] ${
+                          currentName
+                            ? "border-neutral-200 dark:border-neutral-800"
+                            : "border-amber-400 bg-amber-50 dark:border-amber-700 dark:bg-amber-950"
+                        }`}
+                      >
+                        <option value="">-- 未選択 --</option>
+                        {lessonOptions.map((o) => (
+                          <option key={o.id} value={o.name}>
+                            {o.name}
+                          </option>
+                        ))}
+                        <option value="__custom__">その他(自由入力)</option>
+                      </select>
+                      {showCustomInput && (
+                        <input
+                          defaultValue={inOptions ? "" : currentName}
+                          placeholder="レッスン名を入力して確定"
+                          onBlur={(e) => e.target.value.trim() && handleAssignLesson(selected, e.target.value.trim())}
+                          className="w-full rounded border border-amber-400 bg-amber-50 px-1 py-0.5 text-[10px] dark:border-amber-700 dark:bg-amber-950"
+                        />
+                      )}
+                    </div>
+                  );
+                })()}
             </div>
           );
         })}

@@ -5,6 +5,7 @@ import { getOwnHasPayRateRules, getOwnHeadcountMatters, getOwnLessonLogEntries }
 import { getOwnPayEntries, getOwnPayslips, getOwnStaffProfile, getOwnSubmissionStatus } from "@/lib/staff-self";
 import {
   getOwnLessonOptions,
+  getOwnScheduleSubmissionNote,
   getOwnScheduleSubmissions,
   getOwnScheduleSubmissionStatus,
   getOwnScheduleTemplates,
@@ -41,6 +42,7 @@ export default async function StaffMyPage() {
     scheduleTemplates,
     scheduleSubmittedAt,
     scheduleNotes,
+    scheduleSubmissionNote,
   ] = await Promise.all([
     getOwnPayCategories(),
     getOwnPayEntries(periodStart),
@@ -54,6 +56,7 @@ export default async function StaffMyPage() {
     getOwnScheduleTemplates(),
     getOwnScheduleSubmissionStatus(scheduleMonthStart),
     getScheduleNotes(scheduleMonthStart, monthEnd(scheduleMonthStart)),
+    getOwnScheduleSubmissionNote(scheduleMonthStart),
   ]);
   const hasEntryInput = payCategories.length > 0 || hasPayRateRules;
   const hourlyCategories = payCategories.filter((c) => c.unit_type === "hourly");
@@ -110,7 +113,11 @@ export default async function StaffMyPage() {
             lessonOptions={lessonOptions}
             initialNotes={scheduleNotes}
           />
-          <SubmitScheduleButton monthStart={scheduleMonthStart} submittedAt={scheduleSubmittedAt} />
+          <SubmitScheduleButton
+            monthStart={scheduleMonthStart}
+            submittedAt={scheduleSubmittedAt}
+            initialNote={scheduleSubmissionNote}
+          />
         </div>
       </details>
 

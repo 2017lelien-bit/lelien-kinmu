@@ -2,16 +2,18 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { submitSchedule, getOwnScheduleSubmissionStatus } from "@/lib/schedule-submissions";
+import { submitSchedule, getOwnScheduleSubmissionStatus, getOwnScheduleSubmissionNote } from "@/lib/schedule-submissions";
 import { formatDateTimeJst, addMonthsToMonthStart } from "@/lib/date";
 
 export default function SubmitScheduleButton({
   monthStart,
   submittedAt,
+  initialNote,
   staffId,
 }: {
   monthStart: string;
   submittedAt: string | null;
+  initialNote?: string | null;
   staffId?: string;
 }) {
   const router = useRouter();
@@ -21,6 +23,10 @@ export default function SubmitScheduleButton({
   // 実際には来月分の提出として記録されてしまう不具合があった)。
   const [targetMonth, setTargetMonth] = useState(monthStart);
   const [targetSubmittedAt, setTargetSubmittedAt] = useState(submittedAt);
+  // 個々の予定とは別に、月全体についての伝言(「今月は入れません」等)。
+  // 以前は日々の予定入力フォームの「メモ」欄に書いても、実際に予定を1件も登録しない限り
+  // どこにも保存されなかった(=管理者に伝わらなかった)ため、ここで確実に保存できるようにする。
+  const [note, setNote] = useState(initialNote ?? "");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState(false);
@@ -29,15 +35,19 @@ export default function SubmitScheduleButton({
     setTargetMonth(newMonth);
     setError(null);
     setLoadingStatus(true);
-    const status = await getOwnScheduleSubmissionStatus(newMonth, staffId);
+    const [status, noteData] = await Promise.all([
+      getOwnScheduleSubmissionStatus(newMonth, staffId),
+      getOwnScheduleSubmissionNote(newMonth, staffId),
+    ]);
     setLoadingStatus(false);
     setTargetSubmittedAt(status);
+    setNote(noteData ?? "");
   }
 
   async function handleSubmit() {
     setSubmitting(true);
     setError(null);
-    const result = await submitSchedule(targetMonth, staffId);
+    const result = await submitSchedule(targetMonth, note, staffId);
     setSubmitting(false);
     if (!result.ok) {
       setError(result.error);
@@ -59,6 +69,15 @@ export default function SubmitScheduleButton({
           max={maxMonthStart.slice(0, 7)}
           onChange={(e) => handleMonthChange(`${e.target.value}-01`)}
           className="rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        今月についてのメモ(任意。「今月は入れません」等、日付に紐づかない伝言はここに書いてください)
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          rows={2}
+          className="rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
         />
       </label>
       <p className="text-sm text-neutral-500">

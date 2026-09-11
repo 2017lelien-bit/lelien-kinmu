@@ -11,7 +11,7 @@ import { SCHEDULE_KIND_LABEL } from "@/lib/types";
 import type { ScheduleSubmission } from "@/lib/types";
 
 type EntryWithName = ScheduleSubmission & { staffName: string };
-type StatusRow = { staffId: string; staffName: string; submittedAt: string | null };
+type StatusRow = { staffId: string; staffName: string; submittedAt: string | null; note: string | null };
 
 function formatMonthLabel(monthStart: string): string {
   const [y, m] = monthStart.split("-");
@@ -78,6 +78,9 @@ export default function ScheduleReviewPanel({
   const notedEntries = entries
     .filter((e) => e.note)
     .sort((a, b) => a.entry_date.localeCompare(b.entry_date));
+  // 日付ごとの予定とは別に、「提出する」ボタンと一緒に書かれた月全体のメモ
+  // (例:「今月は入れません」)も見落とされやすいので、同じように目立たせる。
+  const monthNotes = statusList.filter((s) => s.note);
 
   return (
     <div className="flex max-w-2xl flex-col gap-4">
@@ -102,10 +105,19 @@ export default function ScheduleReviewPanel({
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      {notedEntries.length > 0 && (
+      {(monthNotes.length > 0 || notedEntries.length > 0) && (
         <div className="rounded-lg border border-amber-400 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-950">
-          <p className="mb-2 text-sm font-semibold">📝 スタッフからのメモ({notedEntries.length}件)</p>
+          <p className="mb-2 text-sm font-semibold">
+            📝 スタッフからのメモ({monthNotes.length + notedEntries.length}件)
+          </p>
           <ul className="flex flex-col gap-1 text-sm">
+            {monthNotes.map((s) => (
+              <li key={`month-${s.staffId}`} className="flex flex-wrap items-center gap-2">
+                <span className="font-semibold">{s.staffName}</span>
+                <span className="text-neutral-500">今月全体について</span>
+                <span>{s.note}</span>
+              </li>
+            ))}
             {notedEntries.map((e) => (
               <li key={e.id} className="flex flex-wrap items-center gap-2">
                 <span className="font-semibold">{e.staffName}</span>
