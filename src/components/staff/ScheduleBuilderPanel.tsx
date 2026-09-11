@@ -5,6 +5,7 @@ import {
   addScheduleEntry,
   getAllScheduleSubmissions,
   setScheduleEntryConfirmed,
+  updateScheduleEntryStaff,
   updateScheduleEntryTime,
 } from "@/lib/schedule-submissions";
 import { getScheduleNotes, upsertScheduleNote, type ScheduleNote } from "@/lib/schedule-notes";
@@ -134,6 +135,24 @@ export default function ScheduleBuilderPanel({
     }
   }
 
+  // 確定済みの予定の担当スタッフを、別のスタッフに差し替える。
+  async function handleStaffChange(entry: EntryWithName, staffId: string) {
+    setError(null);
+    const prevStaffId = entry.staff_id;
+    const prevStaffName = entry.staffName;
+    const nextStaffName = staffList.find((s) => s.id === staffId)?.name ?? "";
+    setEntries((prev) =>
+      prev.map((e) => (e.id === entry.id ? { ...e, staff_id: staffId, staffName: nextStaffName } : e)),
+    );
+    const result = await updateScheduleEntryStaff(entry.id, staffId);
+    if (!result.ok) {
+      setError(result.error);
+      setEntries((prev) =>
+        prev.map((e) => (e.id === entry.id ? { ...e, staff_id: prevStaffId, staffName: prevStaffName } : e)),
+      );
+    }
+  }
+
   // レッスン名を決めずに時間帯だけ提出された候補に、実際に担当するレッスン名を割り当てる。
   async function handleAssignLesson(entry: EntryWithName, lessonName: string) {
     setError(null);
@@ -242,6 +261,19 @@ export default function ScheduleBuilderPanel({
                   </option>
                 ))}
               </select>
+              {selected && (
+                <select
+                  value={selected.staff_id}
+                  onChange={(e) => handleStaffChange(selected, e.target.value)}
+                  className="w-full max-w-full rounded border border-neutral-200 px-1 py-0.5 text-[10px] dark:border-neutral-800"
+                >
+                  {staffList.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              )}
               {selected && (
                 <div className="flex items-center gap-0.5 text-[10px]">
                   <input

@@ -158,6 +158,20 @@ export async function updateScheduleEntryTime(
   return { ok: true, data: undefined };
 }
 
+// 確定済みの予定の担当スタッフを、管理者が直接差し替えられるようにする
+// (元々提出した本人ではなく、別のスタッフに変更したい場合)。
+export async function updateScheduleEntryStaff(id: string, staffId: string): Promise<ActionResult> {
+  const adminCheck = await requireAdmin();
+  if (adminCheck) return adminCheck;
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("schedule_submissions").update({ staff_id: staffId }).eq("id", id);
+  if (error) return { ok: false, error: "更新に失敗しました。" };
+
+  revalidatePath("/staff/admin/schedule");
+  return { ok: true, data: undefined };
+}
+
 // 担当できるレッスンの一覧(スケジュール提出時のレッスン名の選択肢になる)。
 export async function getOwnLessonOptions(staffId?: string): Promise<LessonOption[]> {
   const acting = await resolveActingStaffId(staffId);
