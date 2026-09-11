@@ -1,16 +1,10 @@
 import { notFound } from "next/navigation";
 import { getStaffUser } from "@/lib/auth";
-import {
-  getAllScheduleSubmissions,
-  getLessonOptionsByStaff,
-  getScheduleSubmissionStatusList,
-} from "@/lib/schedule-submissions";
-import { getScheduleNotes } from "@/lib/schedule-notes";
+import { getAllScheduleSubmissions, getScheduleSubmissionStatusList } from "@/lib/schedule-submissions";
 import { getMusuhiShifts } from "@/lib/musuhi-schedule";
 import { getAllStaff } from "@/lib/staff-admin";
 import { nextMonthStart, monthEnd } from "@/lib/date";
 import ScheduleReviewPanel from "@/components/staff/ScheduleReviewPanel";
-import ScheduleBuilderPanel from "@/components/staff/ScheduleBuilderPanel";
 import MusuhiScheduleBuilderPanel from "@/components/staff/MusuhiScheduleBuilderPanel";
 import SchedulePrintLinks from "@/components/staff/SchedulePrintLinks";
 
@@ -19,13 +13,11 @@ export default async function AdminSchedulePage() {
   if (!staff || staff.role !== "admin") notFound();
 
   const initialMonthStart = nextMonthStart();
-  const [entries, statusList, allStaff, musuhiShifts, scheduleNotes, lessonOptionsByStaff] = await Promise.all([
+  const [entries, statusList, allStaff, musuhiShifts] = await Promise.all([
     getAllScheduleSubmissions(initialMonthStart, monthEnd(initialMonthStart)),
     getScheduleSubmissionStatusList(initialMonthStart),
     getAllStaff(),
     getMusuhiShifts(initialMonthStart, monthEnd(initialMonthStart)),
-    getScheduleNotes(initialMonthStart, monthEnd(initialMonthStart)),
-    getLessonOptionsByStaff(),
   ]);
   const staffList = allStaff
     .filter((s) => s.is_active)
@@ -42,21 +34,7 @@ export default async function AdminSchedulePage() {
       </div>
 
       <div className="flex flex-col gap-4 border-t border-neutral-200 pt-8 dark:border-neutral-800">
-        <h1 className="text-xl font-semibold">② スケジュールの組み立て</h1>
-        <p className="text-sm text-neutral-500">
-          全員そろっていなくても、提出済みの人だけで先に組み始められます。日付ごとに、その時点で提出された候補からプルダウンで選んで、受付・レッスンを決めてください(後から他のスタッフの提出があれば、候補に追加されます)。
-        </p>
-        <ScheduleBuilderPanel
-          initialMonthStart={initialMonthStart}
-          initialEntries={entries}
-          initialNotes={scheduleNotes}
-          staffList={staffList}
-          lessonOptionsByStaff={lessonOptionsByStaff}
-        />
-      </div>
-
-      <div className="flex flex-col gap-4 border-t border-neutral-200 pt-8 dark:border-neutral-800">
-        <h1 className="text-xl font-semibold">③ むすひスケジュール</h1>
+        <h1 className="text-xl font-semibold">② むすひスケジュール</h1>
         <p className="text-sm text-neutral-500">
           むすひの受付を、日付ごとに担当者と時間帯で組み立てます(Le lienのスケジュールとは別の予定です)。
         </p>
@@ -64,9 +42,9 @@ export default async function AdminSchedulePage() {
       </div>
 
       <div className="flex flex-col gap-4 border-t border-neutral-200 pt-8 dark:border-neutral-800">
-        <h1 className="text-xl font-semibold">④ 印刷</h1>
+        <h1 className="text-xl font-semibold">③ スケジュールの組み立て・印刷</h1>
         <p className="text-sm text-neutral-500">
-          「確定」にチェックが入っている予定だけが印刷対象になります。用途に合わせて3種類から選んでください。
+          「スタッフ用」を開くと、そのままカレンダー上で受付・レッスンの担当や時間を編集できます(編集内容は自動で保存されます)。用途に合わせて3種類から選んでください。
         </p>
         <SchedulePrintLinks initialMonthStart={initialMonthStart} />
       </div>
