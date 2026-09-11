@@ -400,21 +400,22 @@ export default function ScheduleBuilderPanel({
   const leadingBlanks = Array(dayOfWeekForDate(dates[0])).fill(null);
   const calendarCells: (string | null)[] = [...leadingBlanks, ...dates];
 
-  // 横に小さく表示する、印刷イメージのプレビュー(確定済みの予定だけを、印刷ページと同じ配色で表示する)。
+  // 確定済みの予定だけを、印刷ページと同じ配色・同じ文字サイズで表示するプレビュー
+  // (文字を小さくしすぎると名前が読めなくなるため、幅は縮めず下に表示する)。
   const colorMap = new Map(lessonColorRows.map((c) => [c.lesson_name, c]));
   function renderPreview() {
     return (
-      <div className="grid grid-cols-7 gap-px overflow-hidden rounded border border-neutral-300 bg-neutral-300 text-[8px] dark:border-neutral-700 dark:bg-neutral-700">
+      <div className="grid grid-cols-7 gap-px overflow-hidden rounded border border-neutral-400 bg-neutral-400 text-[10px] dark:border-neutral-700 dark:bg-neutral-700">
         {DAY_OF_WEEK_LABEL.map((label, i) => (
           <div
             key={label}
-            className={`bg-neutral-100 py-0.5 text-center font-semibold dark:bg-neutral-900 ${i === 0 ? "text-red-600" : ""}`}
+            className={`bg-neutral-100 py-1 text-center text-xs font-semibold dark:bg-neutral-900 ${i === 0 ? "text-red-600" : ""}`}
           >
             {label}
           </div>
         ))}
         {calendarCells.map((date, i) => {
-          if (!date) return <div key={`empty-${i}`} className="min-h-10 bg-white dark:bg-neutral-950" />;
+          if (!date) return <div key={`empty-${i}`} className="min-h-28 bg-white dark:bg-neutral-950" />;
           const day = Number(date.split("-")[2]);
           const dow = dayOfWeekForDate(date);
           const noteEntry = notesByDate.get(date);
@@ -425,29 +426,32 @@ export default function ScheduleBuilderPanel({
           return (
             <div
               key={date}
-              className={`flex min-h-10 flex-col gap-px p-0.5 ${isClosedDay ? "bg-neutral-100 dark:bg-neutral-900" : "bg-white dark:bg-neutral-950"}`}
+              className={`flex min-h-28 flex-col gap-0.5 p-1 ${isClosedDay ? "bg-neutral-100 dark:bg-neutral-900" : "bg-white dark:bg-neutral-950"}`}
             >
-              <div className="flex flex-wrap items-baseline gap-x-0.5">
+              <div className="flex flex-wrap items-baseline gap-x-1">
                 <p className={`font-semibold ${dow === 0 ? "text-red-600" : ""}`}>{day}</p>
                 {!isClosedDay &&
                   reception.map((e) => (
-                    <span key={e.id} className="text-neutral-500">
+                    <span key={e.id} className="text-neutral-600">
+                      {e.staffName}
                       {formatTimeCompact(e.start_time)}
                     </span>
                   ))}
               </div>
               {isClosedDay ? (
-                <p className="text-neutral-400">{noteEntry?.note || "休"}</p>
+                <p className="text-neutral-400">{noteEntry?.note || "定休日"}</p>
               ) : (
-                lessons.map((e) => {
-                  const name = e.lesson_name ?? "(未定)";
-                  return (
-                    <p key={e.id} className="truncate rounded px-0.5 leading-tight" style={lessonStyle(name, colorMap)}>
-                      {formatTime(e.start_time)}
-                      {name}
-                    </p>
-                  );
-                })
+                <>
+                  {noteEntry?.note && <p className="italic text-neutral-500">{noteEntry.note}</p>}
+                  {lessons.map((e) => {
+                    const name = e.lesson_name ?? "(レッスン名未定)";
+                    return (
+                      <p key={e.id} className="rounded px-1 py-0.5 leading-tight" style={lessonStyle(name, colorMap)}>
+                        {formatTime(e.start_time)} {name}({e.staffName})
+                      </p>
+                    );
+                  })}
+                </>
               )}
             </div>
           );
@@ -457,8 +461,8 @@ export default function ScheduleBuilderPanel({
   }
 
   return (
-    <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-    <div className="flex flex-col gap-4 lg:min-w-0 lg:flex-1">
+    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-1 text-sm">
           対象月
@@ -633,9 +637,11 @@ export default function ScheduleBuilderPanel({
         </div>
     </div>
 
-      <div className="flex flex-col gap-1 lg:sticky lg:top-4 lg:w-64 lg:shrink-0">
-        <p className="text-xs font-semibold text-neutral-500">プレビュー(印刷イメージ)</p>
-        {renderPreview()}
+      <div className="flex flex-col gap-2 border-t border-neutral-200 pt-4 dark:border-neutral-800">
+        <p className="text-sm font-semibold text-neutral-500">プレビュー(このまま印刷した場合の見た目・確定済みの予定のみ表示)</p>
+        <div className="overflow-x-auto">
+          <div className="min-w-[700px]">{renderPreview()}</div>
+        </div>
       </div>
     </div>
   );
