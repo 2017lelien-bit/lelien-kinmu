@@ -117,14 +117,14 @@ export default async function SchedulePrintPage({
       <h2 className="hidden text-center text-xl font-bold print:block">{formatMonthLabel(monthStart)}スケジュール</h2>
 
       {lessonNamesUsed.length > 0 && (
-        <div className="flex flex-wrap items-center gap-3 text-xs">
+        <div className="flex flex-nowrap items-center gap-3 overflow-x-auto pb-1 text-xs print:flex-wrap print:overflow-visible">
           {lessonNamesUsed.map((name) => {
             const style = lessonStyle(name, colorMap);
             const config = colorMap.get(name);
             return (
-              <span key={name} className="inline-flex items-center gap-1">
+              <span key={name} className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap">
                 <span
-                  className="inline-block h-3 w-3 rounded-sm border border-black/10"
+                  className="inline-block h-3 w-3 shrink-0 rounded-sm border border-black/10"
                   style={{ backgroundColor: style.backgroundColor ?? style.color ?? "#ffffff" }}
                 />
                 <span style={style}>{name}</span>
