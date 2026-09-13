@@ -246,6 +246,14 @@ export default function ScheduleBuilderPanel({
     (_, i) => `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(i + 1).padStart(2, "0")}`,
   );
 
+  // スタッフごとのレッスン数(確定分のみ)。偏りが無いか一目で確認できるように、多い順に並べる。
+  const lessonCountByStaff = new Map<string, number>();
+  for (const e of entries) {
+    if (e.kind !== "lesson" || !e.confirmed) continue;
+    lessonCountByStaff.set(e.staffName, (lessonCountByStaff.get(e.staffName) ?? 0) + 1);
+  }
+  const lessonCountRows = Array.from(lessonCountByStaff.entries()).sort((a, b) => b[1] - a[1]);
+
   const entriesByDateKind = new Map<string, EntryWithName[]>();
   for (const e of entries) {
     if (e.kind === "unavailable") continue;
@@ -484,6 +492,20 @@ export default function ScheduleBuilderPanel({
       </p>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
+
+      {lessonCountRows.length > 0 && (
+        <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
+          <p className="text-sm font-semibold">スタッフ別レッスン数(確定分・{formatMonthLabel(monthStart)})</p>
+          <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+            {lessonCountRows.map(([name, count]) => (
+              <li key={name} className="flex items-center gap-1">
+                <span>{name}</span>
+                <span className="font-semibold">{count}本</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="overflow-x-auto">
           <div className="grid min-w-[700px] grid-cols-7 gap-1">
