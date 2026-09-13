@@ -274,6 +274,15 @@ export default function ScheduleBuilderPanel({
   }
   const lessonCountRows = Array.from(lessonCountByStaff.entries()).sort((a, b) => b[1] - a[1]);
 
+  // クラス(レッスン名)ごとの本数。特定のクラスに偏っていないか確認できるように、多い順に並べる。
+  const lessonCountByName = new Map<string, number>();
+  for (const e of entries) {
+    if (e.kind !== "lesson" || !e.confirmed) continue;
+    const name = e.lesson_name ?? "(レッスン名未定)";
+    lessonCountByName.set(name, (lessonCountByName.get(name) ?? 0) + 1);
+  }
+  const lessonCountByNameRows = Array.from(lessonCountByName.entries()).sort((a, b) => b[1] - a[1]);
+
   // スケジュールの時点で分かる範囲での、おおよその人件費。
   // レッスンは人数で単価が変わることがあるが、まだ人数が分からないため段階の平均値で見積もる。
   // 受付は時給×時間で計算するが、レッスンと時間が重なっている場合の差し引き(実績入力時に自動適用)は含めていない。
@@ -546,6 +555,20 @@ export default function ScheduleBuilderPanel({
       </p>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
+
+      {lessonCountByNameRows.length > 0 && (
+        <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
+          <p className="text-sm font-semibold">クラス別レッスン数(確定分・{formatMonthLabel(monthStart)})</p>
+          <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+            {lessonCountByNameRows.map(([name, count]) => (
+              <li key={name} className="flex items-center gap-1">
+                <span>{name}</span>
+                <span className="font-semibold">{count}本</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {lessonCountRows.length > 0 && (
         <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
