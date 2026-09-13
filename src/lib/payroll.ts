@@ -6,6 +6,7 @@ import { getStaffUser } from "@/lib/auth";
 import { sendStaffPayslipEmail } from "@/lib/notifications";
 import { calculateContractorWithholding, calculateEmployeeWithholding } from "@/lib/tax";
 import { payPeriodEnd, computeWorkedMinutes, todayJstDateString } from "@/lib/date";
+import { getLeLienDeductionsByDate } from "@/lib/time-log";
 import type {
   ActionResult,
   EmploymentType,
@@ -15,6 +16,10 @@ import type {
   StaffPayslip,
 } from "@/lib/types";
 import { EMPLOYMENT_TYPE_LABEL } from "@/lib/types";
+
+function isLeLienCategoryName(name: string): boolean {
+  return name.toLowerCase().replace(/\s+/g, "").includes("lelien");
+}
 
 async function requireAdmin(): Promise<{ ok: false; error: string } | null> {
   const staff = await getStaffUser();
@@ -72,6 +77,11 @@ export interface TodayShiftSummary {
   breakEnd: string | null;
   hours: number;
   amount: number;
+  // 同じ日にレッスンと時間が重なっている場合の差し引き分(分)。0ならなし。
+  deductionMinutes: number;
+  // 差し引き後、実際に給与へ反映される時間・金額(deductionMinutesが0ならhours/amountと同じ)。
+  netHours: number;
+  netAmount: number;
 }
 
 export interface TodaySummary {
@@ -156,6 +166,16 @@ async function buildSummaryForRange(staffId: string, startDate: string, endDate:
     };
   });
 
+  // 「Le lien」区分は、レッスンと時間が重なっていた分だけ日付ごとに差し引かれる。
+  // 区分ごとに計算し、日付ごとの差し引き分数をまとめておく。
+  const leLienCategoryIds = (categories ?? []).filter((c) => isLeLienCategoryName(c.name)).map((c) => c.id);
+  const deductionsByCategoryDate = new Map<string, Record<string, number>>();
+  for (const categoryId of leLienCategoryIds) {
+    deductionsByCategoryDate.set(categoryId, await getLeLienDeductionsByDate(categoryId, startDate, endDate, staffId));
+  }
+  // 同じ日・同じ区分に複数の記録があっても、差し引き表示は1件だけにする(最後の1件にまとめる)。
+  const deductionShownFor = new Set<string>();
+
   const shiftSummaries: TodayShiftSummary[] = (timeEntries ?? []).map((e) => {
     const category = categoryById.get(e.pay_category_id);
     const hours = computeWorkedMinutes({
@@ -164,6 +184,11 @@ async function buildSummaryForRange(staffId: string, startDate: string, endDate:
       breakStart: e.break_start,
       breakEnd: e.break_end,
     }) / 60;
+    const groupKey = `${e.pay_category_id}|${e.entry_date}`;
+    const deductionMinutes = deductionsByCategoryDate.get(e.pay_category_id)?.[e.entry_date] ?? 0;
+    const showDeduction = deductionMinutes > 0 && !deductionShownFor.has(groupKey);
+    if (showDeduction) deductionShownFor.add(groupKey);
+    const netHours = Math.max(0, hours - deductionMinutes / 60);
     return {
       id: e.id,
       payCategoryId: e.pay_category_id,
@@ -175,6 +200,9 @@ async function buildSummaryForRange(staffId: string, startDate: string, endDate:
       breakEnd: e.break_end,
       hours,
       amount: Math.round(hours * (category?.rate ?? 0)),
+      deductionMinutes: showDeduction ? deductionMinutes : 0,
+      netHours,
+      netAmount: Math.round(netHours * (category?.rate ?? 0)),
     };
   });
 

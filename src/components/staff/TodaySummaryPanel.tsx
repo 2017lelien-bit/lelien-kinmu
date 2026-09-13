@@ -88,7 +88,7 @@ export default function TodaySummaryPanel({
   }
 
   const lessonsTotal = displayLessons.reduce((sum, l) => sum + l.rate, 0);
-  const shiftsTotal = displayShifts.reduce((sum, s) => sum + s.amount, 0);
+  const shiftsTotal = displayShifts.reduce((sum, s) => sum + s.netAmount, 0);
   const hasLeLienShift = displayShifts.some((s) => s.categoryName.toLowerCase().replace(/\s+/g, "").includes("lelien"));
 
   // 期間表示のときは、日付ごとにまとめて見やすくする(新しい日付が上)。
@@ -537,22 +537,31 @@ export default function TodaySummaryPanel({
       );
     }
     return (
-      <li key={s.id} className="flex flex-wrap items-center gap-3">
-        <span>{s.categoryName}</span>
-        <span>
-          {s.startTime.slice(0, 5)}〜{s.endTime.slice(0, 5)}({s.hours}時間)
-        </span>
-        <span className="font-semibold">¥{s.amount.toLocaleString()}</span>
-        <button onClick={() => startEditShift(s)} className="ml-auto text-xs underline">
-          訂正する
-        </button>
-        <button
-          onClick={() => handleDeleteShift(s)}
-          disabled={deletingId === s.id}
-          className="text-xs text-red-600 underline disabled:opacity-40"
-        >
-          {deletingId === s.id ? "削除中..." : "削除"}
-        </button>
+      <li key={s.id} className="flex flex-col gap-1">
+        <div className="flex flex-wrap items-center gap-3">
+          <span>{s.categoryName}</span>
+          <span>
+            {s.startTime.slice(0, 5)}〜{s.endTime.slice(0, 5)}({s.hours}時間)
+          </span>
+          <span className="font-semibold">¥{s.amount.toLocaleString()}</span>
+          <button onClick={() => startEditShift(s)} className="ml-auto text-xs underline">
+            訂正する
+          </button>
+          <button
+            onClick={() => handleDeleteShift(s)}
+            disabled={deletingId === s.id}
+            className="text-xs text-red-600 underline disabled:opacity-40"
+          >
+            {deletingId === s.id ? "削除中..." : "削除"}
+          </button>
+        </div>
+        {s.deductionMinutes > 0 && (
+          <p className="rounded bg-amber-100 px-2 py-1 text-xs text-amber-900 dark:bg-amber-900 dark:text-amber-100">
+            ⚠️ レッスンと時間が重なっているため、この日は-{Math.floor(s.deductionMinutes / 60)}時間
+            {s.deductionMinutes % 60 > 0 ? `${s.deductionMinutes % 60}分` : ""}
+            されます(実際にカウントされるのは{s.netHours}時間・¥{s.netAmount.toLocaleString()})
+          </p>
+        )}
       </li>
     );
   }
