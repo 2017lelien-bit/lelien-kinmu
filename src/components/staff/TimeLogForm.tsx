@@ -16,6 +16,7 @@ export default function TimeLogForm({
   payCategoryId,
   categoryName,
   entries,
+  deductionsByDate,
   periodStart,
   periodEnd,
   staffId,
@@ -23,6 +24,7 @@ export default function TimeLogForm({
   payCategoryId: string;
   categoryName: string;
   entries: TimeLogEntry[];
+  deductionsByDate?: Record<string, number>;
   periodStart: string;
   periodEnd: string;
   staffId?: string;
@@ -112,6 +114,8 @@ export default function TimeLogForm({
       }),
     0,
   );
+  const totalDeductionMinutes = Object.values(deductionsByDate ?? {}).reduce((sum, m) => sum + m, 0);
+  const netTotalMinutes = Math.max(0, totalMinutes - totalDeductionMinutes);
 
   return (
     <div className="flex flex-col gap-4 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
@@ -201,36 +205,46 @@ export default function TimeLogForm({
           <p className="text-sm text-neutral-400">記録はまだありません。</p>
         ) : (
           <ul className="flex flex-col gap-2 text-sm">
-            {entries.map((e) => {
+            {entries.map((e, i) => {
               const minutes = computeWorkedMinutes({
                 startTime: e.start_time,
                 endTime: e.end_time,
                 breakStart: e.break_start,
                 breakEnd: e.break_end,
               });
+              // 同じ日の最後の記録の後にだけ、その日の重複差し引きを表示する(日付ごとに1回)。
+              const isLastOfDate = entries[i + 1]?.entry_date !== e.entry_date;
+              const deduction = deductionsByDate?.[e.entry_date] ?? 0;
               return (
-                <li key={e.id} className="flex flex-wrap items-center gap-3 border-b border-neutral-100 pb-2 dark:border-neutral-900">
-                  <span>{e.entry_date}</span>
-                  <span>
-                    {e.start_time.slice(0, 5)}〜{e.end_time.slice(0, 5)}
-                  </span>
-                  {e.break_start && e.break_end && (
-                    <span className="text-neutral-400">
-                      (休憩 {e.break_start.slice(0, 5)}〜{e.break_end.slice(0, 5)})
+                <li key={e.id} className="flex flex-col gap-1 border-b border-neutral-100 pb-2 dark:border-neutral-900">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span>{e.entry_date}</span>
+                    <span>
+                      {e.start_time.slice(0, 5)}〜{e.end_time.slice(0, 5)}
                     </span>
+                    {e.break_start && e.break_end && (
+                      <span className="text-neutral-400">
+                        (休憩 {e.break_start.slice(0, 5)}〜{e.break_end.slice(0, 5)})
+                      </span>
+                    )}
+                    <span className="font-semibold">{formatMinutes(minutes)}</span>
+                    {e.note && <span className="text-neutral-400">{e.note}</span>}
+                    <button onClick={() => startEdit(e)} className="underline">
+                      編集
+                    </button>
+                    <button
+                      onClick={() => handleDelete(e.id)}
+                      disabled={deletingId === e.id}
+                      className="text-red-600 underline disabled:opacity-40"
+                    >
+                      {deletingId === e.id ? "削除中..." : "削除"}
+                    </button>
+                  </div>
+                  {isLastOfDate && deduction > 0 && (
+                    <p className="rounded bg-amber-100 px-2 py-1 text-xs text-amber-900 dark:bg-amber-900 dark:text-amber-100">
+                      ⚠️ レッスンと時間が重なっているため、この日は-{formatMinutes(deduction)}されます
+                    </p>
                   )}
-                  <span className="font-semibold">{formatMinutes(minutes)}</span>
-                  {e.note && <span className="text-neutral-400">{e.note}</span>}
-                  <button onClick={() => startEdit(e)} className="underline">
-                    編集
-                  </button>
-                  <button
-                    onClick={() => handleDelete(e.id)}
-                    disabled={deletingId === e.id}
-                    className="text-red-600 underline disabled:opacity-40"
-                  >
-                    {deletingId === e.id ? "削除中..." : "削除"}
-                  </button>
                 </li>
               );
             })}
@@ -238,7 +252,14 @@ export default function TimeLogForm({
         )}
       </div>
 
-      <p className="text-sm font-semibold">今期の合計: {formatMinutes(totalMinutes)}</p>
+      <p className="text-sm font-semibold">
+        今期の合計: {formatMinutes(netTotalMinutes)}
+        {totalDeductionMinutes > 0 && (
+          <span className="ml-1 font-normal text-amber-700 dark:text-amber-400">
+            (実働{formatMinutes(totalMinutes)} - レッスン重複分{formatMinutes(totalDeductionMinutes)})
+          </span>
+        )}
+      </p>
     </div>
   );
 }

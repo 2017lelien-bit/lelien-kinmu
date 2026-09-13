@@ -47,6 +47,72 @@ function intervalsOverlap(aStart: number, aEnd: number, bStart: number, bEnd: nu
   return aStart < bEnd && bStart < aEnd;
 }
 
+// レッスンと重なっている受付シフトがあれば、日付ごとに差し引く分数(レッスン数×120分)を返す。
+async function computeOverlapDeductionMinutesByDate(
+  admin: ReturnType<typeof createAdminClient>,
+  staffId: string,
+  shiftsByDate: Map<string, { start: number; end: number }[]>,
+  periodStart: string,
+  periodEnd: string,
+): Promise<Map<string, number>> {
+  const deductionsByDate = new Map<string, number>();
+  if (shiftsByDate.size === 0) return deductionsByDate;
+
+  const { data: lessons } = await admin
+    .from("lesson_log_entries")
+    .select("entry_date, start_time, duration_minutes")
+    .eq("staff_id", staffId)
+    .gte("entry_date", periodStart)
+    .lte("entry_date", periodEnd)
+    .not("start_time", "is", null);
+
+  for (const l of lessons ?? []) {
+    const shifts = shiftsByDate.get(l.entry_date);
+    if (!shifts) continue;
+    const lessonStart = toMinutes(l.start_time);
+    const lessonEnd = lessonStart + l.duration_minutes;
+    const overlaps = shifts.some((s) => intervalsOverlap(lessonStart, lessonEnd, s.start, s.end));
+    if (overlaps) {
+      deductionsByDate.set(l.entry_date, (deductionsByDate.get(l.entry_date) ?? 0) + LESSON_DEDUCTION_MINUTES_PER_LESSON);
+    }
+  }
+  return deductionsByDate;
+}
+
+// 「Le lien」区分について、日付ごとのレッスン重複による差し引き分数を画面表示用に返す
+// (実績入力欄に、なぜ実働時間より少なくカウントされるのかを表示するため)。
+export async function getLeLienDeductionsByDate(
+  payCategoryId: string,
+  periodStart: string,
+  periodEnd: string,
+  staffId?: string,
+): Promise<Record<string, number>> {
+  const acting = await resolveActingStaffId(staffId);
+  if ("error" in acting) return {};
+
+  const admin = createAdminClient();
+  const { data: category } = await admin.from("pay_categories").select("name").eq("id", payCategoryId).maybeSingle();
+  if (!category || !isLeLienCategoryName(category.name)) return {};
+
+  const { data: timeEntries } = await admin
+    .from("time_log_entries")
+    .select("entry_date, start_time, end_time")
+    .eq("staff_id", acting.id)
+    .eq("pay_category_id", payCategoryId)
+    .gte("entry_date", periodStart)
+    .lte("entry_date", periodEnd);
+
+  const shiftsByDate = new Map<string, { start: number; end: number }[]>();
+  for (const e of timeEntries ?? []) {
+    const shifts = shiftsByDate.get(e.entry_date) ?? [];
+    shifts.push({ start: toMinutes(e.start_time), end: toMinutes(e.end_time) });
+    shiftsByDate.set(e.entry_date, shifts);
+  }
+
+  const deductionsByDate = await computeOverlapDeductionMinutesByDate(admin, acting.id, shiftsByDate, periodStart, periodEnd);
+  return Object.fromEntries(deductionsByDate);
+}
+
 async function syncPayEntryFromTimeLog(
   admin: ReturnType<typeof createAdminClient>,
   staffId: string,
@@ -81,31 +147,10 @@ async function syncPayEntryFromTimeLog(
   }
 
   if (category && isLeLienCategoryName(category.name) && minutesByDate.size > 0) {
-    const { data: lessons } = await admin
-      .from("lesson_log_entries")
-      .select("entry_date, start_time, duration_minutes")
-      .eq("staff_id", staffId)
-      .gte("entry_date", periodStart)
-      .lte("entry_date", periodEnd)
-      .not("start_time", "is", null);
-
-    const overlappingLessonCountByDate = new Map<string, number>();
-    for (const l of lessons ?? []) {
-      const shifts = shiftsByDate.get(l.entry_date);
-      if (!shifts) continue;
-      const lessonStart = toMinutes(l.start_time);
-      const lessonEnd = lessonStart + l.duration_minutes;
-      const overlaps = shifts.some((s) => intervalsOverlap(lessonStart, lessonEnd, s.start, s.end));
-      if (overlaps) {
-        overlappingLessonCountByDate.set(l.entry_date, (overlappingLessonCountByDate.get(l.entry_date) ?? 0) + 1);
-      }
-    }
-
+    const deductionsByDate = await computeOverlapDeductionMinutesByDate(admin, staffId, shiftsByDate, periodStart, periodEnd);
     for (const [date, minutes] of minutesByDate) {
-      const lessonCount = overlappingLessonCountByDate.get(date) ?? 0;
-      if (lessonCount > 0) {
-        minutesByDate.set(date, Math.max(0, minutes - lessonCount * LESSON_DEDUCTION_MINUTES_PER_LESSON));
-      }
+      const deduction = deductionsByDate.get(date) ?? 0;
+      if (deduction > 0) minutesByDate.set(date, Math.max(0, minutes - deduction));
     }
   }
 

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { getStaffUser, resolveActingStaffId } from "@/lib/auth";
 import { getOwnPayCategories } from "@/lib/pay-categories";
 import { getStaffDetail } from "@/lib/staff-admin";
-import { getOwnTimeLogEntries } from "@/lib/time-log";
+import { getLeLienDeductionsByDate, getOwnTimeLogEntries } from "@/lib/time-log";
 import { currentPayPeriod } from "@/lib/date";
 import TimeLogForm from "@/components/staff/TimeLogForm";
 
@@ -41,6 +41,13 @@ export default async function StaffAttendancePage({
       ),
     ),
   );
+  const deductionsByCategory = Object.fromEntries(
+    await Promise.all(
+      hourlyCategories.map(
+        async (c) => [c.id, await getLeLienDeductionsByDate(c.id, periodStart, periodEnd, targetStaffId)] as const,
+      ),
+    ),
+  );
 
   return (
     <div className="flex max-w-2xl flex-col gap-6">
@@ -64,6 +71,7 @@ export default async function StaffAttendancePage({
               payCategoryId={c.id}
               categoryName={c.name}
               entries={timeLogEntriesByCategory[c.id]}
+              deductionsByDate={deductionsByCategory[c.id]}
               periodStart={periodStart}
               periodEnd={periodEnd}
               staffId={targetStaffId}
