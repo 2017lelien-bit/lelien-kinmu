@@ -13,7 +13,7 @@ import { getScheduleNotes, upsertScheduleNote, type ScheduleNote } from "@/lib/s
 import type { LessonColor } from "@/lib/lesson-colors";
 import { dayOfWeekForDate, monthEnd } from "@/lib/date";
 import { CLOSED_DAY_OF_WEEK, DAY_OF_WEEK_LABEL, isClosedOnDate } from "@/lib/types";
-import type { LessonOption, ScheduleSubmission } from "@/lib/types";
+import type { LessonOption, PayRateRule, ScheduleSubmission } from "@/lib/types";
 
 type EntryWithName = ScheduleSubmission & { staffName: string };
 
@@ -57,6 +57,22 @@ function formatTimeCompact(t: string | null): string {
   return min === "00" ? String(Number(h)) : `${Number(h)}:${min}`;
 }
 
+// 人件費の概算用。"HH:MM:SS"同士の差を時間(小数)で返す。
+function hoursBetween(start: string | null, end: string | null): number {
+  if (!start || !end) return 0;
+  const [sh, sm] = start.slice(0, 5).split(":").map(Number);
+  const [eh, em] = end.slice(0, 5).split(":").map(Number);
+  return Math.max(0, (eh * 60 + em - (sh * 60 + sm)) / 60);
+}
+
+// 人数によって単価が変わるレッスンは、まだ人数が分からないため段階の平均値で見積もる。
+function estimateLessonRate(rules: PayRateRule[], lessonName: string): number {
+  const normalized = lessonName.trim().toLowerCase();
+  const matches = rules.filter((r) => r.lesson_name && r.lesson_name.trim().toLowerCase() === normalized);
+  if (matches.length === 0) return 0;
+  return matches.reduce((sum, r) => sum + r.rate, 0) / matches.length;
+}
+
 export default function ScheduleBuilderPanel({
   initialMonthStart,
   initialEntries,
@@ -64,6 +80,8 @@ export default function ScheduleBuilderPanel({
   staffList,
   lessonOptionsByStaff,
   lessonColorRows,
+  payRateRulesByStaff,
+  leLienHourlyRateByStaff,
 }: {
   initialMonthStart: string;
   initialEntries: EntryWithName[];
@@ -71,6 +89,8 @@ export default function ScheduleBuilderPanel({
   staffList: { id: string; name: string }[];
   lessonOptionsByStaff: Record<string, LessonOption[]>;
   lessonColorRows: LessonColor[];
+  payRateRulesByStaff: Record<string, PayRateRule[]>;
+  leLienHourlyRateByStaff: Record<string, number>;
 }) {
   const [monthStart, setMonthStart] = useState(initialMonthStart);
   const [entries, setEntries] = useState(initialEntries);
@@ -253,6 +273,40 @@ export default function ScheduleBuilderPanel({
     lessonCountByStaff.set(e.staffName, (lessonCountByStaff.get(e.staffName) ?? 0) + 1);
   }
   const lessonCountRows = Array.from(lessonCountByStaff.entries()).sort((a, b) => b[1] - a[1]);
+
+  // スケジュールの時点で分かる範囲での、おおよその人件費。
+  // レッスンは人数で単価が変わることがあるが、まだ人数が分からないため段階の平均値で見積もる。
+  // 受付は時給×時間で計算するが、レッスンと時間が重なっている場合の差し引き(実績入力時に自動適用)は含めていない。
+  interface StaffCostEstimate {
+    name: string;
+    lessonCost: number;
+    receptionCost: number;
+    hasUnpriced: boolean;
+  }
+  const costByStaff = new Map<string, StaffCostEstimate>();
+  for (const e of entries) {
+    if (!e.confirmed) continue;
+    const current = costByStaff.get(e.staff_id) ?? {
+      name: e.staffName,
+      lessonCost: 0,
+      receptionCost: 0,
+      hasUnpriced: false,
+    };
+    if (e.kind === "lesson" && e.lesson_name) {
+      const rate = estimateLessonRate(payRateRulesByStaff[e.staff_id] ?? [], e.lesson_name);
+      if (rate === 0) current.hasUnpriced = true;
+      current.lessonCost += rate;
+    } else if (e.kind === "reception") {
+      const rate = leLienHourlyRateByStaff[e.staff_id] ?? 0;
+      current.receptionCost += hoursBetween(e.start_time, e.end_time) * rate;
+    }
+    costByStaff.set(e.staff_id, current);
+  }
+  const costRows = Array.from(costByStaff.values())
+    .map((c) => ({ ...c, total: c.lessonCost + c.receptionCost }))
+    .sort((a, b) => b.total - a.total);
+  const grandTotal = costRows.reduce((sum, c) => sum + c.total, 0);
+  const hasUnpriced = costRows.some((c) => c.hasUnpriced);
 
   const entriesByDateKind = new Map<string, EntryWithName[]>();
   for (const e of entries) {
@@ -504,6 +558,30 @@ export default function ScheduleBuilderPanel({
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {costRows.length > 0 && (
+        <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
+          <p className="text-sm font-semibold">おおよその人件費(概算・確定分・{formatMonthLabel(monthStart)})</p>
+          <ul className="flex flex-col gap-1 text-sm">
+            {costRows.map((c) => (
+              <li key={c.name} className="flex flex-wrap items-center gap-3">
+                <span>{c.name}</span>
+                <span className="text-neutral-400">
+                  レッスン ¥{Math.round(c.lessonCost).toLocaleString()} + 受付 ¥{Math.round(c.receptionCost).toLocaleString()}
+                </span>
+                <span className="ml-auto font-semibold">¥{Math.round(c.total).toLocaleString()}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="border-t border-neutral-100 pt-2 text-sm font-semibold dark:border-neutral-900">
+            合計: ¥{Math.round(grandTotal).toLocaleString()}
+          </p>
+          <p className="text-xs text-neutral-400">
+            ※あくまで概算です。人数で単価が変わるレッスンは段階の平均値で計算しており、レッスンと受付の時間が重なる場合の差し引きも含まれていません(実績入力後の実際の金額とは異なります)。
+            {hasUnpriced && "また、単価が設定されていないレッスンは0円として計算されています。"}
+          </p>
         </div>
       )}
 

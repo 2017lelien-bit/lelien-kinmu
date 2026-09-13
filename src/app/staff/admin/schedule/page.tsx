@@ -7,6 +7,7 @@ import {
 } from "@/lib/schedule-submissions";
 import { getScheduleNotes } from "@/lib/schedule-notes";
 import { getLessonColors } from "@/lib/lesson-colors";
+import { getLeLienHourlyRateByStaff, getPayRateRulesByStaff } from "@/lib/payroll";
 import { getMusuhiShifts } from "@/lib/musuhi-schedule";
 import { getAllStaff } from "@/lib/staff-admin";
 import { nextMonthStart, monthEnd } from "@/lib/date";
@@ -20,16 +21,27 @@ export default async function AdminSchedulePage() {
   if (!staff || staff.role !== "admin") notFound();
 
   const initialMonthStart = nextMonthStart();
-  const [entries, statusList, allStaff, musuhiShifts, scheduleNotes, lessonOptionsByStaff, lessonColorRows] =
-    await Promise.all([
-      getAllScheduleSubmissions(initialMonthStart, monthEnd(initialMonthStart)),
-      getScheduleSubmissionStatusList(initialMonthStart),
-      getAllStaff(),
-      getMusuhiShifts(initialMonthStart, monthEnd(initialMonthStart)),
-      getScheduleNotes(initialMonthStart, monthEnd(initialMonthStart)),
-      getLessonOptionsByStaff(),
-      getLessonColors(),
-    ]);
+  const [
+    entries,
+    statusList,
+    allStaff,
+    musuhiShifts,
+    scheduleNotes,
+    lessonOptionsByStaff,
+    lessonColorRows,
+    payRateRulesByStaff,
+    leLienHourlyRateByStaff,
+  ] = await Promise.all([
+    getAllScheduleSubmissions(initialMonthStart, monthEnd(initialMonthStart)),
+    getScheduleSubmissionStatusList(initialMonthStart),
+    getAllStaff(),
+    getMusuhiShifts(initialMonthStart, monthEnd(initialMonthStart)),
+    getScheduleNotes(initialMonthStart, monthEnd(initialMonthStart)),
+    getLessonOptionsByStaff(),
+    getLessonColors(),
+    getPayRateRulesByStaff(),
+    getLeLienHourlyRateByStaff(),
+  ]);
   const staffList = allStaff
     .filter((s) => s.is_active)
     .map((s) => ({ id: s.id, name: s.schedule_display_name || s.name }));
@@ -56,6 +68,8 @@ export default async function AdminSchedulePage() {
           staffList={staffList}
           lessonOptionsByStaff={lessonOptionsByStaff}
           lessonColorRows={lessonColorRows}
+          payRateRulesByStaff={payRateRulesByStaff}
+          leLienHourlyRateByStaff={leLienHourlyRateByStaff}
         />
       </div>
 

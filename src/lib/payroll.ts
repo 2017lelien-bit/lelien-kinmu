@@ -530,3 +530,34 @@ export async function sendPayslipEmail(payslipId: string): Promise<ActionResult>
   revalidatePath(`/staff/admin/staff/${payslip.staff_id}`);
   return { ok: true, data: undefined };
 }
+
+// スケジュールを組み立てている時点で、おおよその人件費を確認できるようにする
+// (全スタッフ分の単価ルールをまとめて返す。実績はまだ無いため、実際の人数・分数は使えない)。
+export async function getPayRateRulesByStaff(): Promise<Record<string, PayRateRule[]>> {
+  const adminCheck = await requireAdmin();
+  if (adminCheck) return {};
+
+  const admin = createAdminClient();
+  const { data } = await admin.from("pay_rate_rules").select("*").order("sort_order", { ascending: true });
+
+  const map: Record<string, PayRateRule[]> = {};
+  for (const row of (data ?? []) as PayRateRule[]) {
+    (map[row.staff_id] ??= []).push(row);
+  }
+  return map;
+}
+
+// スケジュールの受付時間から人件費を見積もれるように、スタッフごとの「Le lien」時給を返す。
+export async function getLeLienHourlyRateByStaff(): Promise<Record<string, number>> {
+  const adminCheck = await requireAdmin();
+  if (adminCheck) return {};
+
+  const admin = createAdminClient();
+  const { data } = await admin.from("pay_categories").select("staff_id, name, rate, unit_type").eq("unit_type", "hourly");
+
+  const map: Record<string, number> = {};
+  for (const row of data ?? []) {
+    if (isLeLienCategoryName(row.name)) map[row.staff_id] = row.rate;
+  }
+  return map;
+}
