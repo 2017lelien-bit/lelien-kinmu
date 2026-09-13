@@ -3,6 +3,7 @@
 import { useState } from "react";
 import {
   addScheduleEntry,
+  assignScheduleEntryLessonName,
   getAllScheduleSubmissions,
   setScheduleEntryConfirmed,
   updateScheduleEntryStaff,
@@ -194,11 +195,7 @@ export default function ScheduleBuilderPanel({
     setError(null);
     const prevName = entry.lesson_name;
     setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, lesson_name: lessonName || null } : e)));
-    const result = await updateScheduleEntryTime(entry.id, {
-      startTime: entry.start_time ?? "",
-      endTime: entry.end_time ?? undefined,
-      lessonName,
-    });
+    const result = await assignScheduleEntryLessonName(entry.id, lessonName);
     if (!result.ok) {
       setError(result.error);
       setEntries((prev) => (prev.map((e) => (e.id === entry.id ? { ...e, lesson_name: prevName } : e))));

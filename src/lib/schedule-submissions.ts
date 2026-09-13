@@ -158,6 +158,25 @@ export async function updateScheduleEntryTime(
   return { ok: true, data: undefined };
 }
 
+// レッスン名だけを更新する(時刻の列には一切触れない)。
+// 時刻編集とレッスン名の割り当てがほぼ同時に起きたとき、片方が古い値で
+// もう片方を上書きしてしまう(入力したのに戻る)不具合を避けるため、
+// レッスン名を割り当てる処理は必ずこちらを使う。
+export async function assignScheduleEntryLessonName(id: string, lessonName: string): Promise<ActionResult> {
+  const adminCheck = await requireAdmin();
+  if (adminCheck) return adminCheck;
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("schedule_submissions")
+    .update({ lesson_name: lessonName.trim() || null })
+    .eq("id", id);
+  if (error) return { ok: false, error: "更新に失敗しました。" };
+
+  revalidatePath("/staff/admin/schedule");
+  return { ok: true, data: undefined };
+}
+
 // 確定済みの予定の担当スタッフを、管理者が直接差し替えられるようにする
 // (元々提出した本人ではなく、別のスタッフに変更したい場合)。
 export async function updateScheduleEntryStaff(id: string, staffId: string): Promise<ActionResult> {
