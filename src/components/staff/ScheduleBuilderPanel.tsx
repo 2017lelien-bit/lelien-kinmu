@@ -550,25 +550,20 @@ export default function ScheduleBuilderPanel({
               key={date}
               className={`flex min-h-28 flex-col gap-0.5 p-1 ${isClosedDay ? "bg-neutral-100 dark:bg-neutral-900" : "bg-white dark:bg-neutral-950"}`}
             >
-              <div className="flex flex-wrap items-baseline gap-x-1">
-                <p className={`font-semibold ${dow === 0 ? "text-red-600" : ""}`}>{day}</p>
-                {!isClosedDay &&
-                  reception.map((e) => (
-                    <span key={e.id} className="text-neutral-600">
-                      {e.staffName}
-                      {formatTimeCompact(e.start_time)}-{formatTimeCompact(e.end_time)}
-                    </span>
-                  ))}
+              <div className="flex items-baseline gap-x-1 overflow-hidden whitespace-nowrap">
+                <p className={`shrink-0 font-semibold ${dow === 0 ? "text-red-600" : ""}`}>{day}</p>
+                {!isClosedDay && (
+                  <span className="min-w-0 flex-1 overflow-hidden text-ellipsis text-neutral-600">
+                    {reception.map((e) => `${e.staffName}${formatTimeCompact(e.start_time)}-${formatTimeCompact(e.end_time)}`).join(" ")}
+                  </span>
+                )}
               </div>
               {!isClosedDay && musuhiDay.length > 0 && (
-                <p className="flex flex-wrap items-baseline gap-x-1 rounded bg-emerald-50 px-1 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">
-                  <span className="font-semibold">むすひ:</span>
-                  {musuhiDay.map((s) => (
-                    <span key={s.id}>
-                      {s.staffName}
-                      {formatTimeCompact(s.start_time)}-{formatTimeCompact(s.end_time)}
-                    </span>
-                  ))}
+                <p className="flex items-baseline gap-x-1 overflow-hidden whitespace-nowrap rounded bg-emerald-50 px-1 text-[9px] text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">
+                  <span className="shrink-0 font-semibold">むすひ:</span>
+                  <span className="min-w-0 flex-1 overflow-hidden text-ellipsis">
+                    {musuhiDay.map((s) => `${s.staffName}${formatTimeCompact(s.start_time)}-${formatTimeCompact(s.end_time)}`).join(" ")}
+                  </span>
                 </p>
               )}
               {isClosedDay ? (
