@@ -119,7 +119,7 @@ export default async function SchedulePrintPage({
       <div id="schedule-capture" className="flex flex-col gap-3 bg-white p-2">
       <h2 className="text-center text-xl font-bold">{formatMonthLabel(monthStart)}スケジュール</h2>
 
-      {lessonNamesUsed.length > 0 && (
+      {type === "staff" && lessonNamesUsed.length > 0 && (
         <div className="flex flex-nowrap items-center gap-3 overflow-x-auto pb-1 text-xs print:gap-1.5 print:text-[8px]">
           {lessonNamesUsed.map((name) => {
             const style = lessonStyle(name, colorMap);
