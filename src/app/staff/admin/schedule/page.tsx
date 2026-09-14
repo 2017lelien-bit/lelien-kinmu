@@ -82,6 +82,7 @@ export default async function AdminSchedulePage() {
           leLienHourlyRateByStaff={leLienHourlyRateByStaff}
           musuhiHourlyRateByStaff={musuhiHourlyRateByStaff}
           initialMusuhiShifts={musuhiShifts}
+          initialMusuhiNotes={musuhiNotes}
           costExcludedStaffIds={costExcludedStaffIds}
         />
       </div>

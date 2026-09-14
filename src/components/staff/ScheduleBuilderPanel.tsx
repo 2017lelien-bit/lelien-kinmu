@@ -10,7 +10,7 @@ import {
   updateScheduleEntryTime,
 } from "@/lib/schedule-submissions";
 import { getScheduleNotes, upsertScheduleNote, type ScheduleNote } from "@/lib/schedule-notes";
-import { getMusuhiShifts, type MusuhiShift } from "@/lib/musuhi-schedule";
+import { getMusuhiNotes, getMusuhiShifts, type MusuhiNote, type MusuhiShift } from "@/lib/musuhi-schedule";
 import type { LessonColor } from "@/lib/lesson-colors";
 import { dayOfWeekForDate, monthEnd } from "@/lib/date";
 import { CLOSED_DAY_OF_WEEK, DAY_OF_WEEK_LABEL, isClosedOnDate } from "@/lib/types";
@@ -88,6 +88,7 @@ export default function ScheduleBuilderPanel({
   leLienHourlyRateByStaff,
   musuhiHourlyRateByStaff,
   initialMusuhiShifts,
+  initialMusuhiNotes,
   costExcludedStaffIds,
 }: {
   initialMonthStart: string;
@@ -100,12 +101,14 @@ export default function ScheduleBuilderPanel({
   leLienHourlyRateByStaff: Record<string, number>;
   musuhiHourlyRateByStaff: Record<string, number>;
   initialMusuhiShifts: MusuhiShiftWithName[];
+  initialMusuhiNotes: MusuhiNote[];
   costExcludedStaffIds: string[];
 }) {
   const [monthStart, setMonthStart] = useState(initialMonthStart);
   const [entries, setEntries] = useState(initialEntries);
   const [notes, setNotes] = useState(initialNotes);
   const [musuhiShifts, setMusuhiShifts] = useState(initialMusuhiShifts);
+  const [musuhiNotes, setMusuhiNotes] = useState(initialMusuhiNotes);
   // むすひスケジュールは別のパネルで編集されるため、router.refresh()でこのプロパティが
   // 新しくなったら(参照が変わったら)、そちらを正として同期する(レンダー中にsetStateする、
   // Reactが推奨する「propsからstateを導出し直す」パターン)。
@@ -113,6 +116,11 @@ export default function ScheduleBuilderPanel({
   if (initialMusuhiShifts !== prevMusuhiShifts) {
     setPrevMusuhiShifts(initialMusuhiShifts);
     setMusuhiShifts(initialMusuhiShifts);
+  }
+  const [prevMusuhiNotes, setPrevMusuhiNotes] = useState(initialMusuhiNotes);
+  if (initialMusuhiNotes !== prevMusuhiNotes) {
+    setPrevMusuhiNotes(initialMusuhiNotes);
+    setMusuhiNotes(initialMusuhiNotes);
   }
   const [loading, setLoading] = useState(false);
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -135,15 +143,17 @@ export default function ScheduleBuilderPanel({
   async function handleShowMonth() {
     setLoading(true);
     setError(null);
-    const [data, notesData, musuhiData] = await Promise.all([
+    const [data, notesData, musuhiData, musuhiNotesData] = await Promise.all([
       getAllScheduleSubmissions(monthStart, monthEnd(monthStart)),
       getScheduleNotes(monthStart, monthEnd(monthStart)),
       getMusuhiShifts(monthStart, monthEnd(monthStart)),
+      getMusuhiNotes(monthStart, monthEnd(monthStart)),
     ]);
     setLoading(false);
     setEntries(data);
     setNotes(notesData);
     setMusuhiShifts(musuhiData);
+    setMusuhiNotes(musuhiNotesData);
     setExtraSlots({});
   }
 
@@ -516,6 +526,7 @@ export default function ScheduleBuilderPanel({
   for (const list of musuhiByDate.values()) {
     list.sort((a, b) => a.start_time.localeCompare(b.start_time));
   }
+  const musuhiNotesByDate = new Map(musuhiNotes.map((n) => [n.entry_date, n]));
 
   // カレンダーの見た目に合わせて、月初の曜日分だけ空マスを差し込む。
   const leadingBlanks = Array(dayOfWeekForDate(dates[0])).fill(null);
@@ -544,6 +555,8 @@ export default function ScheduleBuilderPanel({
           const dayEntries = entriesByDateKind;
           const reception = (dayEntries.get(`${date}|reception`) ?? []).filter((e) => e.confirmed);
           const lessons = (dayEntries.get(`${date}|lesson`) ?? []).filter((e) => e.confirmed);
+          const musuhiNoteEntry = musuhiNotesByDate.get(date);
+          const isMusuhiClosedDay = isClosedOnDate(date, musuhiNoteEntry?.is_closed_override);
           const musuhiDay = musuhiByDate.get(date) ?? [];
           return (
             <div
@@ -558,13 +571,19 @@ export default function ScheduleBuilderPanel({
                   </span>
                 )}
               </div>
-              {!isClosedDay && musuhiDay.length > 0 && (
-                <p className="flex items-baseline gap-x-1 overflow-hidden whitespace-nowrap rounded bg-emerald-50 px-1 text-[9px] text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">
-                  <span className="shrink-0 font-semibold">むすひ:</span>
-                  <span className="min-w-0 flex-1 overflow-hidden text-ellipsis">
-                    {musuhiDay.map((s) => `${s.staffName}${formatTimeCompact(s.start_time)}-${formatTimeCompact(s.end_time)}`).join(" ")}
-                  </span>
-                </p>
+              {isMusuhiClosedDay ? (
+                !isClosedDay && (
+                  <p className="rounded bg-neutral-100 px-1 text-[9px] text-neutral-400 dark:bg-neutral-900">むすひ: 休業</p>
+                )
+              ) : (
+                musuhiDay.length > 0 && (
+                  <p className="flex items-baseline gap-x-1 overflow-hidden whitespace-nowrap rounded bg-emerald-50 px-1 text-[9px] text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">
+                    <span className="shrink-0 font-semibold">むすひ:</span>
+                    <span className="min-w-0 flex-1 overflow-hidden text-ellipsis">
+                      {musuhiDay.map((s) => `${s.staffName}${formatTimeCompact(s.start_time)}-${formatTimeCompact(s.end_time)}`).join(" ")}
+                    </span>
+                  </p>
+                )
               )}
               {isClosedDay ? (
                 <p className="text-neutral-400" style={noteEntry?.color ? { color: noteEntry.color } : undefined}>
