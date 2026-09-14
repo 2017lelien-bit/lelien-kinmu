@@ -15,6 +15,7 @@ import { nextMonthStart, monthEnd, formatDateTimeJst } from "@/lib/date";
 import ScheduleReviewPanel from "@/components/staff/ScheduleReviewPanel";
 import ScheduleBuilderPanel from "@/components/staff/ScheduleBuilderPanel";
 import MusuhiScheduleBuilderPanel from "@/components/staff/MusuhiScheduleBuilderPanel";
+import NotifyPendingConfirmationsButton from "@/components/staff/NotifyPendingConfirmationsButton";
 import SchedulePrintLinks from "@/components/staff/SchedulePrintLinks";
 
 export default async function AdminSchedulePage() {
@@ -111,6 +112,7 @@ export default async function AdminSchedulePage() {
         <p className="text-sm text-neutral-500">
           組み立てたスケジュールを、各スタッフがマイページで「OK」と確認したかどうかの一覧です。
         </p>
+        <NotifyPendingConfirmationsButton monthStart={initialMonthStart} monthEndDate={monthEnd(initialMonthStart)} />
         <ul className="flex flex-col gap-1 text-sm">
           {confirmationStatusList.map((s) => (
             <li key={s.staffId} className="flex flex-wrap items-center gap-3">

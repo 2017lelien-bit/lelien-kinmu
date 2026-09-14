@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStaffUser, resolveActingStaffId } from "@/lib/auth";
+import { sendToStaffIds } from "@/lib/push";
 import type { ActionResult } from "@/lib/types";
 
 // 組み立てが終わった最終的なスケジュールを、スタッフ本人に「これでOKか」確認してもらう。
@@ -64,4 +65,41 @@ export async function getScheduleConfirmationStatusList(
     staffName: s.schedule_display_name || s.name,
     confirmedAt: statusByStaff.get(s.id) ?? null,
   }));
+}
+
+// 組み立て済みのスケジュールがあるのに、まだ「OK」を押していないスタッフだけに
+// アプリの通知(プッシュ通知)で確認をお願いする。
+export async function notifyPendingScheduleConfirmations(
+  monthStart: string,
+  monthEndDate: string,
+): Promise<ActionResult<{ notified: number }>> {
+  const staff = await getStaffUser();
+  if (!staff || staff.role !== "admin") return { ok: false, error: "管理者としてログインしてください。" };
+
+  const admin = createAdminClient();
+  const [{ data: confirmedEntries }, { data: confirmations }] = await Promise.all([
+    admin
+      .from("schedule_submissions")
+      .select("staff_id")
+      .eq("confirmed", true)
+      .neq("kind", "unavailable")
+      .gte("entry_date", monthStart)
+      .lte("entry_date", monthEndDate),
+    admin.from("schedule_confirmations").select("staff_id").eq("month_start", monthStart),
+  ]);
+
+  const alreadyConfirmed = new Set((confirmations ?? []).map((c) => c.staff_id as string));
+  const staffIds = Array.from(new Set((confirmedEntries ?? []).map((e) => e.staff_id as string))).filter(
+    (id) => !alreadyConfirmed.has(id),
+  );
+  if (staffIds.length === 0) return { ok: true, data: { notified: 0 } };
+
+  const monthLabel = `${Number(monthStart.slice(5, 7))}月`;
+  await sendToStaffIds(staffIds, {
+    title: "スケジュールが確定しました",
+    body: `${monthLabel}のスケジュールが確定しました。マイページでご確認ください。`,
+    url: "/staff/mypage",
+  });
+
+  return { ok: true, data: { notified: staffIds.length } };
 }

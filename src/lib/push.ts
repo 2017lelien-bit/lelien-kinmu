@@ -46,7 +46,7 @@ export async function removePushSubscription(endpoint: string): Promise<ActionRe
   return { ok: true, data: undefined };
 }
 
-async function sendToStaffIds(
+export async function sendToStaffIds(
   staffIds: string[],
   payload: { title: string; body: string; url: string; badgeCount?: number },
 ): Promise<void> {
