@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   addMusuhiShift,
+  backfillMusuhiBookingAvailability,
   deleteMusuhiShift,
   fillMusuhiFromLelienReception,
   getMusuhiNotes,
@@ -46,6 +47,8 @@ export default function MusuhiScheduleBuilderPanel({
   const [pairStaffBId, setPairStaffBId] = useState(staffList[1]?.id ?? "");
   const [filling, setFilling] = useState(false);
   const [fillMessage, setFillMessage] = useState<string | null>(null);
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillMessage, setBackfillMessage] = useState<string | null>(null);
 
   async function handleShowMonth() {
     setLoading(true);
@@ -91,6 +94,22 @@ export default function MusuhiScheduleBuilderPanel({
     setFillMessage(result.data.created > 0 ? `${result.data.created}件を反映しました。` : "反映できる新しい予定はありませんでした。");
     await handleShowMonth();
     router.refresh();
+  }
+
+  // むすひ予約サイトの予約可能時間は、通常は保存した瞬間に自動で反映されるが、環境変数を
+  // 設定する前から入っていた過去の予定は自動連携が一度も走っていない。その月をまとめて
+  // 手動で反映し直すためのボタン。
+  async function handleBackfill() {
+    setBackfilling(true);
+    setError(null);
+    setBackfillMessage(null);
+    const result = await backfillMusuhiBookingAvailability(monthStart, monthEnd(monthStart));
+    setBackfilling(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setBackfillMessage(`${formatMonthLabel(monthStart)}分(${result.data.synced}日分)をむすひ予約サイトへ反映しました。`);
   }
 
   async function handleAdd(date: string) {
@@ -231,6 +250,23 @@ export default function MusuhiScheduleBuilderPanel({
             {filling ? "反映中..." : "反映する"}
           </button>
           {fillMessage && <span className="text-xs text-neutral-500">{fillMessage}</span>}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
+        <p className="text-sm font-semibold">むすひの予約サイトへ今すぐ反映</p>
+        <p className="text-xs text-neutral-400">
+          通常は保存した瞬間にむすひ予約サイトの予約可能時間へ自動で反映されますが、それより前から入っていた予定は反映されていません。表示中の月をまとめて反映し直したいときに使ってください。
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handleBackfill}
+            disabled={backfilling}
+            className="self-start rounded-lg bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-40 dark:bg-white dark:text-black"
+          >
+            {backfilling ? "反映中..." : `${formatMonthLabel(monthStart)}分を今すぐ反映`}
+          </button>
+          {backfillMessage && <span className="text-xs text-neutral-500">{backfillMessage}</span>}
         </div>
       </div>
 

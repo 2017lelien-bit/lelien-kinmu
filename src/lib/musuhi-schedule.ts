@@ -182,6 +182,27 @@ export async function deleteMusuhiShift(id: string): Promise<ActionResult> {
   return { ok: true, data: undefined };
 }
 
+// 環境変数を設定する前から既に入っていた過去のむすひスケジュールは、自動連携の
+// 対象になっていない(保存イベントが一度も発生していないため)。管理者が任意の月を
+// 選んで手動でまとめて反映できるようにする。
+export async function backfillMusuhiBookingAvailability(monthStart: string, monthEndDate: string): Promise<ActionResult<{ synced: number }>> {
+  const adminCheck = await requireAdmin();
+  if (adminCheck) return adminCheck;
+
+  const dates: string[] = [];
+  const cursor = new Date(`${monthStart}T00:00:00Z`);
+  const end = new Date(`${monthEndDate}T00:00:00Z`);
+  while (cursor <= end) {
+    dates.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+
+  for (const date of dates) {
+    await syncMusuhiBookingAvailability(date);
+  }
+  return { ok: true, data: { synced: dates.length } };
+}
+
 function timeToMinutes(t: string): number {
   const [h, m] = t.slice(0, 5).split(":").map(Number);
   return h * 60 + m;
