@@ -552,8 +552,8 @@ export default function ScheduleBuilderPanel({
                   ))}
               </div>
               {!isClosedDay && musuhiDay.length > 0 && (
-                <p className="flex flex-wrap items-baseline gap-x-1 text-blue-600 dark:text-blue-400">
-                  <span className="text-neutral-400">むすひ:</span>
+                <p className="flex flex-wrap items-baseline gap-x-1 rounded bg-emerald-50 px-1 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">
+                  <span className="font-semibold">むすひ:</span>
                   {musuhiDay.map((s) => (
                     <span key={s.id}>
                       {s.staffName}
