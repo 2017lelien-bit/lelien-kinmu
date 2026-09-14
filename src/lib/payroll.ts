@@ -33,11 +33,11 @@ async function requireAdmin(): Promise<{ ok: false; error: string } | null> {
 //    人数の範囲もあわせて絞り込む)
 // 2. レッスン名を問わないルール(時間・人数の範囲で決まる通常クラス用)
 function matchPayRateRule(rules: PayRateRule[], entry: { lessonName: string; durationMinutes: number; headcount: number }): PayRateRule | null {
-  const normalizedName = entry.lessonName.trim().toLowerCase();
+  const normalizedName = entry.lessonName.normalize("NFKC").trim().toLowerCase();
   const named = rules.find(
     (r) =>
       r.lesson_name &&
-      r.lesson_name.trim().toLowerCase() === normalizedName &&
+      r.lesson_name.normalize("NFKC").trim().toLowerCase() === normalizedName &&
       (r.duration_minutes === null || r.duration_minutes === entry.durationMinutes) &&
       (r.min_headcount === null || entry.headcount >= r.min_headcount) &&
       (r.max_headcount === null || entry.headcount <= r.max_headcount),

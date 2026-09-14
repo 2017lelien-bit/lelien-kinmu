@@ -6,6 +6,7 @@ import { getStaffUser, resolveActingStaffId } from "@/lib/auth";
 import { resyncLeLienCategoriesForPeriod } from "@/lib/time-log";
 import { isEntryDateLocked } from "@/lib/staff-self";
 import { payPeriodForDate } from "@/lib/date";
+import { normalizeLessonName } from "@/lib/types";
 import type { ActionResult, LessonLogEntry } from "@/lib/types";
 
 function revalidateMypageAndAdmin(staffId: string) {
@@ -89,7 +90,7 @@ export async function addLessonLogEntry(
   const { error } = await admin.from("lesson_log_entries").insert({
     staff_id: acting.id,
     entry_date: input.entryDate,
-    lesson_name: input.lessonName.trim(),
+    lesson_name: normalizeLessonName(input.lessonName),
     duration_minutes: input.durationMinutes,
     headcount: input.headcount,
     start_time: input.startTime || null,
@@ -150,7 +151,7 @@ export async function updateLessonLogEntry(
     .from("lesson_log_entries")
     .update({
       entry_date: input.entryDate,
-      lesson_name: input.lessonName.trim(),
+      lesson_name: normalizeLessonName(input.lessonName),
       duration_minutes: input.durationMinutes,
       headcount: input.headcount,
       start_time: input.startTime || null,

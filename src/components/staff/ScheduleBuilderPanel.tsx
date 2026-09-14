@@ -67,8 +67,8 @@ function hoursBetween(start: string | null, end: string | null): number {
 
 // 人数によって単価が変わるレッスンは、まだ人数が分からないため段階の平均値で見積もる。
 function estimateLessonRate(rules: PayRateRule[], lessonName: string): number {
-  const normalized = lessonName.trim().toLowerCase();
-  const matches = rules.filter((r) => r.lesson_name && r.lesson_name.trim().toLowerCase() === normalized);
+  const normalized = lessonName.normalize("NFKC").trim().toLowerCase();
+  const matches = rules.filter((r) => r.lesson_name && r.lesson_name.normalize("NFKC").trim().toLowerCase() === normalized);
   if (matches.length === 0) return 0;
   return matches.reduce((sum, r) => sum + r.rate, 0) / matches.length;
 }
@@ -275,13 +275,17 @@ export default function ScheduleBuilderPanel({
   const lessonCountRows = Array.from(lessonCountByStaff.entries()).sort((a, b) => b[1] - a[1]);
 
   // クラス(レッスン名)ごとの本数。特定のクラスに偏っていないか確認できるように、多い順に並べる。
-  const lessonCountByName = new Map<string, number>();
+  // 全角/半角の違い(例:「４Dpro」と「4Dpro」)で別の名前として数えられないよう、正規化したキーでまとめる。
+  const lessonCountByName = new Map<string, { label: string; count: number }>();
   for (const e of entries) {
     if (e.kind !== "lesson" || !e.confirmed) continue;
-    const name = e.lesson_name ?? "(レッスン名未定)";
-    lessonCountByName.set(name, (lessonCountByName.get(name) ?? 0) + 1);
+    const label = e.lesson_name ?? "(レッスン名未定)";
+    const key = label.normalize("NFKC").trim().toLowerCase();
+    const existing = lessonCountByName.get(key);
+    if (existing) existing.count += 1;
+    else lessonCountByName.set(key, { label, count: 1 });
   }
-  const lessonCountByNameRows = Array.from(lessonCountByName.entries()).sort((a, b) => b[1] - a[1]);
+  const lessonCountByNameRows = Array.from(lessonCountByName.values()).sort((a, b) => b.count - a.count);
 
   // スケジュールの時点で分かる範囲での、おおよその人件費。
   // レッスンは人数で単価が変わることがあるが、まだ人数が分からないため段階の平均値で見積もる。
@@ -560,10 +564,10 @@ export default function ScheduleBuilderPanel({
         <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
           <p className="text-sm font-semibold">クラス別レッスン数(確定分・{formatMonthLabel(monthStart)})</p>
           <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-            {lessonCountByNameRows.map(([name, count]) => (
-              <li key={name} className="flex items-center gap-1">
-                <span>{name}</span>
-                <span className="font-semibold">{count}本</span>
+            {lessonCountByNameRows.map((row) => (
+              <li key={row.label} className="flex items-center gap-1">
+                <span>{row.label}</span>
+                <span className="font-semibold">{row.count}本</span>
               </li>
             ))}
           </ul>

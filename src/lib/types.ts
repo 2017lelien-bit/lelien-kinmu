@@ -5,6 +5,13 @@ export type ActionResult<T = undefined> = { ok: true; data: T } | { ok: false; e
 // スタジオで開催しているレッスンの名前一覧(レッスン実績入力のプルダウンに使う)。
 export const LESSON_NAMES = ["フロアクラス", "ハンモック", "ティシュー", "75分クラス"] as const;
 
+// 自由入力のレッスン名は、全角の数字・英字(「４Dpro」等)と半角(「4Dpro」)が混ざると
+// 見た目は同じでも別の名前として扱われ、集計や単価マッチングが分かれてしまう。
+// 保存前に必ずこれを通し、半角に揃える。
+export function normalizeLessonName(name: string): string {
+  return name.normalize("NFKC").trim();
+}
+
 // 定休日(曜日)。0=日曜〜6=土曜。スケジュール関連の画面でこの曜日は「定休日」として扱う。
 export const CLOSED_DAY_OF_WEEK = 1; // 月曜日
 

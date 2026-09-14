@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStaffUser, resolveActingStaffId } from "@/lib/auth";
 import { addDaysToDateString, dayOfWeekForDate } from "@/lib/date";
-import { CLOSED_DAY_OF_WEEK } from "@/lib/types";
+import { CLOSED_DAY_OF_WEEK, normalizeLessonName } from "@/lib/types";
 import type { ActionResult, LessonOption, ScheduleSubmission, ScheduleTemplate } from "@/lib/types";
 
 async function requireAdmin(): Promise<{ ok: false; error: string } | null> {
@@ -50,10 +50,11 @@ export async function addScheduleEntry(
   if (input.kind === "reception" && (!input.startTime || !input.endTime)) {
     return { ok: false, error: "受付は開始・終了時刻を入力してください。" };
   }
+  const normalizedLessonName = input.lessonName ? normalizeLessonName(input.lessonName) : input.lessonName;
   if (input.kind === "lesson") {
     if (!input.startTime) return { ok: false, error: "レッスンは開始時刻を入力してください。" };
     // レッスン名を決めない場合は、代わりに終了時刻(可能な時間帯)を必須にする。
-    if (!input.lessonName?.trim() && !input.endTime) {
+    if (!normalizedLessonName && !input.endTime) {
       return { ok: false, error: "レッスン名か、終了時刻(時間帯だけ伝える場合)のどちらかを入力してください。" };
     }
   }
@@ -68,8 +69,8 @@ export async function addScheduleEntry(
       // 休み希望(unavailable)は、時刻を空欄にすれば終日休み、指定すればその時間帯だけの休みになる。
       start_time: input.kind === "unavailable" ? input.startTime || null : input.startTime,
       // レッスン名を決めている場合は開始時刻だけ、決めていない場合(時間帯だけ伝える)は終了時刻も持つ。
-      end_time: input.kind === "lesson" ? (input.lessonName?.trim() ? null : input.endTime || null) : input.endTime || null,
-      lesson_name: input.kind === "lesson" ? input.lessonName?.trim() || null : null,
+      end_time: input.kind === "lesson" ? (normalizedLessonName ? null : input.endTime || null) : input.endTime || null,
+      lesson_name: input.kind === "lesson" ? normalizedLessonName || null : null,
       note: input.note || null,
     })
     .select()
@@ -149,7 +150,7 @@ export async function updateScheduleEntryTime(
     start_time: input.startTime,
     end_time: input.endTime || null,
   };
-  if (input.lessonName !== undefined) update.lesson_name = input.lessonName.trim() || null;
+  if (input.lessonName !== undefined) update.lesson_name = normalizeLessonName(input.lessonName) || null;
 
   const { error } = await admin.from("schedule_submissions").update(update).eq("id", id);
   if (error) return { ok: false, error: "更新に失敗しました。" };
@@ -169,7 +170,7 @@ export async function assignScheduleEntryLessonName(id: string, lessonName: stri
   const admin = createAdminClient();
   const { error } = await admin
     .from("schedule_submissions")
-    .update({ lesson_name: lessonName.trim() || null })
+    .update({ lesson_name: normalizeLessonName(lessonName) || null })
     .eq("id", id);
   if (error) return { ok: false, error: "更新に失敗しました。" };
 
@@ -280,7 +281,8 @@ export async function addScheduleTemplate(
   if (input.kind === "reception" && !input.endTime) {
     return { ok: false, error: "受付は終了時刻を入力してください。" };
   }
-  if (input.kind === "lesson" && !input.lessonName?.trim()) {
+  const normalizedLessonName = input.lessonName ? normalizeLessonName(input.lessonName) : input.lessonName;
+  if (input.kind === "lesson" && !normalizedLessonName) {
     return { ok: false, error: "レッスン名を入力してください。" };
   }
 
@@ -291,7 +293,7 @@ export async function addScheduleTemplate(
     kind: input.kind,
     start_time: input.startTime,
     end_time: input.kind === "reception" ? input.endTime : null,
-    lesson_name: input.kind === "lesson" ? input.lessonName?.trim() : null,
+    lesson_name: input.kind === "lesson" ? normalizedLessonName : null,
     note: input.note || null,
     weeks_of_month: input.weeksOfMonth && input.weeksOfMonth.length > 0 ? input.weeksOfMonth : null,
   });
