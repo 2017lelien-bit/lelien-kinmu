@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   addMusuhiShift,
   deleteMusuhiShift,
@@ -28,6 +29,7 @@ export default function MusuhiScheduleBuilderPanel({
   initialShifts: ShiftWithName[];
   staffList: { id: string; name: string }[];
 }) {
+  const router = useRouter();
   const [monthStart, setMonthStart] = useState(initialMonthStart);
   const [shifts, setShifts] = useState(initialShifts);
   const [loading, setLoading] = useState(false);
@@ -64,6 +66,7 @@ export default function MusuhiScheduleBuilderPanel({
     }
     setFillMessage(result.data.created > 0 ? `${result.data.created}件を反映しました。` : "反映できる新しい予定はありませんでした。");
     await handleShowMonth();
+    router.refresh();
   }
 
   async function handleAdd(date: string) {
@@ -77,6 +80,7 @@ export default function MusuhiScheduleBuilderPanel({
     }
     const staffName = staffList.find((s) => s.id === staffId)?.name ?? "";
     setShifts((prev) => [...prev, { ...result.data, staffName }]);
+    router.refresh();
   }
 
   async function handleChange(shift: ShiftWithName, patch: { staffId?: string; startTime?: string; endTime?: string }) {
@@ -102,6 +106,8 @@ export default function MusuhiScheduleBuilderPanel({
     if (!result.ok) {
       setError(result.error);
       setShifts((cur) => cur.map((s) => (s.id === shift.id ? prev : s)));
+    } else {
+      router.refresh();
     }
   }
 
@@ -113,6 +119,8 @@ export default function MusuhiScheduleBuilderPanel({
     if (!result.ok) {
       setError(result.error);
       setShifts(prevShifts);
+    } else {
+      router.refresh();
     }
   }
 

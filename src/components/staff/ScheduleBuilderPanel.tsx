@@ -105,6 +105,14 @@ export default function ScheduleBuilderPanel({
   const [entries, setEntries] = useState(initialEntries);
   const [notes, setNotes] = useState(initialNotes);
   const [musuhiShifts, setMusuhiShifts] = useState(initialMusuhiShifts);
+  // むすひスケジュールは別のパネルで編集されるため、router.refresh()でこのプロパティが
+  // 新しくなったら(参照が変わったら)、そちらを正として同期する(レンダー中にsetStateする、
+  // Reactが推奨する「propsからstateを導出し直す」パターン)。
+  const [prevMusuhiShifts, setPrevMusuhiShifts] = useState(initialMusuhiShifts);
+  if (initialMusuhiShifts !== prevMusuhiShifts) {
+    setPrevMusuhiShifts(initialMusuhiShifts);
+    setMusuhiShifts(initialMusuhiShifts);
+  }
   const [loading, setLoading] = useState(false);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
