@@ -10,12 +10,14 @@ import {
   updateScheduleEntryTime,
 } from "@/lib/schedule-submissions";
 import { getScheduleNotes, upsertScheduleNote, type ScheduleNote } from "@/lib/schedule-notes";
+import { getMusuhiShifts, type MusuhiShift } from "@/lib/musuhi-schedule";
 import type { LessonColor } from "@/lib/lesson-colors";
 import { dayOfWeekForDate, monthEnd } from "@/lib/date";
 import { CLOSED_DAY_OF_WEEK, DAY_OF_WEEK_LABEL, isClosedOnDate } from "@/lib/types";
 import type { LessonOption, PayRateRule, ScheduleSubmission } from "@/lib/types";
 
 type EntryWithName = ScheduleSubmission & { staffName: string };
+type MusuhiShiftWithName = MusuhiShift & { staffName: string };
 
 function formatMonthLabel(monthStart: string): string {
   const [y, m] = monthStart.split("-");
@@ -83,6 +85,9 @@ export default function ScheduleBuilderPanel({
   lessonColorRows,
   payRateRulesByStaff,
   leLienHourlyRateByStaff,
+  musuhiHourlyRateByStaff,
+  initialMusuhiShifts,
+  costExcludedStaffIds,
 }: {
   initialMonthStart: string;
   initialEntries: EntryWithName[];
@@ -92,10 +97,14 @@ export default function ScheduleBuilderPanel({
   lessonColorRows: LessonColor[];
   payRateRulesByStaff: Record<string, PayRateRule[]>;
   leLienHourlyRateByStaff: Record<string, number>;
+  musuhiHourlyRateByStaff: Record<string, number>;
+  initialMusuhiShifts: MusuhiShiftWithName[];
+  costExcludedStaffIds: string[];
 }) {
   const [monthStart, setMonthStart] = useState(initialMonthStart);
   const [entries, setEntries] = useState(initialEntries);
   const [notes, setNotes] = useState(initialNotes);
+  const [musuhiShifts, setMusuhiShifts] = useState(initialMusuhiShifts);
   const [loading, setLoading] = useState(false);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -117,13 +126,15 @@ export default function ScheduleBuilderPanel({
   async function handleShowMonth() {
     setLoading(true);
     setError(null);
-    const [data, notesData] = await Promise.all([
+    const [data, notesData, musuhiData] = await Promise.all([
       getAllScheduleSubmissions(monthStart, monthEnd(monthStart)),
       getScheduleNotes(monthStart, monthEnd(monthStart)),
+      getMusuhiShifts(monthStart, monthEnd(monthStart)),
     ]);
     setLoading(false);
     setEntries(data);
     setNotes(notesData);
+    setMusuhiShifts(musuhiData);
     setExtraSlots({});
   }
 
@@ -290,21 +301,24 @@ export default function ScheduleBuilderPanel({
   }
   const lessonCountByNameRows = Array.from(lessonCountByName.values()).sort((a, b) => b.count - a.count);
 
-  // スケジュールの時点で分かる範囲での、おおよその人件費。
+  // スケジュールの時点で分かる範囲での、おおよその人件費(オーナー自身の時間は除く)。
   // 受付は時給×時間で計算するが、レッスンと時間が重なっている場合の差し引き(実績入力時に自動適用)は含めていない。
+  const excludedStaffIds = new Set(costExcludedStaffIds);
   interface StaffCostEstimate {
     name: string;
     lessonCost: number;
     receptionCost: number;
+    musuhiCost: number;
     hasUnpriced: boolean;
   }
   const costByStaff = new Map<string, StaffCostEstimate>();
   for (const e of entries) {
-    if (!e.confirmed) continue;
+    if (!e.confirmed || excludedStaffIds.has(e.staff_id)) continue;
     const current = costByStaff.get(e.staff_id) ?? {
       name: e.staffName,
       lessonCost: 0,
       receptionCost: 0,
+      musuhiCost: 0,
       hasUnpriced: false,
     };
     if (e.kind === "lesson" && e.lesson_name) {
@@ -317,8 +331,21 @@ export default function ScheduleBuilderPanel({
     }
     costByStaff.set(e.staff_id, current);
   }
+  for (const s of musuhiShifts) {
+    if (excludedStaffIds.has(s.staff_id)) continue;
+    const current = costByStaff.get(s.staff_id) ?? {
+      name: s.staffName,
+      lessonCost: 0,
+      receptionCost: 0,
+      musuhiCost: 0,
+      hasUnpriced: false,
+    };
+    const rate = musuhiHourlyRateByStaff[s.staff_id] ?? 0;
+    current.musuhiCost += hoursBetween(s.start_time, s.end_time) * rate;
+    costByStaff.set(s.staff_id, current);
+  }
   const costRows = Array.from(costByStaff.values())
-    .map((c) => ({ ...c, total: c.lessonCost + c.receptionCost }))
+    .map((c) => ({ ...c, total: c.lessonCost + c.receptionCost + c.musuhiCost }))
     .sort((a, b) => b.total - a.total);
   const grandTotal = costRows.reduce((sum, c) => sum + c.total, 0);
   const hasUnpriced = costRows.some((c) => c.hasUnpriced);
@@ -604,7 +631,8 @@ export default function ScheduleBuilderPanel({
               <li key={c.name} className="flex flex-wrap items-center gap-3">
                 <span>{c.name}</span>
                 <span className="text-neutral-400">
-                  レッスン ¥{Math.round(c.lessonCost).toLocaleString()} + 受付 ¥{Math.round(c.receptionCost).toLocaleString()}
+                  レッスン ¥{Math.round(c.lessonCost).toLocaleString()} + 受付(Le lien) ¥{Math.round(c.receptionCost).toLocaleString()}
+                  {c.musuhiCost > 0 && ` + 受付(むすひ) ¥${Math.round(c.musuhiCost).toLocaleString()}`}
                 </span>
                 <span className="ml-auto font-semibold">¥{Math.round(c.total).toLocaleString()}</span>
               </li>
@@ -614,7 +642,7 @@ export default function ScheduleBuilderPanel({
             合計: ¥{Math.round(grandTotal).toLocaleString()}
           </p>
           <p className="text-xs text-neutral-400">
-            ※あくまで概算です。スケジュールのクラス名(Fアクティブ等)は実績入力の単価ルール(フロアクラス/ハンモック等の大分類)と紐付いていないため、レッスン単価はそのスタッフの単価ルール全体の平均額を使っています。受付はレッスンと時間が重なる場合の差し引きも含まれていません。実際の金額は実績入力後の給与明細でご確認ください。
+            ※あくまで概算です。スケジュールのクラス名(Fアクティブ等)は実績入力の単価ルール(フロアクラス/ハンモック等の大分類)と紐付いていないため、レッスン単価はそのスタッフの単価ルール全体の平均額を使っています。受付はレッスンと時間が重なる場合の差し引きも含まれていません。オーナー自身の時間はこの合計に含めていません。実際の金額は実績入力後の給与明細でご確認ください。
             {hasUnpriced && "単価ルールが1件も設定されていないスタッフのレッスンは0円として計算されています。"}
           </p>
         </div>

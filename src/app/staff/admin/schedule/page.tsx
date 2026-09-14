@@ -7,7 +7,7 @@ import {
 } from "@/lib/schedule-submissions";
 import { getScheduleNotes } from "@/lib/schedule-notes";
 import { getLessonColors } from "@/lib/lesson-colors";
-import { getLeLienHourlyRateByStaff, getPayRateRulesByStaff } from "@/lib/payroll";
+import { getLeLienHourlyRateByStaff, getMusuhiHourlyRateByStaff, getPayRateRulesByStaff } from "@/lib/payroll";
 import { getMusuhiShifts } from "@/lib/musuhi-schedule";
 import { getAllStaff } from "@/lib/staff-admin";
 import { nextMonthStart, monthEnd } from "@/lib/date";
@@ -31,6 +31,7 @@ export default async function AdminSchedulePage() {
     lessonColorRows,
     payRateRulesByStaff,
     leLienHourlyRateByStaff,
+    musuhiHourlyRateByStaff,
   ] = await Promise.all([
     getAllScheduleSubmissions(initialMonthStart, monthEnd(initialMonthStart)),
     getScheduleSubmissionStatusList(initialMonthStart),
@@ -41,10 +42,13 @@ export default async function AdminSchedulePage() {
     getLessonColors(),
     getPayRateRulesByStaff(),
     getLeLienHourlyRateByStaff(),
+    getMusuhiHourlyRateByStaff(),
   ]);
   const staffList = allStaff
     .filter((s) => s.is_active)
     .map((s) => ({ id: s.id, name: s.schedule_display_name || s.name }));
+  // 人件費の概算からは、オーナー(管理者)自身の時間は除く。
+  const costExcludedStaffIds = allStaff.filter((s) => s.role === "admin").map((s) => s.id);
 
   return (
     <div className="flex max-w-6xl flex-col gap-8">
@@ -70,6 +74,9 @@ export default async function AdminSchedulePage() {
           lessonColorRows={lessonColorRows}
           payRateRulesByStaff={payRateRulesByStaff}
           leLienHourlyRateByStaff={leLienHourlyRateByStaff}
+          musuhiHourlyRateByStaff={musuhiHourlyRateByStaff}
+          initialMusuhiShifts={musuhiShifts}
+          costExcludedStaffIds={costExcludedStaffIds}
         />
       </div>
 

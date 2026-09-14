@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   addMusuhiShift,
   deleteMusuhiShift,
+  fillMusuhiFromLelienReception,
   getMusuhiShifts,
   updateMusuhiShift,
   type MusuhiShift,
@@ -32,6 +33,11 @@ export default function MusuhiScheduleBuilderPanel({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  // Le lienの受付を参考に埋める機能。2人が入れ替わる組み合わせを選ぶ。
+  const [pairStaffAId, setPairStaffAId] = useState(staffList[0]?.id ?? "");
+  const [pairStaffBId, setPairStaffBId] = useState(staffList[1]?.id ?? "");
+  const [filling, setFilling] = useState(false);
+  const [fillMessage, setFillMessage] = useState<string | null>(null);
 
   async function handleShowMonth() {
     setLoading(true);
@@ -39,6 +45,25 @@ export default function MusuhiScheduleBuilderPanel({
     const data = await getMusuhiShifts(monthStart, monthEnd(monthStart));
     setLoading(false);
     setShifts(data);
+  }
+
+  async function handleFillFromLelien() {
+    setFilling(true);
+    setError(null);
+    setFillMessage(null);
+    const result = await fillMusuhiFromLelienReception({
+      monthStart,
+      monthEnd: monthEnd(monthStart),
+      staffAId: pairStaffAId,
+      staffBId: pairStaffBId,
+    });
+    setFilling(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setFillMessage(result.data.created > 0 ? `${result.data.created}件を反映しました。` : "反映できる新しい予定はありませんでした。");
+    await handleShowMonth();
   }
 
   async function handleAdd(date: string) {
@@ -129,6 +154,52 @@ export default function MusuhiScheduleBuilderPanel({
       </div>
 
       <p className="text-xs text-neutral-400">日付ごとに「+追加」で受付枠を作り、担当者と時間を選んでください。変更は自動で保存されます。</p>
+
+      <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
+        <p className="text-sm font-semibold">Le lienの受付を参考に埋める</p>
+        <p className="text-xs text-neutral-400">
+          選んだ2人が入れ替わる関係として、Le lienの受付に入っている時間と同じ時間で、むすひ側にまだ何も入っていない枠だけ自動で追加します(すでに何か入っている枠はそのまま。追加後に自由に微調整できます)。
+        </p>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="flex flex-col gap-1 text-xs">
+            Le lienが
+            <select
+              value={pairStaffAId}
+              onChange={(e) => setPairStaffAId(e.target.value)}
+              className="rounded-lg border border-neutral-200 px-2 py-1.5 text-sm dark:border-neutral-800"
+            >
+              {staffList.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="pb-2 text-xs text-neutral-400">のとき、むすひは</span>
+          <label className="flex flex-col gap-1 text-xs">
+            &nbsp;
+            <select
+              value={pairStaffBId}
+              onChange={(e) => setPairStaffBId(e.target.value)}
+              className="rounded-lg border border-neutral-200 px-2 py-1.5 text-sm dark:border-neutral-800"
+            >
+              {staffList.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            onClick={handleFillFromLelien}
+            disabled={filling || !pairStaffAId || !pairStaffBId}
+            className="rounded-lg bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-40 dark:bg-white dark:text-black"
+          >
+            {filling ? "反映中..." : "反映する"}
+          </button>
+          {fillMessage && <span className="text-xs text-neutral-500">{fillMessage}</span>}
+        </div>
+      </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 

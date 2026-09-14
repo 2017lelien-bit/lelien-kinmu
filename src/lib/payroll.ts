@@ -561,3 +561,18 @@ export async function getLeLienHourlyRateByStaff(): Promise<Record<string, numbe
   }
   return map;
 }
+
+// むすひスケジュールの受付時間からも人件費を見積もれるように、スタッフごとの「むすひ」時給を返す。
+export async function getMusuhiHourlyRateByStaff(): Promise<Record<string, number>> {
+  const adminCheck = await requireAdmin();
+  if (adminCheck) return {};
+
+  const admin = createAdminClient();
+  const { data } = await admin.from("pay_categories").select("staff_id, name, rate, unit_type").eq("unit_type", "hourly");
+
+  const map: Record<string, number> = {};
+  for (const row of data ?? []) {
+    if (row.name.trim().includes("むすひ")) map[row.staff_id] = row.rate;
+  }
+  return map;
+}
