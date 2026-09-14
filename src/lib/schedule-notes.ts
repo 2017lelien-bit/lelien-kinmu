@@ -9,6 +9,7 @@ export interface ScheduleNote {
   entry_date: string;
   is_closed_override: boolean | null;
   note: string | null;
+  color: string | null;
 }
 
 export async function getScheduleNotes(monthStart: string, monthEnd: string): Promise<ScheduleNote[]> {
@@ -28,6 +29,7 @@ export async function upsertScheduleNote(input: {
   entryDate: string;
   isClosedOverride: boolean | null;
   note: string;
+  color?: string | null;
 }): Promise<ActionResult> {
   const staff = await getStaffUser();
   if (!staff || staff.role !== "admin") return { ok: false, error: "管理者としてログインしてください。" };
@@ -38,6 +40,7 @@ export async function upsertScheduleNote(input: {
       entry_date: input.entryDate,
       is_closed_override: input.isClosedOverride,
       note: input.note.trim() || null,
+      color: input.color ?? null,
     },
     { onConflict: "entry_date" },
   );

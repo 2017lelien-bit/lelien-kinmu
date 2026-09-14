@@ -65,12 +65,13 @@ function hoursBetween(start: string | null, end: string | null): number {
   return Math.max(0, (eh * 60 + em - (sh * 60 + sm)) / 60);
 }
 
-// 人数によって単価が変わるレッスンは、まだ人数が分からないため段階の平均値で見積もる。
-function estimateLessonRate(rules: PayRateRule[], lessonName: string): number {
-  const normalized = lessonName.normalize("NFKC").trim().toLowerCase();
-  const matches = rules.filter((r) => r.lesson_name && r.lesson_name.normalize("NFKC").trim().toLowerCase() === normalized);
-  if (matches.length === 0) return 0;
-  return matches.reduce((sum, r) => sum + r.rate, 0) / matches.length;
+// スケジュール上のクラス名(例:「Fアクティブ」「バンジーフィットネス」)は集客・掲示用の名称で、
+// 実績入力(給与計算のもと)の単価ルールは「フロアクラス」「ハンモック」等の大分類でしか設定されて
+// いないため、クラス名では単価に一切マッチしない。そのため、そのスタッフの単価ルール全体の
+// 平均額を「1レッスンあたりの目安単価」として使う(実績入力後の実際の金額とは異なる)。
+function estimateStaffLessonRate(rules: PayRateRule[]): number {
+  if (rules.length === 0) return 0;
+  return rules.reduce((sum, r) => sum + r.rate, 0) / rules.length;
 }
 
 export default function ScheduleBuilderPanel({
@@ -126,20 +127,22 @@ export default function ScheduleBuilderPanel({
     setExtraSlots({});
   }
 
-  // 休館日の上書き(臨時休業/臨時営業)とイベントなどのメモを保存する。
-  async function handleNoteSave(date: string, patch: { isClosedOverride?: boolean | null; note?: string }) {
+  // 休館日の上書き(臨時休業/臨時営業)とイベントなどのメモ・その表示色を保存する。
+  async function handleNoteSave(date: string, patch: { isClosedOverride?: boolean | null; note?: string; color?: string | null }) {
     setError(null);
     const existing = notes.find((n) => n.entry_date === date);
     const nextNote: ScheduleNote = {
       entry_date: date,
       is_closed_override: patch.isClosedOverride !== undefined ? patch.isClosedOverride : (existing?.is_closed_override ?? null),
       note: patch.note !== undefined ? patch.note : (existing?.note ?? null),
+      color: patch.color !== undefined ? patch.color : (existing?.color ?? null),
     };
     setNotes((prev) => [...prev.filter((n) => n.entry_date !== date), nextNote]);
     const result = await upsertScheduleNote({
       entryDate: date,
       isClosedOverride: nextNote.is_closed_override,
       note: nextNote.note ?? "",
+      color: nextNote.color,
     });
     if (!result.ok) {
       setError(result.error);
@@ -288,7 +291,6 @@ export default function ScheduleBuilderPanel({
   const lessonCountByNameRows = Array.from(lessonCountByName.values()).sort((a, b) => b.count - a.count);
 
   // スケジュールの時点で分かる範囲での、おおよその人件費。
-  // レッスンは人数で単価が変わることがあるが、まだ人数が分からないため段階の平均値で見積もる。
   // 受付は時給×時間で計算するが、レッスンと時間が重なっている場合の差し引き(実績入力時に自動適用)は含めていない。
   interface StaffCostEstimate {
     name: string;
@@ -306,7 +308,7 @@ export default function ScheduleBuilderPanel({
       hasUnpriced: false,
     };
     if (e.kind === "lesson" && e.lesson_name) {
-      const rate = estimateLessonRate(payRateRulesByStaff[e.staff_id] ?? [], e.lesson_name);
+      const rate = estimateStaffLessonRate(payRateRulesByStaff[e.staff_id] ?? []);
       if (rate === 0) current.hasUnpriced = true;
       current.lessonCost += rate;
     } else if (e.kind === "reception") {
@@ -511,10 +513,16 @@ export default function ScheduleBuilderPanel({
                   ))}
               </div>
               {isClosedDay ? (
-                <p className="text-neutral-400">{noteEntry?.note || "定休日"}</p>
+                <p className="text-neutral-400" style={noteEntry?.color ? { color: noteEntry.color } : undefined}>
+                  {noteEntry?.note || "定休日"}
+                </p>
               ) : (
                 <>
-                  {noteEntry?.note && <p className="italic text-neutral-500">{noteEntry.note}</p>}
+                  {noteEntry?.note && (
+                    <p className="italic text-neutral-500" style={noteEntry.color ? { color: noteEntry.color } : undefined}>
+                      {noteEntry.note}
+                    </p>
+                  )}
                   {lessons.map((e) => {
                     const name = e.lesson_name ?? "(レッスン名未定)";
                     return (
@@ -606,8 +614,8 @@ export default function ScheduleBuilderPanel({
             合計: ¥{Math.round(grandTotal).toLocaleString()}
           </p>
           <p className="text-xs text-neutral-400">
-            ※あくまで概算です。人数で単価が変わるレッスンは段階の平均値で計算しており、レッスンと受付の時間が重なる場合の差し引きも含まれていません(実績入力後の実際の金額とは異なります)。
-            {hasUnpriced && "また、単価が設定されていないレッスンは0円として計算されています。"}
+            ※あくまで概算です。スケジュールのクラス名(Fアクティブ等)は実績入力の単価ルール(フロアクラス/ハンモック等の大分類)と紐付いていないため、レッスン単価はそのスタッフの単価ルール全体の平均額を使っています。受付はレッスンと時間が重なる場合の差し引きも含まれていません。実際の金額は実績入力後の給与明細でご確認ください。
+            {hasUnpriced && "単価ルールが1件も設定されていないスタッフのレッスンは0円として計算されています。"}
           </p>
         </div>
       )}
@@ -655,13 +663,22 @@ export default function ScheduleBuilderPanel({
                     <option value="closed">臨時休業</option>
                     <option value="open">臨時営業</option>
                   </select>
-                  <input
-                    type="text"
-                    defaultValue={noteEntry?.note ?? ""}
-                    placeholder="イベント等メモ"
-                    onBlur={(e) => handleNoteSave(date, { note: e.target.value })}
-                    className="w-full rounded border border-neutral-200 px-0.5 text-[9px] dark:border-neutral-800"
-                  />
+                  <div className="flex items-center gap-0.5">
+                    <input
+                      type="text"
+                      defaultValue={noteEntry?.note ?? ""}
+                      placeholder="イベント等メモ"
+                      onBlur={(e) => handleNoteSave(date, { note: e.target.value })}
+                      className="w-full min-w-0 rounded border border-neutral-200 px-0.5 text-[9px] dark:border-neutral-800"
+                    />
+                    <input
+                      type="color"
+                      title="メモの文字色"
+                      value={noteEntry?.color ?? "#737373"}
+                      onChange={(e) => handleNoteSave(date, { color: e.target.value })}
+                      className="h-4 w-4 shrink-0 rounded border border-neutral-200 p-0 dark:border-neutral-800"
+                    />
+                  </div>
                   {isClosedDay ? (
                     <p className="text-[10px] text-neutral-400">休館</p>
                   ) : (

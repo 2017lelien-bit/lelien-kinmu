@@ -169,10 +169,16 @@ export default async function SchedulePrintPage({
                   ))}
               </div>
               {isClosedDay ? (
-                <p className="text-neutral-400">{noteEntry?.note || "定休日"}</p>
+                <p className="text-neutral-400" style={noteEntry?.color ? { color: noteEntry.color } : undefined}>
+                  {noteEntry?.note || "定休日"}
+                </p>
               ) : (
                 <>
-                  {noteEntry?.note && <p className="italic text-neutral-500">{noteEntry.note}</p>}
+                  {noteEntry?.note && (
+                    <p className="italic text-neutral-500" style={noteEntry.color ? { color: noteEntry.color } : undefined}>
+                      {noteEntry.note}
+                    </p>
+                  )}
                   {lessons.map((e) => {
                     const name = e.lesson_name ?? "(レッスン名未定)";
                     return (

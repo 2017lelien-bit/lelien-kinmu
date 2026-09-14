@@ -339,7 +339,14 @@ export default function ScheduleSubmissionForm({
                 {isClosedDay && !isUnavailable && <span className="text-neutral-400">定休</span>}
                 {isUnavailable && <span className="text-red-600">休</span>}
                 {otherCount > 0 && <span className="text-neutral-500">{otherCount}件</span>}
-                {noteEntry?.note && <span className="truncate text-[9px] text-blue-600">{noteEntry.note}</span>}
+                {noteEntry?.note && (
+                  <span
+                    className={`truncate text-[9px] ${noteEntry.color ? "" : "text-blue-600"}`}
+                    style={noteEntry.color ? { color: noteEntry.color } : undefined}
+                  >
+                    {noteEntry.note}
+                  </span>
+                )}
               </button>
             );
           })}
