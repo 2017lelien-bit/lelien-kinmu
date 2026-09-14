@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStaffUser, resolveActingStaffId } from "@/lib/auth";
+import { invalidateScheduleConfirmation } from "@/lib/schedule-confirmations";
 import { dayOfWeekForDate } from "@/lib/date";
 import type { ActionResult } from "@/lib/types";
 
@@ -127,6 +128,7 @@ export async function addMusuhiShift(input: {
     .select()
     .single();
   if (error || !data) return { ok: false, error: "登録に失敗しました。" };
+  await invalidateScheduleConfirmation(input.staffId, input.entryDate);
 
   revalidatePath("/staff/admin/schedule");
   return { ok: true, data: data as MusuhiShift };
@@ -145,8 +147,15 @@ export async function updateMusuhiShift(
   if (input.endTime !== undefined) update.end_time = input.endTime;
 
   const admin = createAdminClient();
+  const { data: existing } = await admin.from("musuhi_shifts").select("staff_id, entry_date").eq("id", id).maybeSingle();
   const { error } = await admin.from("musuhi_shifts").update(update).eq("id", id);
   if (error) return { ok: false, error: "更新に失敗しました。" };
+  if (existing) {
+    await invalidateScheduleConfirmation(existing.staff_id, existing.entry_date);
+    if (input.staffId !== undefined && input.staffId !== existing.staff_id) {
+      await invalidateScheduleConfirmation(input.staffId, existing.entry_date);
+    }
+  }
 
   revalidatePath("/staff/admin/schedule");
   return { ok: true, data: undefined };
@@ -157,8 +166,10 @@ export async function deleteMusuhiShift(id: string): Promise<ActionResult> {
   if (adminCheck) return adminCheck;
 
   const admin = createAdminClient();
+  const { data: existing } = await admin.from("musuhi_shifts").select("staff_id, entry_date").eq("id", id).maybeSingle();
   const { error } = await admin.from("musuhi_shifts").delete().eq("id", id);
   if (error) return { ok: false, error: "削除に失敗しました。" };
+  if (existing) await invalidateScheduleConfirmation(existing.staff_id, existing.entry_date);
 
   revalidatePath("/staff/admin/schedule");
   return { ok: true, data: undefined };
@@ -223,6 +234,11 @@ export async function fillMusuhiFromLelienReception(input: {
   if (rows.length > 0) {
     const { error } = await admin.from("musuhi_shifts").insert(rows);
     if (error) return { ok: false, error: "反映に失敗しました。" };
+    const affected = new Set(rows.map((r) => `${r.staff_id}|${r.entry_date}`));
+    for (const key of affected) {
+      const [staffId, entryDate] = key.split("|");
+      await invalidateScheduleConfirmation(staffId, entryDate);
+    }
   }
 
   revalidatePath("/staff/admin/schedule");

@@ -41,6 +41,18 @@ export async function confirmMonthlySchedule(monthStart: string, staffId?: strin
   return { ok: true, data: undefined };
 }
 
+// スタッフが一度「OK」を押した後で、管理者がその月のスケジュール(Le lien・むすひとも)を
+// 変更した場合、確認済みの状態を解除し、もう一度確認してもらうようにする。
+// 呼び出し側は、変更があった予定の staff_id と entry_date(またはmonth_start)を渡すだけでよい。
+export async function invalidateScheduleConfirmation(staffId: string, entryDateOrMonthStart: string): Promise<void> {
+  const monthStart = `${entryDateOrMonthStart.slice(0, 7)}-01`;
+  const admin = createAdminClient();
+  await admin.from("schedule_confirmations").delete().eq("staff_id", staffId).eq("month_start", monthStart);
+  revalidatePath("/staff/mypage");
+  revalidatePath(`/staff/admin/staff/${staffId}`);
+  revalidatePath("/staff/admin/schedule");
+}
+
 // 管理者が、組み立てた月のスケジュールについて誰が確認済みかをまとめて見られるようにする。
 export async function getScheduleConfirmationStatusList(
   monthStart: string,

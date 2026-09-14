@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getStaffUser, resolveActingStaffId } from "@/lib/auth";
 import { addDaysToDateString, dayOfWeekForDate } from "@/lib/date";
 import { CLOSED_DAY_OF_WEEK, normalizeLessonName } from "@/lib/types";
+import { invalidateScheduleConfirmation } from "@/lib/schedule-confirmations";
 import type { ActionResult, LessonOption, ScheduleSubmission, ScheduleTemplate } from "@/lib/types";
 
 async function requireAdmin(): Promise<{ ok: false; error: string } | null> {
@@ -128,8 +129,10 @@ export async function setScheduleEntryConfirmed(id: string, confirmed: boolean):
   if (adminCheck) return adminCheck;
 
   const admin = createAdminClient();
+  const { data: existing } = await admin.from("schedule_submissions").select("staff_id, entry_date").eq("id", id).maybeSingle();
   const { error } = await admin.from("schedule_submissions").update({ confirmed }).eq("id", id);
   if (error) return { ok: false, error: "更新に失敗しました。" };
+  if (existing) await invalidateScheduleConfirmation(existing.staff_id, existing.entry_date);
 
   revalidatePath("/staff/admin/schedule");
   return { ok: true, data: undefined };
@@ -146,6 +149,7 @@ export async function updateScheduleEntryTime(
   if (adminCheck) return adminCheck;
 
   const admin = createAdminClient();
+  const { data: existing } = await admin.from("schedule_submissions").select("staff_id, entry_date").eq("id", id).maybeSingle();
   const update: { start_time: string; end_time: string | null; lesson_name?: string | null } = {
     start_time: input.startTime,
     end_time: input.endTime || null,
@@ -154,6 +158,7 @@ export async function updateScheduleEntryTime(
 
   const { error } = await admin.from("schedule_submissions").update(update).eq("id", id);
   if (error) return { ok: false, error: "更新に失敗しました。" };
+  if (existing) await invalidateScheduleConfirmation(existing.staff_id, existing.entry_date);
 
   revalidatePath("/staff/admin/schedule");
   return { ok: true, data: undefined };
@@ -168,11 +173,13 @@ export async function assignScheduleEntryLessonName(id: string, lessonName: stri
   if (adminCheck) return adminCheck;
 
   const admin = createAdminClient();
+  const { data: existing } = await admin.from("schedule_submissions").select("staff_id, entry_date").eq("id", id).maybeSingle();
   const { error } = await admin
     .from("schedule_submissions")
     .update({ lesson_name: normalizeLessonName(lessonName) || null })
     .eq("id", id);
   if (error) return { ok: false, error: "更新に失敗しました。" };
+  if (existing) await invalidateScheduleConfirmation(existing.staff_id, existing.entry_date);
 
   revalidatePath("/staff/admin/schedule");
   return { ok: true, data: undefined };
@@ -185,8 +192,14 @@ export async function updateScheduleEntryStaff(id: string, staffId: string): Pro
   if (adminCheck) return adminCheck;
 
   const admin = createAdminClient();
+  const { data: existing } = await admin.from("schedule_submissions").select("staff_id, entry_date").eq("id", id).maybeSingle();
   const { error } = await admin.from("schedule_submissions").update({ staff_id: staffId }).eq("id", id);
   if (error) return { ok: false, error: "更新に失敗しました。" };
+  if (existing) {
+    // 差し替え前のスタッフも、差し替え後のスタッフも、どちらも確認をやり直してもらう。
+    await invalidateScheduleConfirmation(existing.staff_id, existing.entry_date);
+    await invalidateScheduleConfirmation(staffId, existing.entry_date);
+  }
 
   revalidatePath("/staff/admin/schedule");
   return { ok: true, data: undefined };
