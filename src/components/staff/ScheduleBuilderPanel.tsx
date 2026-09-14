@@ -15,6 +15,7 @@ import type { LessonColor } from "@/lib/lesson-colors";
 import { dayOfWeekForDate, monthEnd } from "@/lib/date";
 import { CLOSED_DAY_OF_WEEK, DAY_OF_WEEK_LABEL, isClosedOnDate } from "@/lib/types";
 import type { LessonOption, PayRateRule, ScheduleSubmission } from "@/lib/types";
+import SaveImageButton from "@/components/staff/SaveImageButton";
 
 type EntryWithName = ScheduleSubmission & { staffName: string };
 type MusuhiShiftWithName = MusuhiShift & { staffName: string };
@@ -838,9 +839,12 @@ export default function ScheduleBuilderPanel({
     </div>
 
       <div className="flex flex-col gap-2 border-t border-neutral-200 pt-4 dark:border-neutral-800">
-        <p className="text-sm font-semibold text-neutral-500">プレビュー(このまま印刷した場合の見た目・確定済みの予定のみ表示)</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-sm font-semibold text-neutral-500">プレビュー(このまま印刷した場合の見た目・確定済みの予定のみ表示)</p>
+          <SaveImageButton targetId="lelien-musuhi-preview" filename={`${monthStart.slice(0, 7)}-schedule-preview.png`} />
+        </div>
         <div className="overflow-x-auto">
-          <div className="min-w-[700px]">{renderPreview()}</div>
+          <div id="lelien-musuhi-preview" className="min-w-[700px] bg-white p-2">{renderPreview()}</div>
         </div>
       </div>
     </div>

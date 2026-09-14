@@ -14,7 +14,8 @@ export default function SaveImageButton({ targetId, filename }: { targetId: stri
     try {
       const target = document.getElementById(targetId);
       if (!target) throw new Error("対象が見つかりません。");
-      const { default: html2canvas } = await import("html2canvas");
+      // Tailwind(oklch等)の色をそのまま解釈できるフォーク版を使う(本家html2canvasは対応していない)。
+      const { default: html2canvas } = await import("html2canvas-pro");
       const canvas = await html2canvas(target, {
         backgroundColor: "#ffffff",
         scale: 2,
@@ -25,7 +26,8 @@ export default function SaveImageButton({ targetId, filename }: { targetId: stri
       link.href = dataUrl;
       link.download = filename;
       link.click();
-    } catch {
+    } catch (e) {
+      console.error("[SaveImageButton] failed", e);
       setError("画像の保存に失敗しました。");
     }
     setSaving(false);
