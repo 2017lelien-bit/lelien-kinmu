@@ -3,7 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStaffUser } from "@/lib/auth";
+import { dayOfWeekForDate } from "@/lib/date";
 import type { ActionResult } from "@/lib/types";
+
+// むすひの営業終了時刻(平日20:00・土日18:00)。Le lienの受付を参考に埋めるとき、
+// Le lien側の終了時刻がこれより遅い場合は、むすひの営業時間に合わせて短くする。
+function musuhiClosingTime(dateStr: string): string {
+  const dow = dayOfWeekForDate(dateStr);
+  return dow === 0 || dow === 6 ? "18:00:00" : "20:00:00";
+}
 
 export interface MusuhiShift {
   id: string;
@@ -156,7 +164,9 @@ export async function fillMusuhiFromLelienReception(input: {
       (s) => s.entry_date === r.entry_date && s.staff_id === pairedStaffId && timesOverlap(r.start_time!, r.end_time!, s.start_time, s.end_time),
     );
     if (alreadyCovered) continue;
-    rows.push({ staff_id: pairedStaffId, entry_date: r.entry_date, start_time: r.start_time, end_time: r.end_time });
+    const closing = musuhiClosingTime(r.entry_date);
+    const cappedEnd = timeToMinutes(r.end_time) > timeToMinutes(closing) ? closing : r.end_time;
+    rows.push({ staff_id: pairedStaffId, entry_date: r.entry_date, start_time: r.start_time, end_time: cappedEnd });
   }
 
   if (rows.length > 0) {

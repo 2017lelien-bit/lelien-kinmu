@@ -497,6 +497,17 @@ export default function ScheduleBuilderPanel({
 
   const notesByDate = new Map(notes.map((n) => [n.entry_date, n]));
 
+  // プレビューでLe lienとむすひの受付を同じ場所で見比べられるように、日付ごとにまとめる。
+  const musuhiByDate = new Map<string, MusuhiShiftWithName[]>();
+  for (const s of musuhiShifts) {
+    const list = musuhiByDate.get(s.entry_date) ?? [];
+    list.push(s);
+    musuhiByDate.set(s.entry_date, list);
+  }
+  for (const list of musuhiByDate.values()) {
+    list.sort((a, b) => a.start_time.localeCompare(b.start_time));
+  }
+
   // カレンダーの見た目に合わせて、月初の曜日分だけ空マスを差し込む。
   const leadingBlanks = Array(dayOfWeekForDate(dates[0])).fill(null);
   const calendarCells: (string | null)[] = [...leadingBlanks, ...dates];
@@ -524,6 +535,7 @@ export default function ScheduleBuilderPanel({
           const dayEntries = entriesByDateKind;
           const reception = (dayEntries.get(`${date}|reception`) ?? []).filter((e) => e.confirmed);
           const lessons = (dayEntries.get(`${date}|lesson`) ?? []).filter((e) => e.confirmed);
+          const musuhiDay = musuhiByDate.get(date) ?? [];
           return (
             <div
               key={date}
@@ -539,6 +551,17 @@ export default function ScheduleBuilderPanel({
                     </span>
                   ))}
               </div>
+              {!isClosedDay && musuhiDay.length > 0 && (
+                <p className="flex flex-wrap items-baseline gap-x-1 text-blue-600 dark:text-blue-400">
+                  <span className="text-neutral-400">むすひ:</span>
+                  {musuhiDay.map((s) => (
+                    <span key={s.id}>
+                      {s.staffName}
+                      {formatTimeCompact(s.start_time)}-{formatTimeCompact(s.end_time)}
+                    </span>
+                  ))}
+                </p>
+              )}
               {isClosedDay ? (
                 <p className="text-neutral-400" style={noteEntry?.color ? { color: noteEntry.color } : undefined}>
                   {noteEntry?.note || "定休日"}
