@@ -47,14 +47,17 @@ function minutesToTime(min: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`;
 }
 
+export type MusuhiSyncResult = { ok: true } | { ok: false; error: string };
+
 // 指定日について、Le lien側の「むすひスケジュール」から、むすひ予約サイト側の
 // 予約可能時間(schedule_overrides + schedule_override_windows)を再計算して書き込む。
 // 受付担当が誰もいない時間は「休業」扱いにする(定休日の上書きより、実際の受付有無を優先する)。
-export async function syncMusuhiBookingAvailability(entryDate: string): Promise<void> {
+export async function syncMusuhiBookingAvailability(entryDate: string): Promise<MusuhiSyncResult> {
   const musuhiYoyaku = createMusuhiYoyakuAdminClient();
   if (!musuhiYoyaku) {
-    console.error("[musuhi-booking-sync] MUSUHI_YOYAKU_SUPABASE_URL/SERVICE_ROLE_KEY が未設定のため、連携をスキップしました。");
-    return;
+    const error = "MUSUHI_YOYAKU_SUPABASE_URL/SERVICE_ROLE_KEY が未設定のため、連携をスキップしました。";
+    console.error(`[musuhi-booking-sync] ${error}`);
+    return { ok: false, error };
   }
 
   const lelien = createAdminClient();
@@ -88,12 +91,12 @@ export async function syncMusuhiBookingAvailability(entryDate: string): Promise<
     .single();
   if (error || !upserted) {
     console.error("[musuhi-booking-sync] schedule_overrides upsert failed", error);
-    return;
+    return { ok: false, error: `schedule_overridesへの書き込みに失敗しました: ${error?.message ?? "unknown"}` };
   }
 
   await musuhiYoyaku.from("schedule_override_windows").delete().eq("schedule_override_id", upserted.id);
   if (!isClosed) {
-    await musuhiYoyaku.from("schedule_override_windows").insert(
+    const { error: insertError } = await musuhiYoyaku.from("schedule_override_windows").insert(
       mergedWindows.map((w, index) => ({
         schedule_override_id: upserted.id,
         open_time: minutesToTime(w.start),
@@ -101,5 +104,10 @@ export async function syncMusuhiBookingAvailability(entryDate: string): Promise<
         sort_order: index,
       })),
     );
+    if (insertError) {
+      console.error("[musuhi-booking-sync] schedule_override_windows insert failed", insertError);
+      return { ok: false, error: `schedule_override_windowsへの書き込みに失敗しました: ${insertError.message}` };
+    }
   }
+  return { ok: true };
 }

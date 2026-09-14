@@ -197,10 +197,15 @@ export async function backfillMusuhiBookingAvailability(monthStart: string, mont
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
 
+  let succeeded = 0;
+  let firstError: string | null = null;
   for (const date of dates) {
-    await syncMusuhiBookingAvailability(date);
+    const result = await syncMusuhiBookingAvailability(date);
+    if (result.ok) succeeded++;
+    else firstError ??= result.error;
   }
-  return { ok: true, data: { synced: dates.length } };
+  if (succeeded === 0 && firstError) return { ok: false, error: firstError };
+  return { ok: true, data: { synced: succeeded } };
 }
 
 function timeToMinutes(t: string): number {
