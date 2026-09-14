@@ -839,7 +839,10 @@ export default function ScheduleBuilderPanel({
           <SaveImageButton targetId="lelien-musuhi-preview" filename={`${monthStart.slice(0, 7)}-schedule-preview.png`} />
         </div>
         <div className="overflow-x-auto">
-          <div id="lelien-musuhi-preview" className="min-w-[700px] bg-white p-2">{renderPreview()}</div>
+          <div id="lelien-musuhi-preview" className="flex min-w-[700px] flex-col gap-2 bg-white p-2">
+            <p className="text-center text-lg font-bold text-black">{formatMonthLabel(monthStart)}スケジュール</p>
+            {renderPreview()}
+          </div>
         </div>
       </div>
     </div>
