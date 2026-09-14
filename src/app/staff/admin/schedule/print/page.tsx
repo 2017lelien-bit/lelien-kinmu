@@ -7,6 +7,7 @@ import { getScheduleNotes } from "@/lib/schedule-notes";
 import { nextMonthStart, monthEnd, dayOfWeekForDate } from "@/lib/date";
 import { DAY_OF_WEEK_LABEL, isClosedOnDate } from "@/lib/types";
 import PrintButton from "@/components/staff/PrintButton";
+import PrintFitToPage from "@/components/staff/PrintFitToPage";
 import SaveImageButton from "@/components/staff/SaveImageButton";
 import LessonColorEditor from "@/components/staff/LessonColorEditor";
 
@@ -116,6 +117,7 @@ export default async function SchedulePrintPage({
         <SaveImageButton targetId="schedule-capture" filename={`${monthStart.slice(0, 7)}-schedule-${type}.png`} />
       </div>
 
+      <PrintFitToPage>
       <div id="schedule-capture" className="flex flex-col gap-3 bg-white p-2">
       <h2 className="text-center text-xl font-bold">{formatMonthLabel(monthStart)}スケジュール</h2>
 
@@ -198,6 +200,7 @@ export default async function SchedulePrintPage({
         })}
       </div>
       </div>
+      </PrintFitToPage>
     </div>
   );
 }
