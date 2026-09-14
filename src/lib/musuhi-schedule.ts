@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStaffUser, resolveActingStaffId } from "@/lib/auth";
 import { invalidateScheduleConfirmation } from "@/lib/schedule-confirmations";
+import { syncMusuhiBookingAvailability } from "@/lib/musuhi-booking-sync";
 import { dayOfWeekForDate } from "@/lib/date";
 import type { ActionResult } from "@/lib/types";
 
@@ -56,6 +57,7 @@ export async function upsertMusuhiNote(input: { entryDate: string; isClosedOverr
     .from("musuhi_notes")
     .upsert({ entry_date: input.entryDate, is_closed_override: input.isClosedOverride }, { onConflict: "entry_date" });
   if (error) return { ok: false, error: "保存に失敗しました。" };
+  await syncMusuhiBookingAvailability(input.entryDate);
 
   revalidatePath("/staff/admin/schedule");
   revalidatePath("/staff/mypage");
@@ -129,6 +131,7 @@ export async function addMusuhiShift(input: {
     .single();
   if (error || !data) return { ok: false, error: "登録に失敗しました。" };
   await invalidateScheduleConfirmation(input.staffId, input.entryDate);
+  await syncMusuhiBookingAvailability(input.entryDate);
 
   revalidatePath("/staff/admin/schedule");
   return { ok: true, data: data as MusuhiShift };
@@ -155,6 +158,7 @@ export async function updateMusuhiShift(
     if (input.staffId !== undefined && input.staffId !== existing.staff_id) {
       await invalidateScheduleConfirmation(input.staffId, existing.entry_date);
     }
+    await syncMusuhiBookingAvailability(existing.entry_date);
   }
 
   revalidatePath("/staff/admin/schedule");
@@ -169,7 +173,10 @@ export async function deleteMusuhiShift(id: string): Promise<ActionResult> {
   const { data: existing } = await admin.from("musuhi_shifts").select("staff_id, entry_date").eq("id", id).maybeSingle();
   const { error } = await admin.from("musuhi_shifts").delete().eq("id", id);
   if (error) return { ok: false, error: "削除に失敗しました。" };
-  if (existing) await invalidateScheduleConfirmation(existing.staff_id, existing.entry_date);
+  if (existing) {
+    await invalidateScheduleConfirmation(existing.staff_id, existing.entry_date);
+    await syncMusuhiBookingAvailability(existing.entry_date);
+  }
 
   revalidatePath("/staff/admin/schedule");
   return { ok: true, data: undefined };
@@ -238,6 +245,10 @@ export async function fillMusuhiFromLelienReception(input: {
     for (const key of affected) {
       const [staffId, entryDate] = key.split("|");
       await invalidateScheduleConfirmation(staffId, entryDate);
+    }
+    const affectedDates = new Set(rows.map((r) => r.entry_date));
+    for (const date of affectedDates) {
+      await syncMusuhiBookingAvailability(date);
     }
   }
 
