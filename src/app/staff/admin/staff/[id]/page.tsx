@@ -14,6 +14,7 @@ import {
 } from "@/lib/schedule-submissions";
 import { getScheduleNotes } from "@/lib/schedule-notes";
 import { getOwnScheduleConfirmation } from "@/lib/schedule-confirmations";
+import { getOwnMusuhiShifts } from "@/lib/musuhi-schedule";
 import { currentPayPeriod, nextMonthStart, monthEnd } from "@/lib/date";
 import TaxSettingsForm from "@/components/staff/TaxSettingsForm";
 import CommuteSettingsForm from "@/components/staff/CommuteSettingsForm";
@@ -53,6 +54,7 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
     scheduleNotes,
     scheduleSubmissionNote,
     scheduleConfirmedAt,
+    ownMusuhiShifts,
   ] = await Promise.all([
     getStaffDetail(id),
     getPayslipsForStaff(id),
@@ -67,6 +69,7 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
     getScheduleNotes(scheduleMonthStart, monthEnd(scheduleMonthStart)),
     getOwnScheduleSubmissionNote(scheduleMonthStart, id),
     getOwnScheduleConfirmation(scheduleMonthStart, id),
+    getOwnMusuhiShifts(scheduleMonthStart, monthEnd(scheduleMonthStart), id),
   ]);
   if (!detail) notFound();
 
@@ -111,6 +114,7 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
       <MyScheduleConfirmPanel
         monthStart={scheduleMonthStart}
         entries={scheduleEntries}
+        musuhiShifts={ownMusuhiShifts}
         initialConfirmedAt={scheduleConfirmedAt}
         staffId={profile.id}
       />

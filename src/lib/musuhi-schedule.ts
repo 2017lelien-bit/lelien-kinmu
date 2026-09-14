@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getStaffUser } from "@/lib/auth";
+import { getStaffUser, resolveActingStaffId } from "@/lib/auth";
 import { dayOfWeekForDate } from "@/lib/date";
 import type { ActionResult } from "@/lib/types";
 
@@ -85,6 +85,23 @@ export async function getMusuhiShifts(
     ...s,
     staffName: s.staff_profiles?.schedule_display_name || s.staff_profiles?.name || "(不明)",
   }));
+}
+
+// スタッフ本人が、自分のむすひの担当分だけを確認できるようにする(スケジュールの最終確認画面用)。
+export async function getOwnMusuhiShifts(monthStart: string, monthEnd: string, staffId?: string): Promise<MusuhiShift[]> {
+  const acting = await resolveActingStaffId(staffId);
+  if ("error" in acting) return [];
+
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("musuhi_shifts")
+    .select("*")
+    .eq("staff_id", acting.id)
+    .gte("entry_date", monthStart)
+    .lte("entry_date", monthEnd)
+    .order("entry_date", { ascending: true })
+    .order("start_time", { ascending: true });
+  return (data ?? []) as MusuhiShift[];
 }
 
 export async function addMusuhiShift(input: {

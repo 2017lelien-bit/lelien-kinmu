@@ -12,6 +12,7 @@ import {
 } from "@/lib/schedule-submissions";
 import { getScheduleNotes } from "@/lib/schedule-notes";
 import { getOwnScheduleConfirmation } from "@/lib/schedule-confirmations";
+import { getOwnMusuhiShifts } from "@/lib/musuhi-schedule";
 import { currentPayPeriod, nextMonthStart, monthEnd } from "@/lib/date";
 import MyStaffProfileForm from "@/components/staff/MyStaffProfileForm";
 import MyScheduleConfirmPanel from "@/components/staff/MyScheduleConfirmPanel";
@@ -46,6 +47,7 @@ export default async function StaffMyPage() {
     scheduleNotes,
     scheduleSubmissionNote,
     scheduleConfirmedAt,
+    ownMusuhiShifts,
   ] = await Promise.all([
     getOwnPayCategories(),
     getOwnPayEntries(periodStart),
@@ -61,6 +63,7 @@ export default async function StaffMyPage() {
     getScheduleNotes(scheduleMonthStart, monthEnd(scheduleMonthStart)),
     getOwnScheduleSubmissionNote(scheduleMonthStart),
     getOwnScheduleConfirmation(scheduleMonthStart),
+    getOwnMusuhiShifts(scheduleMonthStart, monthEnd(scheduleMonthStart)),
   ]);
   const hasEntryInput = payCategories.length > 0 || hasPayRateRules;
   const hourlyCategories = payCategories.filter((c) => c.unit_type === "hourly");
@@ -109,6 +112,7 @@ export default async function StaffMyPage() {
       <MyScheduleConfirmPanel
         monthStart={scheduleMonthStart}
         entries={scheduleEntries}
+        musuhiShifts={ownMusuhiShifts}
         initialConfirmedAt={scheduleConfirmedAt}
       />
 
