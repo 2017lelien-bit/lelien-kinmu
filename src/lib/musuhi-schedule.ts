@@ -21,10 +21,44 @@ export interface MusuhiShift {
   end_time: string;
 }
 
+export interface MusuhiNote {
+  entry_date: string;
+  is_closed_override: boolean | null;
+}
+
 async function requireAdmin(): Promise<{ ok: false; error: string } | null> {
   const staff = await getStaffUser();
   if (!staff || staff.role !== "admin") return { ok: false, error: "管理者としてログインしてください。" };
   return null;
+}
+
+// むすひは定休日(月曜)以外にも、臨時休業・臨時営業を個別に指定できるようにする。
+export async function getMusuhiNotes(monthStart: string, monthEnd: string): Promise<MusuhiNote[]> {
+  const staff = await getStaffUser();
+  if (!staff) return [];
+
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("musuhi_notes")
+    .select("*")
+    .gte("entry_date", monthStart)
+    .lte("entry_date", monthEnd);
+  return (data ?? []) as MusuhiNote[];
+}
+
+export async function upsertMusuhiNote(input: { entryDate: string; isClosedOverride: boolean | null }): Promise<ActionResult> {
+  const adminCheck = await requireAdmin();
+  if (adminCheck) return adminCheck;
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("musuhi_notes")
+    .upsert({ entry_date: input.entryDate, is_closed_override: input.isClosedOverride }, { onConflict: "entry_date" });
+  if (error) return { ok: false, error: "保存に失敗しました。" };
+
+  revalidatePath("/staff/admin/schedule");
+  revalidatePath("/staff/mypage");
+  return { ok: true, data: undefined };
 }
 
 export async function getMusuhiShifts(

@@ -34,8 +34,12 @@ export async function getOwnTimeLogEntries(
 // 重なりを確認できないため差し引きの対象にしない。
 const LESSON_DEDUCTION_MINUTES_PER_LESSON = 120;
 
+// 時給区分は現状「Le lien受付」系(名前の付け方は人によって「Lelien受付」「受付」等ばらつきがある)
+// と「むすひ」の2種類しかないため、"むすひ"を含まない=Le lien側、という判定にする方が確実。
+// (「lelien」という文字列が含まれるかで判定すると、Rakeruさんの「受付」のように該当する
+// 単語を含まない区分名を見落として、重複差し引きが適用されない不具合になっていた)
 function isLeLienCategoryName(name: string): boolean {
-  return name.toLowerCase().replace(/\s+/g, "").includes("lelien");
+  return !name.trim().includes("むすひ");
 }
 
 function toMinutes(time: string): number {

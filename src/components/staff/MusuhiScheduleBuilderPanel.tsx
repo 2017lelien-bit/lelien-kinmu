@@ -6,12 +6,15 @@ import {
   addMusuhiShift,
   deleteMusuhiShift,
   fillMusuhiFromLelienReception,
+  getMusuhiNotes,
   getMusuhiShifts,
   updateMusuhiShift,
+  upsertMusuhiNote,
+  type MusuhiNote,
   type MusuhiShift,
 } from "@/lib/musuhi-schedule";
 import { dayOfWeekForDate, monthEnd } from "@/lib/date";
-import { CLOSED_DAY_OF_WEEK, DAY_OF_WEEK_LABEL } from "@/lib/types";
+import { CLOSED_DAY_OF_WEEK, DAY_OF_WEEK_LABEL, isClosedOnDate } from "@/lib/types";
 
 type ShiftWithName = MusuhiShift & { staffName: string };
 
@@ -23,15 +26,18 @@ function formatMonthLabel(monthStart: string): string {
 export default function MusuhiScheduleBuilderPanel({
   initialMonthStart,
   initialShifts,
+  initialNotes,
   staffList,
 }: {
   initialMonthStart: string;
   initialShifts: ShiftWithName[];
+  initialNotes: MusuhiNote[];
   staffList: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const [monthStart, setMonthStart] = useState(initialMonthStart);
   const [shifts, setShifts] = useState(initialShifts);
+  const [notes, setNotes] = useState(initialNotes);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -44,9 +50,27 @@ export default function MusuhiScheduleBuilderPanel({
   async function handleShowMonth() {
     setLoading(true);
     setError(null);
-    const data = await getMusuhiShifts(monthStart, monthEnd(monthStart));
+    const [data, notesData] = await Promise.all([
+      getMusuhiShifts(monthStart, monthEnd(monthStart)),
+      getMusuhiNotes(monthStart, monthEnd(monthStart)),
+    ]);
     setLoading(false);
     setShifts(data);
+    setNotes(notesData);
+  }
+
+  // 定休日(月曜)以外にも、臨時休業・臨時営業を個別に指定できるようにする。
+  async function handleNoteSave(date: string, isClosedOverride: boolean | null) {
+    setError(null);
+    const existing = notes.find((n) => n.entry_date === date);
+    setNotes((prev) => [...prev.filter((n) => n.entry_date !== date), { entry_date: date, is_closed_override: isClosedOverride }]);
+    const result = await upsertMusuhiNote({ entryDate: date, isClosedOverride });
+    if (!result.ok) {
+      setError(result.error);
+      setNotes((prev) => (existing ? [...prev.filter((n) => n.entry_date !== date), existing] : prev.filter((n) => n.entry_date !== date)));
+      return;
+    }
+    router.refresh();
   }
 
   async function handleFillFromLelien() {
@@ -139,6 +163,7 @@ export default function MusuhiScheduleBuilderPanel({
     list.push(s);
     shiftsByDate.set(s.entry_date, list);
   }
+  const notesByDate = new Map(notes.map((n) => [n.entry_date, n]));
 
   return (
     <div className="flex flex-col gap-4">
@@ -221,7 +246,9 @@ export default function MusuhiScheduleBuilderPanel({
           {calendarCells.map((date, i) => {
             if (!date) return <div key={`empty-${i}`} />;
             const day = Number(date.split("-")[2]);
-            const isClosedDay = dayOfWeekForDate(date) === CLOSED_DAY_OF_WEEK;
+            const noteEntry = notesByDate.get(date);
+            const isDefaultClosed = dayOfWeekForDate(date) === CLOSED_DAY_OF_WEEK;
+            const isClosedDay = isClosedOnDate(date, noteEntry?.is_closed_override);
             const dayShifts = shiftsByDate.get(date) ?? [];
             return (
               <div
@@ -233,8 +260,22 @@ export default function MusuhiScheduleBuilderPanel({
                 }`}
               >
                 <p className={`text-xs font-semibold ${isClosedDay ? "text-neutral-400" : ""}`}>{day}</p>
+                <select
+                  value={
+                    noteEntry?.is_closed_override === true ? "closed" : noteEntry?.is_closed_override === false ? "open" : "default"
+                  }
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    handleNoteSave(date, v === "closed" ? true : v === "open" ? false : null);
+                  }}
+                  className="w-full rounded border border-neutral-200 text-[9px] dark:border-neutral-800"
+                >
+                  <option value="default">{isDefaultClosed ? "定休" : "営業"}</option>
+                  <option value="closed">臨時休業</option>
+                  <option value="open">臨時営業</option>
+                </select>
                 {isClosedDay ? (
-                  <p className="text-[10px] text-neutral-400">定休</p>
+                  <p className="text-[10px] text-neutral-400">休館</p>
                 ) : (
                   <>
                     {dayShifts.map((s) => (

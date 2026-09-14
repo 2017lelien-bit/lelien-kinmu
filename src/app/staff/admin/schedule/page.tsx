@@ -9,7 +9,7 @@ import { getScheduleNotes } from "@/lib/schedule-notes";
 import { getScheduleConfirmationStatusList } from "@/lib/schedule-confirmations";
 import { getLessonColors } from "@/lib/lesson-colors";
 import { getLeLienHourlyRateByStaff, getMusuhiHourlyRateByStaff, getPayRateRulesByStaff } from "@/lib/payroll";
-import { getMusuhiShifts } from "@/lib/musuhi-schedule";
+import { getMusuhiNotes, getMusuhiShifts } from "@/lib/musuhi-schedule";
 import { getAllStaff } from "@/lib/staff-admin";
 import { nextMonthStart, monthEnd, formatDateTimeJst } from "@/lib/date";
 import ScheduleReviewPanel from "@/components/staff/ScheduleReviewPanel";
@@ -34,6 +34,7 @@ export default async function AdminSchedulePage() {
     leLienHourlyRateByStaff,
     musuhiHourlyRateByStaff,
     confirmationStatusList,
+    musuhiNotes,
   ] = await Promise.all([
     getAllScheduleSubmissions(initialMonthStart, monthEnd(initialMonthStart)),
     getScheduleSubmissionStatusList(initialMonthStart),
@@ -46,6 +47,7 @@ export default async function AdminSchedulePage() {
     getLeLienHourlyRateByStaff(),
     getMusuhiHourlyRateByStaff(),
     getScheduleConfirmationStatusList(initialMonthStart),
+    getMusuhiNotes(initialMonthStart, monthEnd(initialMonthStart)),
   ]);
   const staffList = allStaff
     .filter((s) => s.is_active)
@@ -88,7 +90,12 @@ export default async function AdminSchedulePage() {
         <p className="text-sm text-neutral-500">
           むすひの受付を、日付ごとに担当者と時間帯で組み立てます(Le lienのスケジュールとは別の予定です)。
         </p>
-        <MusuhiScheduleBuilderPanel initialMonthStart={initialMonthStart} initialShifts={musuhiShifts} staffList={staffList} />
+        <MusuhiScheduleBuilderPanel
+          initialMonthStart={initialMonthStart}
+          initialShifts={musuhiShifts}
+          initialNotes={musuhiNotes}
+          staffList={staffList}
+        />
       </div>
 
       <div className="flex flex-col gap-4 border-t border-neutral-200 pt-8 dark:border-neutral-800">

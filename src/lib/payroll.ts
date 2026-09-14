@@ -17,8 +17,10 @@ import type {
 } from "@/lib/types";
 import { EMPLOYMENT_TYPE_LABEL } from "@/lib/types";
 
+// 時給区分は現状「Le lien受付」系(名前の付け方は人によってばらつきがある)と「むすひ」の
+// 2種類しかないため、"むすひ"を含まない=Le lien側、という判定にする方が確実。
 function isLeLienCategoryName(name: string): boolean {
-  return name.toLowerCase().replace(/\s+/g, "").includes("lelien");
+  return !name.trim().includes("むすひ");
 }
 
 async function requireAdmin(): Promise<{ ok: false; error: string } | null> {
