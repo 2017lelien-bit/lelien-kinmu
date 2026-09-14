@@ -7,6 +7,7 @@ import { getScheduleNotes } from "@/lib/schedule-notes";
 import { nextMonthStart, monthEnd, dayOfWeekForDate } from "@/lib/date";
 import { DAY_OF_WEEK_LABEL, isClosedOnDate } from "@/lib/types";
 import PrintButton from "@/components/staff/PrintButton";
+import SaveImageButton from "@/components/staff/SaveImageButton";
 import LessonColorEditor from "@/components/staff/LessonColorEditor";
 
 const PRINT_TYPES = ["staff", "customer", "hp"] as const;
@@ -112,9 +113,11 @@ export default async function SchedulePrintPage({
           {formatMonthLabel(monthStart)}スケジュール({TYPE_LABEL[type]})
         </h1>
         <PrintButton />
+        <SaveImageButton targetId="schedule-capture" filename={`${monthStart.slice(0, 7)}-schedule-${type}.png`} />
       </div>
 
-      <h2 className="hidden text-center text-xl font-bold print:block">{formatMonthLabel(monthStart)}スケジュール</h2>
+      <div id="schedule-capture" className="flex flex-col gap-3 bg-white p-2">
+      <h2 className="text-center text-xl font-bold">{formatMonthLabel(monthStart)}スケジュール</h2>
 
       {lessonNamesUsed.length > 0 && (
         <div className="flex flex-nowrap items-center gap-3 overflow-x-auto pb-1 text-xs print:gap-1.5 print:text-[8px]">
@@ -193,6 +196,7 @@ export default async function SchedulePrintPage({
             </div>
           );
         })}
+      </div>
       </div>
     </div>
   );

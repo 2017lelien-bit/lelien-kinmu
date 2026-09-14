@@ -11,8 +11,10 @@ import {
   getOwnScheduleTemplates,
 } from "@/lib/schedule-submissions";
 import { getScheduleNotes } from "@/lib/schedule-notes";
+import { getOwnScheduleConfirmation } from "@/lib/schedule-confirmations";
 import { currentPayPeriod, nextMonthStart, monthEnd } from "@/lib/date";
 import MyStaffProfileForm from "@/components/staff/MyStaffProfileForm";
+import MyScheduleConfirmPanel from "@/components/staff/MyScheduleConfirmPanel";
 import PayEntryForm from "@/components/staff/PayEntryForm";
 import LessonLogForm from "@/components/staff/LessonLogForm";
 import ScheduleSubmissionForm from "@/components/staff/ScheduleSubmissionForm";
@@ -43,6 +45,7 @@ export default async function StaffMyPage() {
     scheduleSubmittedAt,
     scheduleNotes,
     scheduleSubmissionNote,
+    scheduleConfirmedAt,
   ] = await Promise.all([
     getOwnPayCategories(),
     getOwnPayEntries(periodStart),
@@ -57,6 +60,7 @@ export default async function StaffMyPage() {
     getOwnScheduleSubmissionStatus(scheduleMonthStart),
     getScheduleNotes(scheduleMonthStart, monthEnd(scheduleMonthStart)),
     getOwnScheduleSubmissionNote(scheduleMonthStart),
+    getOwnScheduleConfirmation(scheduleMonthStart),
   ]);
   const hasEntryInput = payCategories.length > 0 || hasPayRateRules;
   const hourlyCategories = payCategories.filter((c) => c.unit_type === "hourly");
@@ -101,6 +105,12 @@ export default async function StaffMyPage() {
       )}
 
       {hasEntryInput && <SubmitPeriodButton submittedAt={submittedAt} />}
+
+      <MyScheduleConfirmPanel
+        monthStart={scheduleMonthStart}
+        entries={scheduleEntries}
+        initialConfirmedAt={scheduleConfirmedAt}
+      />
 
       <details className="rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
         <summary className="cursor-pointer font-semibold">{scheduleMonthLabel}のスケジュールを提出する</summary>

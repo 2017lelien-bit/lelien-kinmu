@@ -6,11 +6,12 @@ import {
   getScheduleSubmissionStatusList,
 } from "@/lib/schedule-submissions";
 import { getScheduleNotes } from "@/lib/schedule-notes";
+import { getScheduleConfirmationStatusList } from "@/lib/schedule-confirmations";
 import { getLessonColors } from "@/lib/lesson-colors";
 import { getLeLienHourlyRateByStaff, getMusuhiHourlyRateByStaff, getPayRateRulesByStaff } from "@/lib/payroll";
 import { getMusuhiShifts } from "@/lib/musuhi-schedule";
 import { getAllStaff } from "@/lib/staff-admin";
-import { nextMonthStart, monthEnd } from "@/lib/date";
+import { nextMonthStart, monthEnd, formatDateTimeJst } from "@/lib/date";
 import ScheduleReviewPanel from "@/components/staff/ScheduleReviewPanel";
 import ScheduleBuilderPanel from "@/components/staff/ScheduleBuilderPanel";
 import MusuhiScheduleBuilderPanel from "@/components/staff/MusuhiScheduleBuilderPanel";
@@ -32,6 +33,7 @@ export default async function AdminSchedulePage() {
     payRateRulesByStaff,
     leLienHourlyRateByStaff,
     musuhiHourlyRateByStaff,
+    confirmationStatusList,
   ] = await Promise.all([
     getAllScheduleSubmissions(initialMonthStart, monthEnd(initialMonthStart)),
     getScheduleSubmissionStatusList(initialMonthStart),
@@ -43,6 +45,7 @@ export default async function AdminSchedulePage() {
     getPayRateRulesByStaff(),
     getLeLienHourlyRateByStaff(),
     getMusuhiHourlyRateByStaff(),
+    getScheduleConfirmationStatusList(initialMonthStart),
   ]);
   const staffList = allStaff
     .filter((s) => s.is_active)
@@ -94,6 +97,25 @@ export default async function AdminSchedulePage() {
           「確定」にチェックが入っている予定だけが印刷対象になります。用途に合わせて3種類から選んでください。
         </p>
         <SchedulePrintLinks initialMonthStart={initialMonthStart} />
+      </div>
+
+      <div className="flex flex-col gap-4 border-t border-neutral-200 pt-8 dark:border-neutral-800">
+        <h1 className="text-xl font-semibold">⑤ 最終確認状況</h1>
+        <p className="text-sm text-neutral-500">
+          組み立てたスケジュールを、各スタッフがマイページで「OK」と確認したかどうかの一覧です。
+        </p>
+        <ul className="flex flex-col gap-1 text-sm">
+          {confirmationStatusList.map((s) => (
+            <li key={s.staffId} className="flex flex-wrap items-center gap-3">
+              <span>{s.staffName}</span>
+              {s.confirmedAt ? (
+                <span className="text-neutral-400">確認済み({formatDateTimeJst(s.confirmedAt)})</span>
+              ) : (
+                <span className="text-red-600">未確認</span>
+              )}
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );

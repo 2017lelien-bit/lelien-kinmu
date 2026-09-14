@@ -13,6 +13,7 @@ import {
   getOwnScheduleTemplates,
 } from "@/lib/schedule-submissions";
 import { getScheduleNotes } from "@/lib/schedule-notes";
+import { getOwnScheduleConfirmation } from "@/lib/schedule-confirmations";
 import { currentPayPeriod, nextMonthStart, monthEnd } from "@/lib/date";
 import TaxSettingsForm from "@/components/staff/TaxSettingsForm";
 import CommuteSettingsForm from "@/components/staff/CommuteSettingsForm";
@@ -28,6 +29,7 @@ import LessonOptionsManager from "@/components/staff/LessonOptionsManager";
 import SubmitScheduleButton from "@/components/staff/SubmitScheduleButton";
 import ScheduleDisplayNameForm from "@/components/staff/ScheduleDisplayNameForm";
 import SubmissionStatusPanel from "@/components/staff/SubmissionStatusPanel";
+import MyScheduleConfirmPanel from "@/components/staff/MyScheduleConfirmPanel";
 import ResetPasswordButton from "@/components/staff/ResetPasswordButton";
 
 export default async function StaffAdminDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -50,6 +52,7 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
     scheduleSubmittedAt,
     scheduleNotes,
     scheduleSubmissionNote,
+    scheduleConfirmedAt,
   ] = await Promise.all([
     getStaffDetail(id),
     getPayslipsForStaff(id),
@@ -63,6 +66,7 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
     getOwnScheduleSubmissionStatus(scheduleMonthStart, id),
     getScheduleNotes(scheduleMonthStart, monthEnd(scheduleMonthStart)),
     getOwnScheduleSubmissionNote(scheduleMonthStart, id),
+    getOwnScheduleConfirmation(scheduleMonthStart, id),
   ]);
   if (!detail) notFound();
 
@@ -101,6 +105,13 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
         monthStart={scheduleMonthStart}
         submittedAt={scheduleSubmittedAt}
         initialNote={scheduleSubmissionNote}
+        staffId={profile.id}
+      />
+
+      <MyScheduleConfirmPanel
+        monthStart={scheduleMonthStart}
+        entries={scheduleEntries}
+        initialConfirmedAt={scheduleConfirmedAt}
         staffId={profile.id}
       />
 
