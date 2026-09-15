@@ -9,33 +9,32 @@ function getResendClient(): Resend {
   return new Resend(process.env.RESEND_API_KEY);
 }
 
-function payslipBreakdownHtml(breakdown: PayrollBreakdown): string {
-  const categoryHtml =
-    breakdown.lines.length > 0
-      ? `
-        <ul>
-          ${breakdown.lines
-            .map(
-              (line) =>
-                `<li>${line.name}: ${line.quantity}${line.unitType === "hourly" ? "時間" : "回"} × ¥${line.rate.toLocaleString()} = ¥${line.subtotal.toLocaleString()}</li>`,
-            )
-            .join("")}
-        </ul>
-      `
-      : "";
+function isLeLienCategoryName(name: string): boolean {
+  return !name.trim().includes("むすひ");
+}
 
-  // レッスン実績方式では、単価が人数によって変わる仕組みをスタッフに見せないため、
-  // 日付・レッスン名・金額のみを表示する(時間・人数・該当ルール名は表示しない)。
+// レッスン本数が多いスタッフだと1本ずつの明細が長くなりすぎるため、レッスンは合計本数だけに
+// まとめ、時間制のカテゴリはむすひ/Lelienの時間合計を添えて示す。
+function payslipBreakdownHtml(breakdown: PayrollBreakdown): string {
+  const musuhiHours = breakdown.lines
+    .filter((l) => l.unitType === "hourly" && !isLeLienCategoryName(l.name))
+    .reduce((sum, l) => sum + l.quantity, 0);
+  const leLienHours = breakdown.lines
+    .filter((l) => l.unitType === "hourly" && isLeLienCategoryName(l.name))
+    .reduce((sum, l) => sum + l.quantity, 0);
+
+  const categoryItems = breakdown.lines.map(
+    (line) =>
+      `<li>${line.name}: ${line.quantity}${line.unitType === "hourly" ? "時間" : "回"} × ¥${line.rate.toLocaleString()} = ¥${line.subtotal.toLocaleString()}</li>`,
+  );
+  if (leLienHours > 0) categoryItems.push(`<li>Lelien時間合計: ${leLienHours}時間</li>`);
+  if (musuhiHours > 0) categoryItems.push(`<li>むすひ時間合計: ${musuhiHours}時間</li>`);
+
+  const categoryHtml = categoryItems.length > 0 ? `<ul>${categoryItems.join("")}</ul>` : "";
+
+  const lessonTotal = breakdown.lessonLines.reduce((sum, l) => sum + l.rate, 0);
   const lessonHtml =
-    breakdown.lessonLines.length > 0
-      ? `
-        <ul>
-          ${breakdown.lessonLines
-            .map((line) => `<li>${line.date} ${line.lessonName}: ¥${line.rate.toLocaleString()}</li>`)
-            .join("")}
-        </ul>
-      `
-      : "";
+    breakdown.lessonLines.length > 0 ? `<ul><li>レッスン合計: ${breakdown.lessonLines.length}本 = ¥${lessonTotal.toLocaleString()}</li></ul>` : "";
 
   return categoryHtml + lessonHtml;
 }

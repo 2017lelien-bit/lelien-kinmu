@@ -418,14 +418,27 @@ export async function getPayslipsForStaff(staffId: string): Promise<StaffPayslip
 
 // メールが使えない場合に、LINEなどにそのまま貼り付けて個別に送れるよう、
 // 明細メールと同じ内容をプレーンテキストで組み立てる。
+// レッスン本数が多いスタッフだと1本ずつの明細が長くなりすぎるため、
+// レッスンは合計本数だけにまとめ、時間制のカテゴリはむすひ/Lelienの時間合計で示す。
 function formatPayslipText(staffName: string, p: StaffPayslip): string {
   const breakdown = p.breakdown as PayrollBreakdown;
   const lines: string[] = [];
+
+  const musuhiHours = breakdown.lines
+    .filter((l) => l.unitType === "hourly" && !isLeLienCategoryName(l.name))
+    .reduce((sum, l) => sum + l.quantity, 0);
+  const leLienHours = breakdown.lines
+    .filter((l) => l.unitType === "hourly" && isLeLienCategoryName(l.name))
+    .reduce((sum, l) => sum + l.quantity, 0);
+
   for (const l of breakdown.lines) {
     lines.push(`・${l.name}: ${l.quantity}${l.unitType === "hourly" ? "時間" : "回"} × ¥${l.rate.toLocaleString()} = ¥${l.subtotal.toLocaleString()}`);
   }
-  for (const l of breakdown.lessonLines) {
-    lines.push(`・${l.date} ${l.lessonName}: ¥${l.rate.toLocaleString()}`);
+  if (leLienHours > 0) lines.push(`・Lelien時間合計: ${leLienHours}時間`);
+  if (musuhiHours > 0) lines.push(`・むすひ時間合計: ${musuhiHours}時間`);
+  if (breakdown.lessonLines.length > 0) {
+    const lessonTotal = breakdown.lessonLines.reduce((sum, l) => sum + l.rate, 0);
+    lines.push(`・レッスン合計: ${breakdown.lessonLines.length}本 = ¥${lessonTotal.toLocaleString()}`);
   }
 
   return [
