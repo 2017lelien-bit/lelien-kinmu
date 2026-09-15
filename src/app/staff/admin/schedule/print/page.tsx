@@ -187,7 +187,7 @@ export default async function SchedulePrintPage({
                   {lessons.map((e) => {
                     const name = e.lesson_name ?? "(レッスン名未定)";
                     return (
-                      <p key={e.id} className="rounded px-1 py-0.5 leading-tight" style={lessonStyle(name, colorMap)}>
+                      <p key={e.id} className="truncate rounded px-1 py-0.5 leading-tight" style={lessonStyle(name, colorMap)}>
                         {formatTime(e.start_time)} {name}
                         {type !== "hp" && `(${e.staffName})`}
                       </p>
