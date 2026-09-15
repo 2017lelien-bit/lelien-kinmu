@@ -416,6 +416,66 @@ export async function getPayslipsForStaff(staffId: string): Promise<StaffPayslip
   return (data ?? []) as StaffPayslip[];
 }
 
+// メールが使えない場合に、LINEなどにそのまま貼り付けて個別に送れるよう、
+// 明細メールと同じ内容をプレーンテキストで組み立てる。
+function formatPayslipText(staffName: string, p: StaffPayslip): string {
+  const breakdown = p.breakdown as PayrollBreakdown;
+  const lines: string[] = [];
+  for (const l of breakdown.lines) {
+    lines.push(`・${l.name}: ${l.quantity}${l.unitType === "hourly" ? "時間" : "回"} × ¥${l.rate.toLocaleString()} = ¥${l.subtotal.toLocaleString()}`);
+  }
+  for (const l of breakdown.lessonLines) {
+    lines.push(`・${l.date} ${l.lessonName}: ¥${l.rate.toLocaleString()}`);
+  }
+
+  return [
+    `${staffName}様`,
+    "",
+    `【給与明細のお知らせ】(${p.period_start}〜${p.period_end})`,
+    "",
+    ...lines,
+    "",
+    `支給額計: ¥${p.gross_amount.toLocaleString()}`,
+    `通勤費: ¥${p.commute_allowance.toLocaleString()}`,
+    `総支給額: ¥${p.total_gross.toLocaleString()}`,
+    `所得税: ¥${p.income_tax.toLocaleString()}`,
+    `住民税: ¥${p.resident_tax.toLocaleString()}`,
+    `差引支給額: ¥${p.net_amount.toLocaleString()}`,
+  ].join("\n");
+}
+
+export interface PayslipTextSummary {
+  staffId: string;
+  staffName: string;
+  payslipId: string;
+  sentAt: string | null;
+  text: string;
+}
+
+// 対象月の全スタッフ分の明細を、確認しながら1人ずつコピーしてLINE等で送れるようにする。
+export async function getPayslipTextSummaries(periodStart: string): Promise<PayslipTextSummary[]> {
+  const adminCheck = await requireAdmin();
+  if (adminCheck) return [];
+
+  const admin = createAdminClient();
+  const { data: payslips } = await admin
+    .from("staff_payslips")
+    .select("*, staff_profiles(name)")
+    .eq("period_start", periodStart)
+    .order("staff_id");
+
+  return (payslips ?? []).map((p) => {
+    const staffName = (p as unknown as { staff_profiles: { name: string } | null }).staff_profiles?.name ?? "(不明)";
+    return {
+      staffId: p.staff_id,
+      staffName,
+      payslipId: p.id,
+      sentAt: p.sent_at,
+      text: formatPayslipText(staffName, p as StaffPayslip),
+    };
+  });
+}
+
 const CSV_HEADERS = [
   "氏名",
   "対象期間",
