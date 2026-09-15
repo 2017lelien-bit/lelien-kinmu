@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { addLessonLogEntry, deleteLessonLogEntry, updateLessonLogEntry } from "@/lib/lesson-log";
 import { todayJstDateString } from "@/lib/date";
 import { LESSON_NAMES, type LessonLogEntry } from "@/lib/types";
+import CorrectionRequestButton from "@/components/staff/CorrectionRequestButton";
 
 export default function LessonLogForm({
   entries,
@@ -265,6 +266,7 @@ export default function LessonLogForm({
                   >
                     {deletingId === e.id ? "削除中..." : "削除"}
                   </button>
+                  <CorrectionRequestButton entryType="lesson_log" entryDate={e.entry_date} />
                 </li>
               ))}
             </ul>

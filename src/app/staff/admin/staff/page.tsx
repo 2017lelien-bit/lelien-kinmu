@@ -2,12 +2,18 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getStaffUser } from "@/lib/auth";
 import { getAllStaff, getPendingSubmissionMap } from "@/lib/staff-admin";
+import { getPendingCorrectionRequests } from "@/lib/correction-requests";
+import CorrectionRequestsPanel from "@/components/staff/CorrectionRequestsPanel";
 
 export default async function StaffAdminStaffListPage() {
   const staff = await getStaffUser();
   if (!staff || staff.role !== "admin") notFound();
 
-  const [allStaff, pendingMap] = await Promise.all([getAllStaff(), getPendingSubmissionMap()]);
+  const [allStaff, pendingMap, correctionRequests] = await Promise.all([
+    getAllStaff(),
+    getPendingSubmissionMap(),
+    getPendingCorrectionRequests(),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -20,6 +26,8 @@ export default async function StaffAdminStaffListPage() {
           新規スタッフを招待
         </Link>
       </div>
+
+      <CorrectionRequestsPanel requests={correctionRequests} />
 
       <div>
         <table className="w-full border-collapse text-sm">

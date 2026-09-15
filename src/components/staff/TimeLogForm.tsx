@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { addTimeLogEntry, updateTimeLogEntry, deleteTimeLogEntry } from "@/lib/time-log";
 import { todayJstDateString, computeWorkedMinutes } from "@/lib/date";
 import type { TimeLogEntry } from "@/lib/types";
+import CorrectionRequestButton from "@/components/staff/CorrectionRequestButton";
 
 function formatMinutes(minutes: number): string {
   const h = Math.floor(minutes / 60);
@@ -239,6 +240,7 @@ export default function TimeLogForm({
                     >
                       {deletingId === e.id ? "削除中..." : "削除"}
                     </button>
+                    <CorrectionRequestButton entryType="time_log" entryDate={e.entry_date} staffId={staffId} />
                   </div>
                   {isLastOfDate && deduction > 0 && (
                     <p className="rounded bg-amber-100 px-2 py-1 text-xs text-amber-900 dark:bg-amber-900 dark:text-amber-100">
