@@ -15,7 +15,6 @@ export default function PrintFitToPage({ children }: { children: React.ReactNode
   const reactId = useId();
   const id = `print-fit-${reactId.replace(/[:]/g, "")}`;
   const [scale, setScale] = useState(1);
-  const [scaledHeight, setScaledHeight] = useState<number | null>(null);
 
   useLayoutEffect(() => {
     const recompute = () => {
@@ -42,7 +41,6 @@ export default function PrintFitToPage({ children }: { children: React.ReactNode
 
       const nextScale = Math.min(PAGE_WIDTH_PX / measuredWidth, PAGE_HEIGHT_PX / measuredHeight, 1);
       setScale(nextScale);
-      setScaledHeight(measuredHeight * nextScale);
     };
     recompute();
     window.addEventListener("beforeprint", recompute);
@@ -57,11 +55,11 @@ export default function PrintFitToPage({ children }: { children: React.ReactNode
     <div id={`${id}-wrapper`}>
       <style>{`
         @media print {
-          #${id}-wrapper { height: ${scaledHeight ?? "auto"}px; }
+          /* transformは印刷時に反映されないブラウザがあるため、実際にレイアウトが
+             縮む zoom を使う(wrapperの高さも自動でついてくるので別途調整不要)。 */
           #${id}-inner {
             width: ${PAGE_WIDTH_PX}px;
-            transform: scale(${scale});
-            transform-origin: top left;
+            zoom: ${scale};
           }
         }
       `}</style>
