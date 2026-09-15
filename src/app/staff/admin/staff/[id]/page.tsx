@@ -183,6 +183,7 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
         payslips={payslips}
         commuteType={profile.commute_type}
         commuteAmount={profile.commute_amount}
+        headcountMatters={headcountMatters}
       />
     </div>
   );

@@ -11,11 +11,14 @@ export default function PayrollPanel({
   payslips,
   commuteType,
   commuteAmount,
+  headcountMatters,
 }: {
   staffId: string;
   payslips: StaffPayslip[];
   commuteType: CommuteType;
   commuteAmount: number;
+  // 単価が参加人数によって変わる場合は、確認できるよう1本ずつの内訳も表示する。
+  headcountMatters: boolean;
 }) {
   const router = useRouter();
   const [periodStart, setPeriodStart] = useState(currentPayPeriod().periodStart);
@@ -99,6 +102,26 @@ export default function PayrollPanel({
     }
   }
 
+  // 人数で単価が変わる場合だけ、同じ日・レッスン名・時間・人数のレッスンを1行の「○本」表示にまとめて内訳を示す。
+  const lessonGroups =
+    preview && headcountMatters
+      ? Object.values(
+          preview.breakdown.lessonLines.reduce<
+            Record<string, { date: string; lessonName: string; durationMinutes: number; headcount: number; matchedRuleLabel: string | null; rate: number; count: number }>
+          >((groups, line) => {
+            const key = `${line.date}|${line.lessonName}|${line.durationMinutes}|${line.headcount}`;
+            const existing = groups[key];
+            if (existing) {
+              existing.count += 1;
+              existing.rate += line.rate;
+            } else {
+              groups[key] = { ...line, count: 1 };
+            }
+            return groups;
+          }, {}),
+        )
+      : [];
+
   async function handleDelete(payslipId: string) {
     setDeletingId(payslipId);
     setError(null);
@@ -153,6 +176,17 @@ export default function PayrollPanel({
               レッスン合計: {preview.breakdown.lessonLines.length}本 = ¥
               {preview.breakdown.lessonLines.reduce((sum, l) => sum + l.rate, 0).toLocaleString()}
             </p>
+          )}
+          {headcountMatters && lessonGroups.length > 0 && (
+            <ul className="text-sm">
+              {lessonGroups.map((g) => (
+                <li key={`${g.date}|${g.lessonName}|${g.durationMinutes}|${g.headcount}`}>
+                  {g.date} {g.lessonName}({g.durationMinutes}分・{g.headcount}人) →
+                  {g.matchedRuleLabel ? ` ${g.matchedRuleLabel}` : " 該当ルールなし"} = ¥
+                  {g.rate.toLocaleString()}
+                </li>
+              ))}
+            </ul>
           )}
           <p className="text-sm font-semibold">支給額計: ¥{preview.grossAmount.toLocaleString()}</p>
 
