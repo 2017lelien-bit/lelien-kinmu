@@ -384,7 +384,7 @@ export default function MusuhiScheduleBuilderPanel({
         <div className="overflow-x-auto">
           <div id="musuhi-only-preview" className="flex min-w-[700px] flex-col gap-2 bg-white p-2">
             <p className="text-center text-lg font-bold text-black">{formatMonthLabel(monthStart)}むすひスケジュール</p>
-            <div className="grid grid-cols-7 gap-px overflow-hidden rounded border border-neutral-400 bg-neutral-400 text-[10px]">
+            <div className="grid grid-cols-7 gap-px rounded border border-neutral-400 bg-neutral-400 text-[10px]">
               {DAY_OF_WEEK_LABEL.map((label, i) => (
                 <div
                   key={label}

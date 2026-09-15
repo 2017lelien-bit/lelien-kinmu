@@ -140,7 +140,7 @@ export default async function SchedulePrintPage({
         </div>
       )}
 
-      <div className="grid grid-cols-7 gap-px overflow-hidden rounded border border-neutral-400 bg-neutral-400 text-[10px]">
+      <div className="grid grid-cols-7 gap-px rounded border border-neutral-400 bg-neutral-400 text-[10px]">
         {DAY_OF_WEEK_LABEL.map((label, i) => (
           <div
             key={label}

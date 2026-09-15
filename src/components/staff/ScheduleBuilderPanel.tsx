@@ -537,7 +537,7 @@ export default function ScheduleBuilderPanel({
   const colorMap = new Map(lessonColorRows.map((c) => [c.lesson_name, c]));
   function renderPreview() {
     return (
-      <div className="grid grid-cols-7 gap-px overflow-hidden rounded border border-neutral-400 bg-neutral-400 text-[10px] dark:border-neutral-700 dark:bg-neutral-700">
+      <div className="grid grid-cols-7 gap-px rounded border border-neutral-400 bg-neutral-400 text-[10px] dark:border-neutral-700 dark:bg-neutral-700">
         {DAY_OF_WEEK_LABEL.map((label, i) => (
           <div
             key={label}
