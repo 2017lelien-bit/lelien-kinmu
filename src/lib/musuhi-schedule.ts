@@ -15,6 +15,10 @@ function musuhiClosingTime(dateStr: string): string {
   return dow === 0 || dow === 6 ? "18:00:00" : "20:00:00";
 }
 
+// むすひの営業開始時刻(毎日10:00)。Le lien側の開始時刻がこれより早い場合は、
+// むすひの営業時間に合わせて遅らせる。
+const MUSUHI_OPENING_TIME = "10:00:00";
+
 export interface MusuhiShift {
   id: string;
   staff_id: string;
@@ -107,6 +111,15 @@ export async function getOwnMusuhiShifts(monthStart: string, monthEnd: string, s
   return (data ?? []) as MusuhiShift[];
 }
 
+// むすひの営業時間(10:00〜平日20:00・土日18:00)の外側にはみ出さないよう、
+// 手動入力・自動反映のどちらでも時刻をこの範囲に収める。
+function clampToMusuhiHours(dateStr: string, startTime: string, endTime: string): { startTime: string; endTime: string } {
+  const closing = musuhiClosingTime(dateStr);
+  const cappedStart = timeToMinutes(startTime) < timeToMinutes(MUSUHI_OPENING_TIME) ? MUSUHI_OPENING_TIME : startTime;
+  const cappedEnd = timeToMinutes(endTime) > timeToMinutes(closing) ? closing : endTime;
+  return { startTime: cappedStart, endTime: cappedEnd };
+}
+
 export async function addMusuhiShift(input: {
   staffId: string;
   entryDate: string;
@@ -117,6 +130,7 @@ export async function addMusuhiShift(input: {
   if (adminCheck) return adminCheck;
 
   if (input.endTime <= input.startTime) return { ok: false, error: "終了時刻は開始時刻より後にしてください。" };
+  const { startTime, endTime } = clampToMusuhiHours(input.entryDate, input.startTime, input.endTime);
 
   const admin = createAdminClient();
   const { data, error } = await admin
@@ -124,8 +138,8 @@ export async function addMusuhiShift(input: {
     .insert({
       staff_id: input.staffId,
       entry_date: input.entryDate,
-      start_time: input.startTime,
-      end_time: input.endTime,
+      start_time: startTime,
+      end_time: endTime,
     })
     .select()
     .single();
@@ -144,13 +158,28 @@ export async function updateMusuhiShift(
   const adminCheck = await requireAdmin();
   if (adminCheck) return adminCheck;
 
+  const admin = createAdminClient();
+  const { data: existing } = await admin
+    .from("musuhi_shifts")
+    .select("staff_id, entry_date, start_time, end_time")
+    .eq("id", id)
+    .maybeSingle();
+
   const update: { staff_id?: string; start_time?: string; end_time?: string } = {};
   if (input.staffId !== undefined) update.staff_id = input.staffId;
-  if (input.startTime !== undefined) update.start_time = input.startTime;
-  if (input.endTime !== undefined) update.end_time = input.endTime;
+  if ((input.startTime !== undefined || input.endTime !== undefined) && existing) {
+    const clamped = clampToMusuhiHours(
+      existing.entry_date,
+      input.startTime ?? existing.start_time,
+      input.endTime ?? existing.end_time,
+    );
+    if (input.startTime !== undefined) update.start_time = clamped.startTime;
+    if (input.endTime !== undefined) update.end_time = clamped.endTime;
+  } else {
+    if (input.startTime !== undefined) update.start_time = input.startTime;
+    if (input.endTime !== undefined) update.end_time = input.endTime;
+  }
 
-  const admin = createAdminClient();
-  const { data: existing } = await admin.from("musuhi_shifts").select("staff_id, entry_date").eq("id", id).maybeSingle();
   const { error } = await admin.from("musuhi_shifts").update(update).eq("id", id);
   if (error) return { ok: false, error: "更新に失敗しました。" };
   if (existing) {
@@ -257,9 +286,8 @@ export async function fillMusuhiFromLelienReception(input: {
       (s) => s.entry_date === r.entry_date && s.staff_id === pairedStaffId && timesOverlap(r.start_time!, r.end_time!, s.start_time, s.end_time),
     );
     if (alreadyCovered) continue;
-    const closing = musuhiClosingTime(r.entry_date);
-    const cappedEnd = timeToMinutes(r.end_time) > timeToMinutes(closing) ? closing : r.end_time;
-    rows.push({ staff_id: pairedStaffId, entry_date: r.entry_date, start_time: r.start_time, end_time: cappedEnd });
+    const clamped = clampToMusuhiHours(r.entry_date, r.start_time, r.end_time);
+    rows.push({ staff_id: pairedStaffId, entry_date: r.entry_date, start_time: clamped.startTime, end_time: clamped.endTime });
   }
 
   if (rows.length > 0) {
