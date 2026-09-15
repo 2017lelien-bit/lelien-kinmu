@@ -2,15 +2,15 @@
 
 import { useId, useLayoutEffect, useState } from "react";
 
-// A4横向き・余白10mmの印刷可能エリア(96dpi換算)。カレンダーの中身がこれより
+// A4横向き・余白5mmの印刷可能エリア(96dpi換算)。カレンダーの中身がこれより
 // 縦に長くなっても2ページ目に分かれないよう、印刷用のCSSだけで自動的に縮小する。
 //
 // window.print()時のbeforeprintイベントでstyleを直接書き換える方式だと、ブラウザが
 // 既に印刷レイアウトの計算を始めた後になり、間に合わず反映されないことがあった。
 // そのため、表示された時点で計算した倍率を<style>タグ(@media print)としてあらかじめ
 // 用意しておき、印刷時には常にそのCSSが効くようにする。
-const PAGE_WIDTH_PX = 1047;
-const PAGE_HEIGHT_PX = 718;
+const PAGE_WIDTH_PX = 1084;
+const PAGE_HEIGHT_PX = 756;
 
 export default function PrintFitToPage({ children }: { children: React.ReactNode }) {
   const reactId = useId();
