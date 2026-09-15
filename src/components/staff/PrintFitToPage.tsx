@@ -56,7 +56,12 @@ export default function PrintFitToPage({ children }: { children: React.ReactNode
       <style>{`
         @media print {
           /* transformは印刷時に反映されないブラウザがあるため、実際にレイアウトが
-             縮む zoom を使う(wrapperの高さも自動でついてくるので別途調整不要)。 */
+             縮む zoom を使う(wrapperの高さも自動でついてくるので別途調整不要)。
+             zoomで縮んだ分だけ左上に寄ってしまうため、wrapper側で中央寄せする。 */
+          #${id}-wrapper {
+            display: flex;
+            justify-content: center;
+          }
           #${id}-inner {
             width: ${PAGE_WIDTH_PX}px;
             zoom: ${scale};
