@@ -103,7 +103,15 @@ export default function MusuhiScheduleBuilderPanel({
     setBackfilling(true);
     setError(null);
     setBackfillMessage(null);
-    const result = await backfillMusuhiBookingAvailability(monthStart, monthEnd(monthStart));
+    let result;
+    try {
+      result = await backfillMusuhiBookingAvailability(monthStart, monthEnd(monthStart));
+    } catch (e) {
+      console.error("[handleBackfill] failed", e);
+      setBackfilling(false);
+      setError("反映に失敗しました(通信エラーまたはタイムアウト)。もう一度お試しください。");
+      return;
+    }
     setBackfilling(false);
     if (!result.ok) {
       setError(result.error);

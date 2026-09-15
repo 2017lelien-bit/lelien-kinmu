@@ -197,13 +197,11 @@ export async function backfillMusuhiBookingAvailability(monthStart: string, mont
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
 
-  let succeeded = 0;
-  let firstError: string | null = null;
-  for (const date of dates) {
-    const result = await syncMusuhiBookingAvailability(date);
-    if (result.ok) succeeded++;
-    else firstError ??= result.error;
-  }
+  // 日付ごとに直列で待つと合計時間が長くなり、サーバー関数のタイムアウトにかかりやすいため、
+  // 独立した処理である日付間は並行して実行する。
+  const results = await Promise.all(dates.map((date) => syncMusuhiBookingAvailability(date)));
+  const succeeded = results.filter((r) => r.ok).length;
+  const firstError = results.find((r) => !r.ok)?.error ?? null;
   if (succeeded === 0 && firstError) return { ok: false, error: firstError };
   return { ok: true, data: { synced: succeeded } };
 }
