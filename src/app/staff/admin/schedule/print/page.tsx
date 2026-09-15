@@ -10,6 +10,7 @@ import PrintButton from "@/components/staff/PrintButton";
 import PrintFitToPage from "@/components/staff/PrintFitToPage";
 import SaveImageButton from "@/components/staff/SaveImageButton";
 import LessonColorEditor from "@/components/staff/LessonColorEditor";
+import FitText from "@/components/staff/FitText";
 
 const PRINT_TYPES = ["staff", "customer", "hp"] as const;
 type PrintType = (typeof PRINT_TYPES)[number];
@@ -187,10 +188,10 @@ export default async function SchedulePrintPage({
                   {lessons.map((e) => {
                     const name = e.lesson_name ?? "(レッスン名未定)";
                     return (
-                      <p key={e.id} className="overflow-visible whitespace-nowrap rounded px-1 py-0.5 leading-tight" style={lessonStyle(name, colorMap)}>
+                      <FitText key={e.id} className="rounded px-1 py-0.5 leading-tight" style={lessonStyle(name, colorMap)}>
                         {formatTime(e.start_time)} {name}
                         {type !== "hp" && `(${e.staffName})`}
-                      </p>
+                      </FitText>
                     );
                   })}
                 </>

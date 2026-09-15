@@ -2,14 +2,14 @@
 
 import { useId, useLayoutEffect, useState } from "react";
 
-// A4横向き・余白8mmの印刷可能エリア(96dpi換算)。カレンダーの中身がこれより
+// A4横向き・余白6mmの印刷可能エリア(96dpi換算)。カレンダーの中身がこれより
 // 縦に長くなっても2ページ目に分かれないよう、印刷用のCSSだけで自動的に縮小する。
 //
 // ブラウザの「ヘッダーとフッター」表示は@pageの余白とは別に上下を消費することがあるため、
 // 少し余裕を持たせた数値を目標にする。
 const SAFETY_FACTOR = 0.92;
-const PAGE_WIDTH_PX = 1062 * SAFETY_FACTOR;
-const PAGE_HEIGHT_PX = 733 * SAFETY_FACTOR;
+const PAGE_WIDTH_PX = 1077 * SAFETY_FACTOR;
+const PAGE_HEIGHT_PX = 748 * SAFETY_FACTOR;
 
 export default function PrintFitToPage({ children }: { children: React.ReactNode }) {
   const reactId = useId();
