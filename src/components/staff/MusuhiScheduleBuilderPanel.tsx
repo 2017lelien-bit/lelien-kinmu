@@ -16,12 +16,19 @@ import {
 } from "@/lib/musuhi-schedule";
 import { dayOfWeekForDate, monthEnd } from "@/lib/date";
 import { CLOSED_DAY_OF_WEEK, DAY_OF_WEEK_LABEL, isClosedOnDate } from "@/lib/types";
+import SaveImageButton from "@/components/staff/SaveImageButton";
 
 type ShiftWithName = MusuhiShift & { staffName: string };
 
 function formatMonthLabel(monthStart: string): string {
   const [y, m] = monthStart.split("-");
   return `${y}年${Number(m)}月`;
+}
+
+// 日付の横に詰めて書くための短い時刻表記("09:00"→"9"、"13:30"→"13:30")。
+function formatTimeCompact(t: string): string {
+  const [h, min] = t.slice(0, 5).split(":");
+  return min === "00" ? String(Number(h)) : `${Number(h)}:${min}`;
 }
 
 export default function MusuhiScheduleBuilderPanel({
@@ -366,6 +373,53 @@ export default function MusuhiScheduleBuilderPanel({
               </div>
             );
           })}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2 border-t border-neutral-200 pt-4 dark:border-neutral-800">
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-sm font-semibold text-neutral-500">プレビュー(むすひスケジュールのみ)</p>
+          <SaveImageButton targetId="musuhi-only-preview" filename={`${monthStart.slice(0, 7)}-musuhi-schedule.png`} />
+        </div>
+        <div className="overflow-x-auto">
+          <div id="musuhi-only-preview" className="flex min-w-[700px] flex-col gap-2 bg-white p-2">
+            <p className="text-center text-lg font-bold text-black">{formatMonthLabel(monthStart)}むすひスケジュール</p>
+            <div className="grid grid-cols-7 gap-px overflow-hidden rounded border border-neutral-400 bg-neutral-400 text-[10px]">
+              {DAY_OF_WEEK_LABEL.map((label, i) => (
+                <div
+                  key={label}
+                  className={`bg-neutral-100 py-1 text-center text-xs font-semibold ${i === 0 ? "text-red-600" : ""}`}
+                >
+                  {label}
+                </div>
+              ))}
+              {calendarCells.map((date, i) => {
+                if (!date) return <div key={`empty-preview-${i}`} className="min-h-20 bg-white" />;
+                const day = Number(date.split("-")[2]);
+                const dow = dayOfWeekForDate(date);
+                const noteEntry = notesByDate.get(date);
+                const isClosedDay = isClosedOnDate(date, noteEntry?.is_closed_override);
+                const dayShifts = (shiftsByDate.get(date) ?? []).slice().sort((a, b) => a.start_time.localeCompare(b.start_time));
+                return (
+                  <div key={date} className={`flex min-h-20 flex-col gap-0.5 p-1 ${isClosedDay ? "bg-neutral-100" : "bg-white"}`}>
+                    <p className={`font-semibold ${dow === 0 ? "text-red-600" : ""}`}>{day}</p>
+                    {isClosedDay ? (
+                      <p className="text-neutral-400">休業</p>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-x-1">
+                        {dayShifts.map((s) => (
+                          <p key={s.id} className="text-neutral-800">
+                            {s.staffName}
+                            {formatTimeCompact(s.start_time)}-{formatTimeCompact(s.end_time)}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
     </div>
