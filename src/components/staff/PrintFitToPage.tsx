@@ -1,44 +1,45 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useId, useLayoutEffect, useState } from "react";
 
 // A4横向き・余白10mmの印刷可能エリア(96dpi換算)。カレンダーの中身がこれより
-// 縦に長くなっても2ページ目に分かれないよう、印刷直前だけ自動で縮小する。
+// 縦に長くなっても2ページ目に分かれないよう、印刷用のCSSだけで自動的に縮小する。
+//
+// window.print()時のbeforeprintイベントでstyleを直接書き換える方式だと、ブラウザが
+// 既に印刷レイアウトの計算を始めた後になり、間に合わず反映されないことがあった。
+// そのため、表示された時点で計算した倍率を<style>タグ(@media print)としてあらかじめ
+// 用意しておき、印刷時には常にそのCSSが効くようにする。
 const PAGE_WIDTH_PX = 1047;
 const PAGE_HEIGHT_PX = 718;
 
 export default function PrintFitToPage({ children }: { children: React.ReactNode }) {
-  const wrapperRef = useRef<HTMLDivElement>(null);
-  const innerRef = useRef<HTMLDivElement>(null);
+  const reactId = useId();
+  const id = `print-fit-${reactId.replace(/[:]/g, "")}`;
+  const [scale, setScale] = useState(1);
+  const [scaledHeight, setScaledHeight] = useState<number | null>(null);
 
-  useEffect(() => {
-    const applyScale = () => {
-      const inner = innerRef.current;
-      const wrapper = wrapperRef.current;
-      if (!inner || !wrapper) return;
-      const scale = Math.min(PAGE_WIDTH_PX / inner.scrollWidth, PAGE_HEIGHT_PX / inner.scrollHeight, 1);
-      inner.style.transform = `scale(${scale})`;
-      wrapper.style.height = `${inner.scrollHeight * scale}px`;
+  useLayoutEffect(() => {
+    const recompute = () => {
+      const inner = document.getElementById(`${id}-inner`);
+      if (!inner) return;
+      const nextScale = Math.min(PAGE_WIDTH_PX / inner.scrollWidth, PAGE_HEIGHT_PX / inner.scrollHeight, 1);
+      setScale(nextScale);
+      setScaledHeight(inner.scrollHeight * nextScale);
     };
-    const reset = () => {
-      const inner = innerRef.current;
-      const wrapper = wrapperRef.current;
-      if (inner) inner.style.transform = "";
-      if (wrapper) wrapper.style.height = "";
-    };
-    window.addEventListener("beforeprint", applyScale);
-    window.addEventListener("afterprint", reset);
-    return () => {
-      window.removeEventListener("beforeprint", applyScale);
-      window.removeEventListener("afterprint", reset);
-    };
-  }, []);
+    recompute();
+    window.addEventListener("beforeprint", recompute);
+    return () => window.removeEventListener("beforeprint", recompute);
+  }, [id]);
 
   return (
-    <div ref={wrapperRef}>
-      <div ref={innerRef} className="origin-top-left">
-        {children}
-      </div>
+    <div id={`${id}-wrapper`}>
+      <style>{`
+        @media print {
+          #${id}-wrapper { height: ${scaledHeight ?? "auto"}px; }
+          #${id}-inner { transform: scale(${scale}); transform-origin: top left; }
+        }
+      `}</style>
+      <div id={`${id}-inner`}>{children}</div>
     </div>
   );
 }
