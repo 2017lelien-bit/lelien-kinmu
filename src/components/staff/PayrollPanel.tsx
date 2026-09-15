@@ -170,6 +170,12 @@ export default function PayrollPanel({
               ))}
             </ul>
           )}
+          {lessonGroups.length > 0 && preview && (
+            <p className="text-sm font-semibold">
+              レッスン合計: {preview.breakdown.lessonLines.length}本 = ¥
+              {preview.breakdown.lessonLines.reduce((sum, l) => sum + l.rate, 0).toLocaleString()}
+            </p>
+          )}
           {lessonGroups.length > 0 && (
             <ul className="text-sm">
               {lessonGroups.map((g) => (
