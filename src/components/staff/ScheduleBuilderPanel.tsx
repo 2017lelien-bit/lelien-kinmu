@@ -563,10 +563,10 @@ export default function ScheduleBuilderPanel({
               key={date}
               className={`flex min-h-28 flex-col gap-0.5 p-1 ${isClosedDay ? "bg-neutral-100 dark:bg-neutral-900" : "bg-white dark:bg-neutral-950"}`}
             >
-              <div className="flex items-baseline gap-x-1 overflow-hidden whitespace-nowrap">
+              <div className="flex flex-wrap items-baseline gap-x-1">
                 <p className={`shrink-0 font-semibold ${dow === 0 ? "text-red-600" : ""}`}>{day}</p>
                 {!isClosedDay && (
-                  <span className="min-w-0 flex-1 overflow-hidden text-ellipsis text-neutral-600">
+                  <span className="min-w-0 text-neutral-600">
                     {reception.map((e) => `${e.staffName}${formatTimeCompact(e.start_time)}-${formatTimeCompact(e.end_time)}`).join(" ")}
                   </span>
                 )}
@@ -577,9 +577,9 @@ export default function ScheduleBuilderPanel({
                 )
               ) : (
                 musuhiDay.length > 0 && (
-                  <p className="flex items-baseline gap-x-1 overflow-hidden whitespace-nowrap rounded bg-emerald-50 px-1 text-[9px] text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">
+                  <p className="flex flex-wrap items-baseline gap-x-1 rounded bg-emerald-50 px-1 text-[9px] text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">
                     <span className="shrink-0 font-semibold">むすひ:</span>
-                    <span className="min-w-0 flex-1 overflow-hidden text-ellipsis">
+                    <span className="min-w-0">
                       {musuhiDay.map((s) => `${s.staffName}${formatTimeCompact(s.start_time)}-${formatTimeCompact(s.end_time)}`).join(" ")}
                     </span>
                   </p>
