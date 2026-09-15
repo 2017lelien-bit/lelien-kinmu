@@ -406,14 +406,11 @@ export default function MusuhiScheduleBuilderPanel({
                     {isClosedDay ? (
                       <p className="text-neutral-400">休業</p>
                     ) : (
-                      <div className="grid grid-cols-2 gap-x-1">
-                        {dayShifts.map((s) => (
-                          <p key={s.id} className="text-neutral-800">
-                            {s.staffName}
-                            {formatTimeCompact(s.start_time)}-{formatTimeCompact(s.end_time)}
-                          </p>
-                        ))}
-                      </div>
+                      dayShifts.map((s) => (
+                        <p key={s.id} className="text-neutral-800">
+                          {s.staffName} {formatTimeCompact(s.start_time)}-{formatTimeCompact(s.end_time)}
+                        </p>
+                      ))
                     )}
                   </div>
                 );
