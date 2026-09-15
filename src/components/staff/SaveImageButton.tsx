@@ -2,13 +2,10 @@
 
 import { useState } from "react";
 
-// A4横向き用紙にぴったり合うよう、保存する画像は常にこのピクセルサイズ(縦横比297:210)に統一する。
-// 内容がこれより大きくても小さくても、中に収まるよう自動で拡大縮小して中央に配置する。
-const A4_LANDSCAPE_WIDTH = 2245;
-const A4_LANDSCAPE_HEIGHT = 1587;
-
 // 印刷用ではなく、そのまま画像(PNG)として保存したい場合のボタン。
 // 印刷時に隠す要素(print:hidden、色編集の操作部分など)は画像にも含めない。
+// (A4用紙にぴったり合わせる調整は、実際に紙へ印刷する「印刷する」ボタン側で行う。
+// 画像はカレンダー本来の縦横比のまま保存したほうが、余白ができず見やすい。)
 export default function SaveImageButton({ targetId, filename }: { targetId: string; filename: string }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,31 +18,12 @@ export default function SaveImageButton({ targetId, filename }: { targetId: stri
       if (!target) throw new Error("対象が見つかりません。");
       // Tailwind(oklch等)の色をそのまま解釈できるフォーク版を使う(本家html2canvasは対応していない)。
       const { default: html2canvas } = await import("html2canvas-pro");
-      const captured = await html2canvas(target, {
+      const canvas = await html2canvas(target, {
         backgroundColor: "#ffffff",
         scale: 2,
         ignoreElements: (el) => el.classList.contains("print:hidden"),
       });
-
-      const page = document.createElement("canvas");
-      page.width = A4_LANDSCAPE_WIDTH;
-      page.height = A4_LANDSCAPE_HEIGHT;
-      const ctx = page.getContext("2d");
-      if (!ctx) throw new Error("キャンバスの作成に失敗しました。");
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, page.width, page.height);
-      const fitScale = Math.min(A4_LANDSCAPE_WIDTH / captured.width, A4_LANDSCAPE_HEIGHT / captured.height);
-      const drawWidth = captured.width * fitScale;
-      const drawHeight = captured.height * fitScale;
-      ctx.drawImage(
-        captured,
-        (A4_LANDSCAPE_WIDTH - drawWidth) / 2,
-        (A4_LANDSCAPE_HEIGHT - drawHeight) / 2,
-        drawWidth,
-        drawHeight,
-      );
-
-      const dataUrl = page.toDataURL("image/png");
+      const dataUrl = canvas.toDataURL("image/png");
       const link = document.createElement("a");
       link.href = dataUrl;
       link.download = filename;
