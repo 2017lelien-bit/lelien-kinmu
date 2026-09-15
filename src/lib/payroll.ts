@@ -476,6 +476,19 @@ export async function getPayslipTextSummaries(periodStart: string): Promise<Pays
   });
 }
 
+// スタッフ個別ページの明細履歴からも、その場でLINE等にコピーできるようにする。
+export async function getPayslipText(payslipId: string): Promise<ActionResult<string>> {
+  const adminCheck = await requireAdmin();
+  if (adminCheck) return adminCheck;
+
+  const admin = createAdminClient();
+  const { data: p } = await admin.from("staff_payslips").select("*, staff_profiles(name)").eq("id", payslipId).maybeSingle();
+  if (!p) return { ok: false, error: "明細が見つかりませんでした。" };
+
+  const staffName = (p as unknown as { staff_profiles: { name: string } | null }).staff_profiles?.name ?? "(不明)";
+  return { ok: true, data: formatPayslipText(staffName, p as StaffPayslip) };
+}
+
 const CSV_HEADERS = [
   "氏名",
   "対象期間",

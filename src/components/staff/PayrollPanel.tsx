@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { calculatePayroll, deletePayslip, generatePayslip, sendPayslipEmail, type PayrollResult } from "@/lib/payroll";
+import { calculatePayroll, deletePayslip, generatePayslip, getPayslipText, sendPayslipEmail, type PayrollResult } from "@/lib/payroll";
 import { currentPayPeriod } from "@/lib/date";
 import type { CommuteType, StaffPayslip } from "@/lib/types";
 
@@ -31,6 +31,8 @@ export default function PayrollPanel({
   const [creating, setCreating] = useState(false);
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [copyingId, setCopyingId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   async function handleCalculate() {
     setCalculating(true);
@@ -79,6 +81,25 @@ export default function PayrollPanel({
       return;
     }
     router.refresh();
+  }
+
+  // メールが使えない場合に、その場でLINE等にそのまま貼り付けられるようにする。
+  async function handleCopy(payslipId: string) {
+    setCopyingId(payslipId);
+    setError(null);
+    const result = await getPayslipText(payslipId);
+    setCopyingId(null);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(result.data);
+      setCopiedId(payslipId);
+      setTimeout(() => setCopiedId((cur) => (cur === payslipId ? null : cur)), 2000);
+    } catch {
+      setError("コピーに失敗しました。");
+    }
   }
 
   // 同じ日・レッスン名・時間・人数のレッスンは、1行の「○本」表示にまとめる。
@@ -229,6 +250,13 @@ export default function PayrollPanel({
                   className="underline disabled:opacity-40"
                 >
                   {sendingId === p.id ? "送信中..." : p.sent_at ? "再送信する" : "明細をメール送信する"}
+                </button>
+                <button
+                  onClick={() => handleCopy(p.id)}
+                  disabled={copyingId === p.id}
+                  className="underline disabled:opacity-40"
+                >
+                  {copyingId === p.id ? "コピー中..." : copiedId === p.id ? "コピーしました" : "LINE用にコピー"}
                 </button>
                 <button
                   onClick={() => handleDelete(p.id)}
