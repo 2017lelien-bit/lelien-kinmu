@@ -577,12 +577,17 @@ export default function ScheduleBuilderPanel({
                 )
               ) : (
                 musuhiDay.length > 0 && (
-                  <p className="flex flex-wrap items-baseline gap-x-1 rounded bg-emerald-50 px-1 text-[9px] text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">
-                    <span className="shrink-0 font-semibold">むすひ:</span>
-                    <span className="min-w-0">
-                      {musuhiDay.map((s) => `${s.staffName}${formatTimeCompact(s.start_time)}-${formatTimeCompact(s.end_time)}`).join(" ")}
-                    </span>
-                  </p>
+                  <div className="rounded bg-emerald-50 px-1 text-[9px] text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">
+                    <span className="font-semibold">むすひ:</span>
+                    <div className="grid grid-cols-2 gap-x-1">
+                      {musuhiDay.map((s) => (
+                        <span key={s.id}>
+                          {s.staffName}
+                          {formatTimeCompact(s.start_time)}-{formatTimeCompact(s.end_time)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 )
               )}
               {isClosedDay ? (
