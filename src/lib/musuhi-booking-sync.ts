@@ -47,6 +47,16 @@ function minutesToTime(min: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`;
 }
 
+// お客様が予約できるのは10:00以降。受付担当の実際のシフト(開店準備等で10:00より
+// 早く始まることもある)はそのまま記録しつつ、予約可能時間の表示だけ10:00に合わせる。
+const MUSUHI_BOOKING_OPEN_MINUTES = 10 * 60;
+
+function clampWindowsToBookingHours(windows: Window[]): Window[] {
+  return windows
+    .map((w) => ({ start: Math.max(w.start, MUSUHI_BOOKING_OPEN_MINUTES), end: w.end }))
+    .filter((w) => w.start < w.end);
+}
+
 export type MusuhiSyncResult = { ok: true } | { ok: false; error: string };
 
 // 指定日について、Le lien側の「むすひスケジュール」から、むすひ予約サイト側の
@@ -71,7 +81,7 @@ export async function syncMusuhiBookingAvailability(entryDate: string): Promise<
     start: timeToMinutes(s.start_time),
     end: timeToMinutes(s.end_time),
   }));
-  const mergedWindows = isExplicitlyClosed ? [] : mergeWindows(rawWindows);
+  const mergedWindows = isExplicitlyClosed ? [] : clampWindowsToBookingHours(mergeWindows(rawWindows));
   const isClosed = mergedWindows.length === 0;
 
   // 既存のnote(手動で入れた特別なお知らせ)を消してしまわないよう、あれば引き継ぐ。
