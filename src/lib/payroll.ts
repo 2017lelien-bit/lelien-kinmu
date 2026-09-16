@@ -589,6 +589,8 @@ export async function exportPayrollCsv(periodStart: string): Promise<ActionResul
   });
 
   const csv = [headers.join(","), ...rows].join("\n");
+  // ExcelでUTF-8として正しく開かれるよう、先頭にBOMを付ける(見た目には見えない文字なので
+  // エディタでの編集事故を避けるため、リテラルではなくエスケープシーケンスで明示する)。
   return { ok: true, data: `﻿${csv}` };
 }
 
