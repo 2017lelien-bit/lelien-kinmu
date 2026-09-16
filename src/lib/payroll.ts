@@ -535,17 +535,27 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
   // 名前をそのまま列にすると同じ意味の列が重複して見えてしまう。実質はLe lien/むすひの2種類しか
   // ないため、isLeLienCategoryNameで判定して2つの固定列にまとめる。
   //
-  // レッスンの単価ルール名(例:「ハンモック」)は、時間や人数が違っても同じ名前になっていることが
-  // あり、それだけでは区別がつかない。時間・人数も列名に含めて区別できるようにする。
-  function lessonColumnKey(l: PayrollBreakdownLessonLine): string {
-    const label = l.matchedRuleLabel ?? "該当ルールなし";
-    return `${label}(${l.durationMinutes}分・${l.headcount}人)`;
+  // レッスンの単価ルールの「ラベル」は管理者が自由入力していて、同じ内容でも
+  // 「ハンモック（1～3名）」「ハンモック1-3」「60分(1〜3名)」のように表記がスタッフごとに
+  // バラバラで、そのまま列名にすると同じ内容なのに別の列に分かれてしまう。また、レッスン名でも
+  // 分ける必要はないため、そのスタッフの単価ルールに設定されている人数の範囲(上限・下限)だけを
+  // 見て、揺れのない人数区分の列にまとめる。
+  function headcountTierLabel(staffId: string, headcount: number): string {
+    const rule = (rulesByStaff[staffId] ?? []).find(
+      (r) => (r.min_headcount === null || headcount >= r.min_headcount) && (r.max_headcount === null || headcount <= r.max_headcount),
+    );
+    if (!rule || (rule.min_headcount === null && rule.max_headcount === null)) return "人数区分なし";
+    if (rule.min_headcount !== null && rule.max_headcount !== null) {
+      return rule.min_headcount === rule.max_headcount ? `${rule.min_headcount}人` : `${rule.min_headcount}〜${rule.max_headcount}人`;
+    }
+    if (rule.min_headcount !== null) return `${rule.min_headcount}人以上`;
+    return `${rule.max_headcount}人以下`;
   }
 
   const ruleLabels = new Set<string>();
   for (const { p, breakdown } of parsed) {
     if (!headcountMattersFor(p.staff_id)) continue;
-    for (const l of breakdown.lessonLines) ruleLabels.add(lessonColumnKey(l));
+    for (const l of breakdown.lessonLines) ruleLabels.add(headcountTierLabel(p.staff_id, l.headcount));
   }
   const ruleLabelList = Array.from(ruleLabels).sort();
 
@@ -584,7 +594,7 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
     let flatLessonAmount = 0;
     for (const l of breakdown.lessonLines) {
       if (byHeadcount) {
-        const key = lessonColumnKey(l);
+        const key = headcountTierLabel(p.staff_id, l.headcount);
         const cur = lessonByLabel.get(key) ?? { count: 0, amount: 0 };
         cur.count += 1;
         cur.amount += l.rate;
