@@ -7,6 +7,7 @@ import { sendStaffPayslipEmail } from "@/lib/notifications";
 import { calculateContractorWithholding, calculateEmployeeWithholding } from "@/lib/tax";
 import { payPeriodEnd, computeWorkedMinutes, todayJstDateString } from "@/lib/date";
 import { getLeLienDeductionsByDate } from "@/lib/time-log";
+import type ExcelJS from "exceljs";
 import type {
   ActionResult,
   EmploymentType,
@@ -15,7 +16,6 @@ import type {
   PayrollBreakdownLessonLine,
   StaffPayslip,
 } from "@/lib/types";
-import { EMPLOYMENT_TYPE_LABEL } from "@/lib/types";
 
 // 時給区分は現状「Le lien受付」系(名前の付け方は人によってばらつきがある)と「むすひ」の
 // 2種類しかないため、"むすひ"を含まない=Le lien側、という判定にする方が確実。
@@ -502,11 +502,30 @@ export async function getPayslipText(payslipId: string): Promise<ActionResult<st
   return { ok: true, data: formatPayslipText(staffName, p as StaffPayslip) };
 }
 
+// レッスンの単価ルールを、税理士向け出力の列見出しとして使える形にする。
+// 人数で単価が変わるルールは「{時間}分{人数区分} @{単価}-」、そうでない(本数だけで決まる)
+// ルールはレッスン名をそのまま使う(例:「ティシュー @3,000-」)。
+function ruleColumnLabel(rule: PayRateRule): string {
+  const duration = rule.duration_minutes ? `${rule.duration_minutes}分` : "";
+  if (rule.min_headcount !== null || rule.max_headcount !== null) {
+    let tier: string;
+    if (rule.min_headcount !== null && rule.max_headcount !== null) {
+      tier = rule.min_headcount === rule.max_headcount ? `${rule.min_headcount}人` : `${rule.min_headcount}〜${rule.max_headcount}人`;
+    } else if (rule.min_headcount !== null) {
+      tier = `${rule.min_headcount}人以上`;
+    } else {
+      tier = `${rule.max_headcount}人以下`;
+    }
+    return `${duration}${tier} @${rule.rate.toLocaleString()}-`;
+  }
+  return `${rule.lesson_name ?? "その他"} @${rule.rate.toLocaleString()}-`;
+}
+
 // 税理士など外部への共有用に、対象月の全スタッフ分の明細をExcelファイル(.xlsx)でまとめる
 // (メール送信はドメイン未設定のため使えないので、管理者がダウンロードしていつも通りのメール/LINEで
-// 送る想定)。CSVだと文字コードの扱いでExcel側が文字化けすることがあったため、直接.xlsxを生成する。
-// 業務委託(レッスン単価ルール)・受付等(時給カテゴリ)ごとに、本数/時間と金額を別列に分けて出す
-// (以前Excelで手作業していた「単価ルールごとの列」と同じ考え方)。
+// 送る想定)。これまで手作業でExcelに1人ずつ「見出し行・金額行・時間(回数)行」のブロックを
+// 積み重ねていた形式(表記ゆれのある単価ルール名ではなく、人数区分だけで揃えたもの)を、
+// そのまま自動生成する。
 export async function exportPayrollXlsx(periodStart: string): Promise<ActionResult<string>> {
   const adminCheck = await requireAdmin();
   if (adminCheck) return adminCheck;
@@ -518,107 +537,60 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
     .eq("period_start", periodStart)
     .order("staff_id");
 
+  const rulesByStaff = await getPayRateRulesByStaff();
   const parsed = (payslips ?? []).map((p) => ({
     p,
     name: (p as unknown as { staff_profiles: { name: string } | null }).staff_profiles?.name ?? "",
     breakdown: p.breakdown as PayrollBreakdown,
   }));
 
-  // 人数によって単価が変わるスタッフかどうかで、レッスンの出し方を分ける
-  // (人数依存の人は単価ルールごとの内訳、そうでない人は合計本数・合計金額のみでよい)。
-  const rulesByStaff = await getPayRateRulesByStaff();
-  function headcountMattersFor(staffId: string): boolean {
-    return (rulesByStaff[staffId] ?? []).some((r) => r.min_headcount !== null || r.max_headcount !== null);
-  }
+  const ExcelJS = (await import("exceljs")).default;
+  const workbook = new ExcelJS.Workbook();
+  const YELLOW: ExcelJS.Fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFFF00" } };
+  const LIGHT_YELLOW: ExcelJS.Fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFFFCC" } };
+  const [yearStr, monthStr] = periodStart.split("-");
+  const monthLabel = `${Number(monthStr)}月分`;
 
-  // 時給区分はスタッフごとにカテゴリ名の表記がぶれることがあり(「Lelien受付」「Le lien受付」等)、
-  // 名前をそのまま列にすると同じ意味の列が重複して見えてしまう。実質はLe lien/むすひの2種類しか
-  // ないため、isLeLienCategoryNameで判定して2つの固定列にまとめる。
-  //
-  // レッスンの単価ルールの「ラベル」は管理者が自由入力していて、同じ内容でも
-  // 「ハンモック（1～3名）」「ハンモック1-3」「60分(1〜3名)」のように表記がスタッフごとに
-  // バラバラで、そのまま列名にすると同じ内容なのに別の列に分かれてしまう。また、レッスン名でも
-  // 分ける必要はないため、そのスタッフの単価ルールに設定されている人数の範囲(上限・下限)だけを
-  // 見て、揺れのない人数区分の列にまとめる。
-  function headcountTierLabel(staffId: string, headcount: number): string {
-    const rule = (rulesByStaff[staffId] ?? []).find(
-      (r) => (r.min_headcount === null || headcount >= r.min_headcount) && (r.max_headcount === null || headcount <= r.max_headcount),
-    );
-    if (!rule || (rule.min_headcount === null && rule.max_headcount === null)) return "人数区分なし";
-    if (rule.min_headcount !== null && rule.max_headcount !== null) {
-      return rule.min_headcount === rule.max_headcount ? `${rule.min_headcount}人` : `${rule.min_headcount}〜${rule.max_headcount}人`;
-    }
-    if (rule.min_headcount !== null) return `${rule.min_headcount}人以上`;
-    return `${rule.max_headcount}人以下`;
-  }
+  // --- 受付(時給)シート: Le lien / むすひの2区分は表記ゆれが出ないよう固定列にする。 ---
+  const hourlySheet = workbook.addWorksheet("給料(受付)");
+  for (let i = 1; i <= 16; i++) hourlySheet.getColumn(i).width = 13;
 
-  const ruleLabels = new Set<string>();
-  for (const { p, breakdown } of parsed) {
-    if (!headcountMattersFor(p.staff_id)) continue;
-    for (const l of breakdown.lessonLines) ruleLabels.add(headcountTierLabel(p.staff_id, l.headcount));
-  }
-  const ruleLabelList = Array.from(ruleLabels).sort();
-
-  const headers = [
-    "氏名",
-    "対象期間",
-    "雇用形態",
-    "Lelien受付_時間",
-    "Lelien受付_金額",
-    "むすひ_時間",
-    "むすひ_金額",
-    ...ruleLabelList.flatMap((l) => [`${l}_本数`, `${l}_金額`]),
-    "レッスン合計(本数制)_本数",
-    "レッスン合計(本数制)_金額",
-    "支給額計",
-    "通勤費",
-    "総支給額",
-    "課税対象額",
-    "所得税",
-    "住民税",
-    "差引支給額",
-    "出勤日数",
-  ];
-
-  const rows = parsed.map(({ p, name, breakdown }) => {
+  for (const { p, name, breakdown } of parsed) {
     const leLienHourly = breakdown.lines.filter((l) => l.unitType === "hourly" && isLeLienCategoryName(l.name));
     const musuhiHourly = breakdown.lines.filter((l) => l.unitType === "hourly" && !isLeLienCategoryName(l.name));
+    if (leLienHourly.length === 0 && musuhiHourly.length === 0) continue;
+
     const leLienHours = leLienHourly.reduce((sum, l) => sum + l.quantity, 0);
     const leLienAmount = leLienHourly.reduce((sum, l) => sum + l.subtotal, 0);
     const musuhiHours = musuhiHourly.reduce((sum, l) => sum + l.quantity, 0);
     const musuhiAmount = musuhiHourly.reduce((sum, l) => sum + l.subtotal, 0);
+    const leLienRate = leLienHourly[0]?.rate ?? 0;
+    const musuhiRate = musuhiHourly[0]?.rate ?? 0;
 
-    const byHeadcount = headcountMattersFor(p.staff_id);
-    const lessonByLabel = new Map<string, { count: number; amount: number }>();
-    let flatLessonCount = 0;
-    let flatLessonAmount = 0;
-    for (const l of breakdown.lessonLines) {
-      if (byHeadcount) {
-        const key = headcountTierLabel(p.staff_id, l.headcount);
-        const cur = lessonByLabel.get(key) ?? { count: 0, amount: 0 };
-        cur.count += 1;
-        cur.amount += l.rate;
-        lessonByLabel.set(key, cur);
-      } else {
-        flatLessonCount += 1;
-        flatLessonAmount += l.rate;
-      }
-    }
-
-    return [
+    hourlySheet.addRow([`${yearStr}年`, monthLabel, "給与", "ル リアン"]);
+    const headerRow = hourlySheet.addRow([
+      "パート",
+      "",
+      `時給 @${leLienRate.toLocaleString()}- 時間`,
+      "",
+      "",
+      `時給¥${musuhiRate.toLocaleString()} 時間`,
+      "支給額計",
+      `通勤費 @${p.commute_allowance.toLocaleString()}`,
+      "総支給額",
+      "課税対象額",
+      "所得税",
+      "住民税",
+      "差引支給額",
+      "出勤日数",
+    ]);
+    const valueRow = hourlySheet.addRow([
       name,
-      `${p.period_start}〜${p.period_end}`,
-      EMPLOYMENT_TYPE_LABEL[p.employment_type as EmploymentType],
-      leLienHours,
+      "",
       leLienAmount,
-      musuhiHours,
+      "",
+      "",
       musuhiAmount,
-      ...ruleLabelList.flatMap((label) => {
-        const v = lessonByLabel.get(label);
-        return [v?.count ?? 0, v?.amount ?? 0];
-      }),
-      flatLessonCount,
-      flatLessonAmount,
       p.gross_amount,
       p.commute_allowance,
       p.total_gross,
@@ -627,15 +599,85 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
       p.resident_tax,
       p.net_amount,
       p.days_worked,
-    ];
-  });
+    ]);
+    const hoursRow = hourlySheet.addRow(["", "", leLienHours, "", "", musuhiHours]);
+    hourlySheet.addRow([]);
 
-  const XLSX = await import("xlsx");
-  const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "給与データ");
-  const base64 = XLSX.write(workbook, { type: "base64", bookType: "xlsx" });
-  return { ok: true, data: base64 };
+    for (const col of [9, 10, 13]) {
+      headerRow.getCell(col).fill = YELLOW;
+      valueRow.getCell(col).fill = YELLOW;
+    }
+    for (const col of [3, 6]) {
+      valueRow.getCell(col).fill = LIGHT_YELLOW;
+      hoursRow.getCell(col).fill = LIGHT_YELLOW;
+    }
+  }
+
+  // --- 業務委託(レッスン)シート: 単価ルールごとに1人ずつブロックで積む。 ---
+  const lessonSheet = workbook.addWorksheet("業務委託(レッスン)");
+  for (let i = 1; i <= 25; i++) lessonSheet.getColumn(i).width = 13;
+
+  for (const { p, name, breakdown } of parsed) {
+    if (breakdown.lessonLines.length === 0) continue;
+    const rules = rulesByStaff[p.staff_id] ?? [];
+
+    // 表示ラベルが同じになるルール(例:「ハンモック」と「フロアクラス」がどちらも
+    // 60分1〜3人 @3,000-)は、別のルールIDでも同じ列にまとめる(レッスン名では分けない)。
+    const byLabel = new Map<string, { rule: PayRateRule; count: number; amount: number }>();
+    let unmatchedCount = 0;
+    let unmatchedAmount = 0;
+    for (const l of breakdown.lessonLines) {
+      const matched = matchPayRateRule(rules, { lessonName: l.lessonName, durationMinutes: l.durationMinutes, headcount: l.headcount });
+      if (!matched) {
+        unmatchedCount += 1;
+        unmatchedAmount += l.rate;
+        continue;
+      }
+      const label = ruleColumnLabel(matched);
+      const cur = byLabel.get(label) ?? { rule: matched, count: 0, amount: 0 };
+      cur.count += 1;
+      cur.amount += l.rate;
+      byLabel.set(label, cur);
+    }
+    const entries = Array.from(byLabel.values()).sort((a, b) => a.rule.sort_order - b.rule.sort_order);
+    const hasUnmatched = unmatchedCount > 0;
+
+    lessonSheet.addRow([`${yearStr}年`, "", monthLabel, "給与"]);
+
+    // B列は空欄にしておき(業務委託/名前の次)、回数行の「回数」ラベルがその位置に収まるようにする
+    // (単価ルールの列自体はC列から始まり、3行とも列の位置が揃う)。
+    const headerCells: (string | number)[] = ["業務委託", "", ...entries.map((e) => ruleColumnLabel(e.rule))];
+    if (hasUnmatched) headerCells.push("該当ルールなし");
+    const totalGrossCol = headerCells.length + 3; // 支給額計・通勤費の次(1-indexedなので+1して2つ先)
+    headerCells.push(
+      "支給額計",
+      `通勤費 @${p.commute_allowance.toLocaleString()}`,
+      "総支給額",
+      "課税対象額",
+      "所得税",
+      "差引支給額",
+      "出勤日数",
+    );
+    const headerRow = lessonSheet.addRow(headerCells);
+
+    const valueCells: (string | number)[] = [name, "", ...entries.map((e) => e.amount)];
+    if (hasUnmatched) valueCells.push(unmatchedAmount);
+    valueCells.push(p.gross_amount, p.commute_allowance, p.total_gross, p.taxable_amount, p.income_tax, p.net_amount, p.days_worked);
+    const valueRow = lessonSheet.addRow(valueCells);
+
+    const countCells: (string | number)[] = ["", "回数", ...entries.map((e) => e.count)];
+    if (hasUnmatched) countCells.push(unmatchedCount);
+    lessonSheet.addRow(countCells);
+    lessonSheet.addRow([]);
+
+    for (const col of [totalGrossCol, totalGrossCol + 1, totalGrossCol + 3]) {
+      headerRow.getCell(col).fill = YELLOW;
+      valueRow.getCell(col).fill = YELLOW;
+    }
+  }
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return { ok: true, data: Buffer.from(buffer).toString("base64") };
 }
 
 export async function deletePayslip(payslipId: string): Promise<ActionResult> {
