@@ -502,16 +502,12 @@ export async function getPayslipText(payslipId: string): Promise<ActionResult<st
   return { ok: true, data: formatPayslipText(staffName, p as StaffPayslip) };
 }
 
-function csvField(value: string | number): string {
-  const s = String(value);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
-// 税理士など外部への共有用に、対象月の全スタッフ分の明細をCSVでまとめる(メール送信はドメイン未設定のため使えないので、
-// 管理者がダウンロードしていつも通りのメール/LINEで送る想定)。
+// 税理士など外部への共有用に、対象月の全スタッフ分の明細をExcelファイル(.xlsx)でまとめる
+// (メール送信はドメイン未設定のため使えないので、管理者がダウンロードしていつも通りのメール/LINEで
+// 送る想定)。CSVだと文字コードの扱いでExcel側が文字化けすることがあったため、直接.xlsxを生成する。
 // 業務委託(レッスン単価ルール)・受付等(時給カテゴリ)ごとに、本数/時間と金額を別列に分けて出す
 // (以前Excelで手作業していた「単価ルールごとの列」と同じ考え方)。
-export async function exportPayrollCsv(periodStart: string): Promise<ActionResult<string>> {
+export async function exportPayrollXlsx(periodStart: string): Promise<ActionResult<string>> {
   const adminCheck = await requireAdmin();
   if (adminCheck) return adminCheck;
 
@@ -566,32 +562,34 @@ export async function exportPayrollCsv(periodStart: string): Promise<ActionResul
     }
 
     return [
-      csvField(name),
-      csvField(`${p.period_start}〜${p.period_end}`),
-      csvField(EMPLOYMENT_TYPE_LABEL[p.employment_type as EmploymentType]),
+      name,
+      `${p.period_start}〜${p.period_end}`,
+      EMPLOYMENT_TYPE_LABEL[p.employment_type as EmploymentType],
       ...hourlyNameList.flatMap((n) => {
         const l = hourlyByName.get(n);
-        return [csvField(l?.quantity ?? 0), csvField(l?.subtotal ?? 0)];
+        return [l?.quantity ?? 0, l?.subtotal ?? 0];
       }),
       ...ruleLabelList.flatMap((label) => {
         const v = lessonByLabel.get(label);
-        return [csvField(v?.count ?? 0), csvField(v?.amount ?? 0)];
+        return [v?.count ?? 0, v?.amount ?? 0];
       }),
-      csvField(p.gross_amount),
-      csvField(p.commute_allowance),
-      csvField(p.total_gross),
-      csvField(p.taxable_amount),
-      csvField(p.income_tax),
-      csvField(p.resident_tax),
-      csvField(p.net_amount),
-      csvField(p.days_worked),
-    ].join(",");
+      p.gross_amount,
+      p.commute_allowance,
+      p.total_gross,
+      p.taxable_amount,
+      p.income_tax,
+      p.resident_tax,
+      p.net_amount,
+      p.days_worked,
+    ];
   });
 
-  const csv = [headers.join(","), ...rows].join("\n");
-  // ExcelでUTF-8として正しく開かれるよう、先頭にBOMを付ける(見た目には見えない文字なので
-  // エディタでの編集事故を避けるため、リテラルではなくエスケープシーケンスで明示する)。
-  return { ok: true, data: `﻿${csv}` };
+  const XLSX = await import("xlsx");
+  const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "給与データ");
+  const base64 = XLSX.write(workbook, { type: "base64", bookType: "xlsx" });
+  return { ok: true, data: base64 };
 }
 
 export async function deletePayslip(payslipId: string): Promise<ActionResult> {

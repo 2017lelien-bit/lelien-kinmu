@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { exportPayrollCsv, getPayslipTextSummaries, type PayslipTextSummary } from "@/lib/payroll";
+import { exportPayrollXlsx, getPayslipTextSummaries, type PayslipTextSummary } from "@/lib/payroll";
 import { currentPayPeriod } from "@/lib/date";
 
 export default function PayrollExportPanel() {
@@ -15,18 +15,22 @@ export default function PayrollExportPanel() {
   async function handleDownload() {
     setDownloading(true);
     setError(null);
-    const result = await exportPayrollCsv(periodStart);
+    const result = await exportPayrollXlsx(periodStart);
     setDownloading(false);
     if (!result.ok) {
       setError(result.error);
       return;
     }
 
-    const blob = new Blob([result.data], { type: "text/csv;charset=utf-8;" });
+    // base64文字列をバイナリに戻してExcelファイルとしてダウンロードする。
+    const binary = atob(result.data);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `給与データ_${periodStart.slice(0, 7)}.csv`;
+    a.download = `給与データ_${periodStart.slice(0, 7)}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -69,7 +73,7 @@ export default function PayrollExportPanel() {
           disabled={downloading}
           className="self-start rounded-lg bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-40 dark:bg-white dark:text-black"
         >
-          {downloading ? "作成中..." : "CSVダウンロード(税理士さん用)"}
+          {downloading ? "作成中..." : "Excelダウンロード(税理士さん用)"}
         </button>
         <button
           onClick={handleShowSummaries}
