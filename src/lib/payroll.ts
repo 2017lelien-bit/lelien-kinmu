@@ -313,11 +313,15 @@ export async function calculatePayroll(staffId: string, periodStart: string): Pr
   return { ok: true, data: { breakdown: { lines, lessonLines }, grossAmount, daysWorked } };
 }
 
+// 受付(時給・給与所得)とレッスン(業務委託・報酬)の両方がある人は、1枚にまとめると
+// 「二重に税金が引かれているように見える」と税理士から指摘があったため、それぞれ
+// 別々の明細(支払い)として作成する。税額の計算方法自体は変えていない
+// (受付側=扶養控除等を踏まえた給与所得の月額表、レッスン側=報酬・料金等の一律10.21%)。
 export async function generatePayslip(
   staffId: string,
   periodStart: string,
   input: { commuteAllowance: number; residentTax: number; daysWorked: number },
-): Promise<ActionResult<StaffPayslip>> {
+): Promise<ActionResult<StaffPayslip[]>> {
   const adminCheck = await requireAdmin();
   if (adminCheck) return adminCheck;
 
@@ -336,56 +340,80 @@ export async function generatePayslip(
   const result = await calculatePayroll(staffId, periodStart);
   if (!result.ok) return result;
 
-  const { grossAmount, breakdown } = result.data;
-  const totalGross = grossAmount + input.commuteAllowance;
+  const { breakdown } = result.data;
+  const periodEnd = payPeriodEnd(periodStart);
 
-  // 収入の出どころによって税の扱いが異なるため、それぞれ別に計算して合算する。
-  // 区分(支払区分)からの収入 = 給与所得として、扶養設定に応じた月額表(甲欄)の算式で計算する(通勤費は非課税)。
-  // レッスン実績からの収入 = 報酬・料金等として、一律10.21%で源泉徴収する(通勤費も課税対象に含む)。
-  // パートと業務委託が両方ある場合、通勤費は全額パート側(非課税)として扱う。業務委託のみの場合は、
-  // 従来通り通勤費も課税対象に含める(税理士確認済み)。
   const categoryGross = breakdown.lines.reduce((sum, l) => sum + l.subtotal, 0);
   const lessonGross = breakdown.lessonLines.reduce((sum, l) => sum + l.rate, 0);
 
-  const commuteForLessons = categoryGross > 0 ? 0 : input.commuteAllowance;
+  // 通勤費は非課税なので受付(給与)側で持たせる。受付がなくレッスンのみの場合は、
+  // これまで通りレッスン側の報酬に含めて課税する(税理士確認済み)。
+  const commuteOnHourly = categoryGross > 0 ? input.commuteAllowance : 0;
+  const commuteOnLesson = categoryGross > 0 ? 0 : input.commuteAllowance;
+  // 住民税は主たる勤務先(受付側)からまとめて控除する想定。受付がなければレッスン側に付ける。
+  const residentTaxOnHourly = categoryGross > 0 ? input.residentTax : 0;
+  const residentTaxOnLesson = categoryGross > 0 ? 0 : input.residentTax;
 
-  const employeeTax =
-    categoryGross > 0
-      ? calculateEmployeeWithholding({
-          grossAfterSocialInsurance: categoryGross,
-          dependentCount: profile.dependent_count,
-          hasSpouseDeduction: profile.has_spouse_deduction,
-        })
-      : 0;
-  const contractorTax = calculateContractorWithholding(lessonGross + commuteForLessons);
+  const rows: {
+    employment_type: EmploymentType;
+    breakdown: PayrollBreakdown;
+    gross_amount: number;
+    commute_allowance: number;
+    total_gross: number;
+    taxable_amount: number;
+    income_tax: number;
+    resident_tax: number;
+    net_amount: number;
+    days_worked: number;
+  }[] = [];
 
-  const taxableAmount = categoryGross + lessonGross + commuteForLessons;
-  const incomeTax = employeeTax + contractorTax;
-  const employmentType: EmploymentType =
-    categoryGross > 0 && lessonGross > 0 ? "mixed" : lessonGross > 0 ? "contract" : "hourly";
+  if (categoryGross > 0) {
+    const employeeTax = calculateEmployeeWithholding({
+      grossAfterSocialInsurance: categoryGross,
+      dependentCount: profile.dependent_count,
+      hasSpouseDeduction: profile.has_spouse_deduction,
+    });
+    const totalGross = categoryGross + commuteOnHourly;
+    rows.push({
+      employment_type: "hourly",
+      breakdown: { lines: breakdown.lines, lessonLines: [] },
+      gross_amount: categoryGross,
+      commute_allowance: commuteOnHourly,
+      total_gross: totalGross,
+      taxable_amount: categoryGross,
+      income_tax: employeeTax,
+      resident_tax: residentTaxOnHourly,
+      net_amount: totalGross - employeeTax - residentTaxOnHourly,
+      days_worked: input.daysWorked,
+    });
+  }
 
-  const netAmount = totalGross - incomeTax - input.residentTax;
-  const periodEnd = payPeriodEnd(periodStart);
+  if (lessonGross > 0) {
+    const taxableAmount = lessonGross + commuteOnLesson;
+    const contractorTax = calculateContractorWithholding(taxableAmount);
+    const totalGross = lessonGross + commuteOnLesson;
+    rows.push({
+      employment_type: "contract",
+      breakdown: { lines: [], lessonLines: breakdown.lessonLines },
+      gross_amount: lessonGross,
+      commute_allowance: commuteOnLesson,
+      total_gross: totalGross,
+      taxable_amount: taxableAmount,
+      income_tax: contractorTax,
+      resident_tax: residentTaxOnLesson,
+      net_amount: totalGross - contractorTax - residentTaxOnLesson,
+      days_worked: input.daysWorked,
+    });
+  }
+
+  if (rows.length === 0) {
+    return { ok: false, error: "この期間の実績がありません。" };
+  }
 
   const { data: inserted, error } = await admin
     .from("staff_payslips")
-    .insert({
-      staff_id: staffId,
-      period_start: periodStart,
-      period_end: periodEnd,
-      employment_type: employmentType,
-      breakdown,
-      gross_amount: grossAmount,
-      commute_allowance: input.commuteAllowance,
-      total_gross: totalGross,
-      taxable_amount: taxableAmount,
-      income_tax: incomeTax,
-      resident_tax: input.residentTax,
-      net_amount: netAmount,
-      days_worked: input.daysWorked,
-    })
-    .select("*")
-    .single();
+    .insert(rows.map((r) => ({ staff_id: staffId, period_start: periodStart, period_end: periodEnd, ...r })))
+    .select("*");
 
   if (error || !inserted) return { ok: false, error: "明細の作成に失敗しました。" };
 
@@ -400,7 +428,7 @@ export async function generatePayslip(
 
   revalidatePath(`/staff/admin/staff/${staffId}`);
   revalidatePath("/staff/admin/staff");
-  return { ok: true, data: inserted as StaffPayslip };
+  return { ok: true, data: inserted as StaffPayslip[] };
 }
 
 export async function getPayslipsForStaff(staffId: string): Promise<StaffPayslip[]> {
@@ -560,12 +588,21 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
     bottom: { style: "thin" },
     right: { style: "thin" },
   };
-  const [yearStr, monthStr] = periodStart.split("-");
+  // 「◯月分」は開始月ではなく、締め日(期間の終わり)の月で呼ぶ慣習に合わせる
+  // (例: 8/16〜9/15の期間は「9月分」)。
+  const periodEndForLabel = payPeriodEnd(periodStart);
+  const [yearStr, monthStr] = periodEndForLabel.split("-");
   const monthLabel = `${Number(monthStr)}月分`;
 
   // --- 受付(時給)シート: Le lien / むすひの2区分は表記ゆれが出ないよう固定列にする。 ---
   const hourlySheet = workbook.addWorksheet("給料(受付)");
   for (let i = 1; i <= 16; i++) hourlySheet.getColumn(i).width = 13;
+
+  let hourlyGrossTotal = 0;
+  let hourlyCommuteTotal = 0;
+  let hourlyTotalGrossTotal = 0;
+  let hourlyIncomeTaxTotal = 0;
+  let hourlyNetTotal = 0;
 
   for (const { p, name, breakdown, commuteLabel } of parsed) {
     const leLienHourly = breakdown.lines.filter((l) => l.unitType === "hourly" && isLeLienCategoryName(l.name));
@@ -627,11 +664,42 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
       valueRow.getCell(col).fill = LIGHT_YELLOW;
       hoursRow.getCell(col).fill = LIGHT_YELLOW;
     }
+
+    hourlyGrossTotal += p.gross_amount;
+    hourlyCommuteTotal += p.commute_allowance;
+    hourlyTotalGrossTotal += p.total_gross;
+    hourlyIncomeTaxTotal += p.income_tax;
+    hourlyNetTotal += p.net_amount;
+  }
+
+  if (hourlySheet.rowCount > 0) {
+    const totalRow = hourlySheet.addRow([
+      "合計",
+      "",
+      "",
+      "",
+      "",
+      "",
+      hourlyGrossTotal,
+      hourlyCommuteTotal,
+      hourlyTotalGrossTotal,
+      "",
+      hourlyIncomeTaxTotal,
+      "",
+      hourlyNetTotal,
+    ]);
+    for (let col = 1; col <= 13; col++) totalRow.getCell(col).font = { bold: true };
   }
 
   // --- 業務委託(レッスン)シート: 単価ルールごとに1人ずつブロックで積む。 ---
   const lessonSheet = workbook.addWorksheet("業務委託(レッスン)");
   for (let i = 1; i <= 25; i++) lessonSheet.getColumn(i).width = 13;
+
+  let lessonGrossTotal = 0;
+  let lessonCommuteTotal = 0;
+  let lessonTotalGrossTotal = 0;
+  let lessonIncomeTaxTotal = 0;
+  let lessonNetTotal = 0;
 
   for (const { p, name, breakdown, commuteLabel } of parsed) {
     if (breakdown.lessonLines.length === 0) continue;
@@ -686,6 +754,29 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
     for (const row of [titleRow, headerRow, valueRow, countRow]) {
       for (let col = 1; col <= lastCol; col++) row.getCell(col).border = THIN_BORDER;
     }
+
+    lessonGrossTotal += p.gross_amount;
+    lessonCommuteTotal += p.commute_allowance;
+    lessonTotalGrossTotal += p.total_gross;
+    lessonIncomeTaxTotal += p.income_tax;
+    lessonNetTotal += p.net_amount;
+  }
+
+  if (lessonSheet.rowCount > 0) {
+    const totalRow = lessonSheet.addRow([
+      "合計",
+      "支給額計",
+      lessonGrossTotal,
+      "通勤費",
+      lessonCommuteTotal,
+      "総支給額",
+      lessonTotalGrossTotal,
+      "所得税",
+      lessonIncomeTaxTotal,
+      "差引支給額",
+      lessonNetTotal,
+    ]);
+    for (let col = 1; col <= 11; col++) totalRow.getCell(col).font = { bold: true };
   }
 
   const buffer = await workbook.xlsx.writeBuffer();
