@@ -611,10 +611,8 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
     bottom: { style: "thin" },
     right: { style: "thin" },
   };
-  // 「◯月分」は開始月ではなく、締め日(期間の終わり)の月で呼ぶ慣習に合わせる
-  // (例: 8/16〜9/15の期間は「9月分」)。
-  const periodEndForLabel = payPeriodEnd(periodStart);
-  const [yearStr, monthStr] = periodEndForLabel.split("-");
+  // 「◯月分」は開始月で呼ぶ(例: 8/16〜9/15の期間は「8月分」)。
+  const [yearStr, monthStr] = periodStart.split("-");
   const monthLabel = `${Number(monthStr)}月分`;
 
   // --- 受付(時給)シート: 元のExcelと同じ列構成(支給額計/通勤費/総支給額/非課税通勤/
