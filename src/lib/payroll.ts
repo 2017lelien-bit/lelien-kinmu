@@ -530,10 +530,11 @@ export async function getPayslipText(payslipId: string): Promise<ActionResult<st
   return { ok: true, data: formatPayslipText(staffName, p as StaffPayslip) };
 }
 
-// レッスンの単価ルールを、税理士向け出力の列見出しとして使える形にする。
-// 人数で単価が変わるルールは「{時間}分{人数区分} @{単価}-」、そうでない(本数だけで決まる)
-// ルールはレッスン名をそのまま使う(例:「ティシュー @3,000-」)。
-function ruleColumnLabel(rule: PayRateRule): string {
+// レッスンの単価ルールを、税理士向け出力の列見出しとして使える形にする(単価はスタッフごとに
+// 微妙に違うことがあるため、見出しには含めず、人数区分・時間・レッスン名だけで揃える)。
+// 人数で単価が変わるルールは「{時間}分{人数区分}」、そうでない(本数だけで決まる)ルールは
+// レッスン名をそのまま使う(例:「ティシュー」)。
+function ruleColumnKey(rule: PayRateRule): string {
   const duration = rule.duration_minutes ? `${rule.duration_minutes}分` : "";
   if (rule.min_headcount !== null || rule.max_headcount !== null) {
     let tier: string;
@@ -544,9 +545,31 @@ function ruleColumnLabel(rule: PayRateRule): string {
     } else {
       tier = `${rule.max_headcount}人以下`;
     }
-    return `${duration}${tier} @${rule.rate.toLocaleString()}-`;
+    return `${duration}${tier}`;
   }
-  return `${rule.lesson_name ?? "その他"} @${rule.rate.toLocaleString()}-`;
+  return rule.lesson_name ?? "その他";
+}
+
+// 人数区分の列は時間・人数の小さい順、本数だけで決まるレッスン名の列は最後にまとめて
+// 並べる(全スタッフ共通の列順にすることで、SUM関数で列ごとの合計が取れるようにする)。
+function columnSortKey(key: string): [number, number, string] {
+  const durationMatch = key.match(/^(\d+)分/);
+  const headcountMatch = key.match(/(\d+)人/);
+  const duration = durationMatch ? Number(durationMatch[1]) : 0;
+  const headcount = headcountMatch ? Number(headcountMatch[1]) : 999;
+  return [duration, headcount, key];
+}
+
+// Excel列番号(1始まり)をA1形式の列文字に変換する(例: 1→A, 27→AA)。
+function colLetter(n: number): string {
+  let s = "";
+  let x = n;
+  while (x > 0) {
+    const rem = (x - 1) % 26;
+    s = String.fromCharCode(65 + rem) + s;
+    x = Math.floor((x - 1) / 26);
+  }
+  return s;
 }
 
 // 税理士など外部への共有用に、対象月の全スタッフ分の明細をExcelファイル(.xlsx)でまとめる
@@ -594,14 +617,20 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
   const [yearStr, monthStr] = periodEndForLabel.split("-");
   const monthLabel = `${Number(monthStr)}月分`;
 
-  // --- 受付(時給)シート: Le lien / むすひの2区分は表記ゆれが出ないよう固定列にする。 ---
+  // --- 受付(時給)シート: 元のExcelと同じ列構成(支給額計/通勤費/総支給額/非課税通勤/
+  // 課税対象額/所得税/住民税/控除計/差引支給額/出勤日数)にし、実際の計算式を入れる。
+  // Le lien / むすひの2区分は表記ゆれが出ないよう固定列にする。
   const hourlySheet = workbook.addWorksheet("給料(受付)");
-  for (let i = 1; i <= 16; i++) hourlySheet.getColumn(i).width = 13;
+  for (let i = 1; i <= 17; i++) hourlySheet.getColumn(i).width = 13;
 
+  const hourlyFirstRow = hourlySheet.rowCount + 1;
   let hourlyGrossTotal = 0;
   let hourlyCommuteTotal = 0;
   let hourlyTotalGrossTotal = 0;
+  let hourlyTaxableTotal = 0;
   let hourlyIncomeTaxTotal = 0;
+  let hourlyResidentTaxTotal = 0;
+  let hourlyDeductionTotal = 0;
   let hourlyNetTotal = 0;
 
   for (const { p, name, breakdown, commuteLabel } of parsed) {
@@ -610,9 +639,7 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
     if (leLienHourly.length === 0 && musuhiHourly.length === 0) continue;
 
     const leLienHours = leLienHourly.reduce((sum, l) => sum + l.quantity, 0);
-    const leLienAmount = leLienHourly.reduce((sum, l) => sum + l.subtotal, 0);
     const musuhiHours = musuhiHourly.reduce((sum, l) => sum + l.quantity, 0);
-    const musuhiAmount = musuhiHourly.reduce((sum, l) => sum + l.subtotal, 0);
     const leLienRate = leLienHourly[0]?.rate ?? 0;
     const musuhiRate = musuhiHourly[0]?.rate ?? 0;
 
@@ -627,36 +654,42 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
       "支給額計",
       `通勤費 ${commuteLabel}`,
       "総支給額",
+      "非課税通勤",
       "課税対象額",
       "所得税",
       "住民税",
+      "控除計",
       "差引支給額",
       "出勤日数",
+      "有給使用有給残",
     ]);
+    const valueRowNum = headerRow.number + 1;
+    const hoursRowNum = valueRowNum + 1;
     const valueRow = hourlySheet.addRow([
       name,
       "",
-      leLienAmount,
+      { formula: `C${hoursRowNum}*${leLienRate}`, result: leLienHours * leLienRate },
       "",
       "",
-      musuhiAmount,
-      p.gross_amount,
-      p.commute_allowance,
-      p.total_gross,
-      p.taxable_amount,
-      p.income_tax,
-      p.resident_tax,
-      p.net_amount,
+      { formula: `F${hoursRowNum}*${musuhiRate}`, result: musuhiHours * musuhiRate },
+      { formula: `C${valueRowNum}+F${valueRowNum}`, result: p.gross_amount }, // 支給額計
+      p.commute_allowance, // 通勤費
+      { formula: `G${valueRowNum}+H${valueRowNum}`, result: p.total_gross }, // 総支給額
+      { formula: `H${valueRowNum}`, result: p.commute_allowance }, // 非課税通勤(通勤費と同額)
+      { formula: `G${valueRowNum}`, result: p.taxable_amount }, // 課税対象額(通勤費を除く)
+      p.income_tax, // 所得税(税額表に基づく計算結果。元のExcelもここは数式なしの手入力箇所)
+      p.resident_tax, // 住民税
+      { formula: `L${valueRowNum}+M${valueRowNum}`, result: p.income_tax + p.resident_tax }, // 控除計
+      { formula: `I${valueRowNum}-N${valueRowNum}`, result: p.net_amount }, // 差引支給額
       p.days_worked,
     ]);
     const hoursRow = hourlySheet.addRow(["", "", leLienHours, "", "", musuhiHours]);
     hourlySheet.addRow([]);
 
     for (const row of [titleRow, headerRow, valueRow, hoursRow]) {
-      for (let col = 1; col <= 14; col++) row.getCell(col).border = THIN_BORDER;
+      for (let col = 1; col <= 17; col++) row.getCell(col).border = THIN_BORDER;
     }
-
-    for (const col of [9, 10, 13]) {
+    for (const col of [9, 11, 15]) {
       headerRow.getCell(col).fill = YELLOW;
       valueRow.getCell(col).fill = YELLOW;
     }
@@ -668,11 +701,16 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
     hourlyGrossTotal += p.gross_amount;
     hourlyCommuteTotal += p.commute_allowance;
     hourlyTotalGrossTotal += p.total_gross;
+    hourlyTaxableTotal += p.taxable_amount;
     hourlyIncomeTaxTotal += p.income_tax;
+    hourlyResidentTaxTotal += p.resident_tax;
+    hourlyDeductionTotal += p.income_tax + p.resident_tax;
     hourlyNetTotal += p.net_amount;
   }
 
-  if (hourlySheet.rowCount > 0) {
+  const hourlyLastRow = hourlySheet.rowCount;
+  if (hourlyLastRow >= hourlyFirstRow) {
+    const r = (col: string) => `${col}${hourlyFirstRow}:${col}${hourlyLastRow}`;
     const totalRow = hourlySheet.addRow([
       "合計",
       "",
@@ -680,34 +718,33 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
       "",
       "",
       "",
-      hourlyGrossTotal,
-      hourlyCommuteTotal,
-      hourlyTotalGrossTotal,
-      "",
-      hourlyIncomeTaxTotal,
-      "",
-      hourlyNetTotal,
+      { formula: `SUM(${r("G")})`, result: hourlyGrossTotal },
+      { formula: `SUM(${r("H")})`, result: hourlyCommuteTotal },
+      { formula: `SUM(${r("I")})`, result: hourlyTotalGrossTotal },
+      { formula: `SUM(${r("J")})`, result: hourlyCommuteTotal },
+      { formula: `SUM(${r("K")})`, result: hourlyTaxableTotal },
+      { formula: `SUM(${r("L")})`, result: hourlyIncomeTaxTotal },
+      { formula: `SUM(${r("M")})`, result: hourlyResidentTaxTotal },
+      { formula: `SUM(${r("N")})`, result: hourlyDeductionTotal },
+      { formula: `SUM(${r("O")})`, result: hourlyNetTotal },
     ]);
-    for (let col = 1; col <= 13; col++) totalRow.getCell(col).font = { bold: true };
+    for (let col = 1; col <= 15; col++) totalRow.getCell(col).font = { bold: true };
   }
 
-  // --- 業務委託(レッスン)シート: 単価ルールごとに1人ずつブロックで積む。 ---
+  // --- 業務委託(レッスン)シート: 全スタッフ共通の列(人数区分・レッスン名)を使い、
+  // 列ごとの合計もSUM関数で出せるようにする。 ---
   const lessonSheet = workbook.addWorksheet("業務委託(レッスン)");
-  for (let i = 1; i <= 25; i++) lessonSheet.getColumn(i).width = 13;
 
-  let lessonGrossTotal = 0;
-  let lessonCommuteTotal = 0;
-  let lessonTotalGrossTotal = 0;
-  let lessonIncomeTaxTotal = 0;
-  let lessonNetTotal = 0;
-
-  for (const { p, name, breakdown, commuteLabel } of parsed) {
+  // 事前に全スタッフのレッスンを単価ルールごとに集計し、共通の列一覧を作る。
+  const lessonAggByStaff = new Map<
+    string,
+    { byKey: Map<string, { rate: number; count: number; amount: number }>; unmatchedCount: number; unmatchedAmount: number }
+  >();
+  const globalLessonKeys = new Set<string>();
+  for (const { p, breakdown } of parsed) {
     if (breakdown.lessonLines.length === 0) continue;
     const rules = rulesByStaff[p.staff_id] ?? [];
-
-    // 表示ラベルが同じになるルール(例:「ハンモック」と「フロアクラス」がどちらも
-    // 60分1〜3人 @3,000-)は、別のルールIDでも同じ列にまとめる(レッスン名では分けない)。
-    const byLabel = new Map<string, { rule: PayRateRule; count: number; amount: number }>();
+    const byKey = new Map<string, { rate: number; count: number; amount: number }>();
     let unmatchedCount = 0;
     let unmatchedAmount = 0;
     for (const l of breakdown.lessonLines) {
@@ -717,66 +754,140 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
         unmatchedAmount += l.rate;
         continue;
       }
-      const label = ruleColumnLabel(matched);
-      const cur = byLabel.get(label) ?? { rule: matched, count: 0, amount: 0 };
+      // 表示ラベルが同じになるルール(例:「ハンモック」と「フロアクラス」がどちらも
+      // 60分1〜3人)は、別のルールIDでも同じ列にまとめる(レッスン名では分けない)。
+      const key = ruleColumnKey(matched);
+      globalLessonKeys.add(key);
+      const cur = byKey.get(key) ?? { rate: matched.rate, count: 0, amount: 0 };
       cur.count += 1;
       cur.amount += l.rate;
-      byLabel.set(label, cur);
+      byKey.set(key, cur);
     }
-    const entries = Array.from(byLabel.values()).sort((a, b) => a.rule.sort_order - b.rule.sort_order);
-    const hasUnmatched = unmatchedCount > 0;
+    lessonAggByStaff.set(p.staff_id, { byKey, unmatchedCount, unmatchedAmount });
+  }
+  const lessonColumnKeys = Array.from(globalLessonKeys).sort((a, b) => {
+    const ka = columnSortKey(a);
+    const kb = columnSortKey(b);
+    return ka[0] - kb[0] || ka[1] - kb[1] || ka[2].localeCompare(kb[2]);
+  });
+  const n = lessonColumnKeys.length;
+  // 列位置: 1=業務委託/氏名, 2=空欄, 3..(2+n)=人数区分・レッスン名, (3+n)=該当ルールなし,
+  // (4+n)=支給額計, (5+n)=通勤費, (6+n)=総支給額, (7+n)=課税対象額, (8+n)=所得税,
+  // (9+n)=住民税, (10+n)=差引支給額, (11+n)=出勤日数。
+  const unmatchedCol = 3 + n;
+  const grossCol = 4 + n;
+  const commuteCol = 5 + n;
+  const totalGrossCol = 6 + n;
+  const taxableCol = 7 + n;
+  const incomeTaxCol = 8 + n;
+  const residentTaxCol = 9 + n;
+  const netCol = 10 + n;
+  const daysCol = 11 + n;
+  for (let i = 1; i <= daysCol; i++) lessonSheet.getColumn(i).width = 13;
+
+  const lessonFirstRow = lessonSheet.rowCount + 1;
+  const lessonColumnTotals = new Array<number>(n).fill(0);
+  let lessonUnmatchedTotal = 0;
+  let lessonGrossTotal = 0;
+  let lessonCommuteTotal = 0;
+  let lessonTotalGrossTotal = 0;
+  let lessonTaxableTotal = 0;
+  let lessonIncomeTaxTotal = 0;
+  let lessonResidentTaxTotal = 0;
+  let lessonNetTotal = 0;
+
+  for (const { p, name, commuteLabel } of parsed) {
+    const agg = lessonAggByStaff.get(p.staff_id);
+    if (!agg) continue;
 
     const titleRow = lessonSheet.addRow([`${yearStr}年`, "", monthLabel, "給与"]);
-
-    // B列は空欄にしておき(業務委託/名前の次)、回数行の「回数」ラベルがその位置に収まるようにする
-    // (単価ルールの列自体はC列から始まり、3行とも列の位置が揃う)。
-    const headerCells: (string | number)[] = ["業務委託", "", ...entries.map((e) => ruleColumnLabel(e.rule))];
-    if (hasUnmatched) headerCells.push("該当ルールなし");
-    const totalGrossCol = headerCells.length + 3; // 支給額計・通勤費の次(1-indexedなので+1して2つ先)
-    headerCells.push("支給額計", `通勤費 ${commuteLabel}`, "総支給額", "課税対象額", "所得税", "差引支給額", "出勤日数");
+    const headerCells: (string | number)[] = ["業務委託", "", ...lessonColumnKeys, "該当ルールなし"];
+    headerCells.push("支給額計", `通勤費 ${commuteLabel}`, "総支給額", "課税対象額", "所得税", "住民税", "差引支給額", "出勤日数");
     const headerRow = lessonSheet.addRow(headerCells);
 
-    const valueCells: (string | number)[] = [name, "", ...entries.map((e) => e.amount)];
-    if (hasUnmatched) valueCells.push(unmatchedAmount);
-    valueCells.push(p.gross_amount, p.commute_allowance, p.total_gross, p.taxable_amount, p.income_tax, p.net_amount, p.days_worked);
-    const valueRow = lessonSheet.addRow(valueCells);
+    const valueRowNum = headerRow.number + 1;
+    const countRowNum = valueRowNum + 1;
 
-    const countCells: (string | number)[] = ["", "回数", ...entries.map((e) => e.count)];
-    if (hasUnmatched) countCells.push(unmatchedCount);
+    const valueCells: (string | number | { formula: string; result: number })[] = [name, ""];
+    const countCells: (string | number)[] = ["", "回数"];
+    for (let i = 0; i < n; i++) {
+      const col = 3 + i;
+      const letter = colLetter(col);
+      const entry = agg.byKey.get(lessonColumnKeys[i]);
+      if (entry) {
+        valueCells.push({ formula: `${letter}${countRowNum}*${entry.rate}`, result: entry.amount });
+        countCells.push(entry.count);
+        lessonColumnTotals[i] += entry.amount;
+      } else {
+        valueCells.push(0);
+        countCells.push(0);
+      }
+    }
+    valueCells.push(agg.unmatchedAmount);
+    countCells.push(agg.unmatchedCount);
+    lessonUnmatchedTotal += agg.unmatchedAmount;
+
+    const sumRange = `${colLetter(3)}${valueRowNum}:${colLetter(unmatchedCol)}${valueRowNum}`;
+    valueCells.push(
+      { formula: `SUM(${sumRange})`, result: p.gross_amount }, // 支給額計
+      p.commute_allowance, // 通勤費
+      { formula: `${colLetter(grossCol)}${valueRowNum}+${colLetter(commuteCol)}${valueRowNum}`, result: p.total_gross }, // 総支給額
+      { formula: `${colLetter(totalGrossCol)}${valueRowNum}`, result: p.taxable_amount }, // 課税対象額(通勤費含む)
+      {
+        formula: `ROUNDDOWN(${colLetter(taxableCol)}${valueRowNum}*0.1021,0)`,
+        result: p.income_tax,
+      }, // 所得税
+      p.resident_tax, // 住民税
+      {
+        formula: `${colLetter(taxableCol)}${valueRowNum}-${colLetter(incomeTaxCol)}${valueRowNum}-${colLetter(residentTaxCol)}${valueRowNum}`,
+        result: p.net_amount,
+      }, // 差引支給額
+      p.days_worked,
+    );
+    const valueRow = lessonSheet.addRow(valueCells);
     const countRow = lessonSheet.addRow(countCells);
     lessonSheet.addRow([]);
 
-    for (const col of [totalGrossCol, totalGrossCol + 1, totalGrossCol + 3]) {
+    for (const col of [totalGrossCol, taxableCol, netCol]) {
       headerRow.getCell(col).fill = YELLOW;
       valueRow.getCell(col).fill = YELLOW;
     }
-    const lastCol = headerCells.length;
     for (const row of [titleRow, headerRow, valueRow, countRow]) {
-      for (let col = 1; col <= lastCol; col++) row.getCell(col).border = THIN_BORDER;
+      for (let col = 1; col <= daysCol; col++) row.getCell(col).border = THIN_BORDER;
     }
 
     lessonGrossTotal += p.gross_amount;
     lessonCommuteTotal += p.commute_allowance;
     lessonTotalGrossTotal += p.total_gross;
+    lessonTaxableTotal += p.taxable_amount;
     lessonIncomeTaxTotal += p.income_tax;
+    lessonResidentTaxTotal += p.resident_tax;
     lessonNetTotal += p.net_amount;
   }
 
-  if (lessonSheet.rowCount > 0) {
-    const totalRow = lessonSheet.addRow([
-      "合計",
-      "支給額計",
-      lessonGrossTotal,
-      "通勤費",
-      lessonCommuteTotal,
-      "総支給額",
-      lessonTotalGrossTotal,
-      "所得税",
-      lessonIncomeTaxTotal,
-      "差引支給額",
-      lessonNetTotal,
-    ]);
-    for (let col = 1; col <= 11; col++) totalRow.getCell(col).font = { bold: true };
+  const lessonLastRow = lessonSheet.rowCount;
+  if (lessonLastRow >= lessonFirstRow) {
+    const totalCells: (string | number | { formula: string; result: number })[] = ["合計", ""];
+    for (let i = 0; i < n; i++) {
+      const letter = colLetter(3 + i);
+      totalCells.push({ formula: `SUM(${letter}${lessonFirstRow}:${letter}${lessonLastRow})`, result: lessonColumnTotals[i] });
+    }
+    const summaryTotals: Record<number, number> = {
+      [unmatchedCol]: lessonUnmatchedTotal,
+      [grossCol]: lessonGrossTotal,
+      [commuteCol]: lessonCommuteTotal,
+      [totalGrossCol]: lessonTotalGrossTotal,
+      [taxableCol]: lessonTaxableTotal,
+      [incomeTaxCol]: lessonIncomeTaxTotal,
+      [residentTaxCol]: lessonResidentTaxTotal,
+      [netCol]: lessonNetTotal,
+    };
+    for (const col of [unmatchedCol, grossCol, commuteCol, totalGrossCol, taxableCol, incomeTaxCol, residentTaxCol, netCol]) {
+      const letter = colLetter(col);
+      totalCells.push({ formula: `SUM(${letter}${lessonFirstRow}:${letter}${lessonLastRow})`, result: summaryTotals[col] });
+    }
+    const totalRow = lessonSheet.addRow(totalCells);
+    for (let col = 1; col <= daysCol; col++) totalRow.getCell(col).font = { bold: true };
   }
 
   const buffer = await workbook.xlsx.writeBuffer();
