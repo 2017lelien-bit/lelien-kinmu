@@ -502,20 +502,6 @@ export async function getPayslipText(payslipId: string): Promise<ActionResult<st
   return { ok: true, data: formatPayslipText(staffName, p as StaffPayslip) };
 }
 
-const CSV_HEADERS = [
-  "氏名",
-  "対象期間",
-  "雇用形態",
-  "支給額計",
-  "通勤費",
-  "総支給額",
-  "課税対象額",
-  "所得税",
-  "住民税",
-  "差引支給額",
-  "出勤日数",
-];
-
 function csvField(value: string | number): string {
   const s = String(value);
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -523,6 +509,8 @@ function csvField(value: string | number): string {
 
 // 税理士など外部への共有用に、対象月の全スタッフ分の明細をCSVでまとめる(メール送信はドメイン未設定のため使えないので、
 // 管理者がダウンロードしていつも通りのメール/LINEで送る想定)。
+// 業務委託(レッスン単価ルール)・受付等(時給カテゴリ)ごとに、本数/時間と金額を別列に分けて出す
+// (以前Excelで手作業していた「単価ルールごとの列」と同じ考え方)。
 export async function exportPayrollCsv(periodStart: string): Promise<ActionResult<string>> {
   const adminCheck = await requireAdmin();
   if (adminCheck) return adminCheck;
@@ -534,12 +522,61 @@ export async function exportPayrollCsv(periodStart: string): Promise<ActionResul
     .eq("period_start", periodStart)
     .order("staff_id");
 
-  const rows = (payslips ?? []).map((p) => {
-    const name = (p as unknown as { staff_profiles: { name: string } | null }).staff_profiles?.name ?? "";
+  const parsed = (payslips ?? []).map((p) => ({
+    p,
+    name: (p as unknown as { staff_profiles: { name: string } | null }).staff_profiles?.name ?? "",
+    breakdown: p.breakdown as PayrollBreakdown,
+  }));
+
+  // この期間に登場する時給カテゴリ名・レッスン単価ルール名を集めて、列の見出しにする。
+  const hourlyNames = new Set<string>();
+  const ruleLabels = new Set<string>();
+  for (const { breakdown } of parsed) {
+    for (const l of breakdown.lines) hourlyNames.add(l.name);
+    for (const l of breakdown.lessonLines) ruleLabels.add(l.matchedRuleLabel ?? "該当ルールなし");
+  }
+  const hourlyNameList = Array.from(hourlyNames).sort();
+  const ruleLabelList = Array.from(ruleLabels).sort();
+
+  const headers = [
+    "氏名",
+    "対象期間",
+    "雇用形態",
+    ...hourlyNameList.flatMap((n) => [`${n}_時間`, `${n}_金額`]),
+    ...ruleLabelList.flatMap((l) => [`${l}_本数`, `${l}_金額`]),
+    "支給額計",
+    "通勤費",
+    "総支給額",
+    "課税対象額",
+    "所得税",
+    "住民税",
+    "差引支給額",
+    "出勤日数",
+  ];
+
+  const rows = parsed.map(({ p, name, breakdown }) => {
+    const hourlyByName = new Map(breakdown.lines.map((l) => [l.name, l]));
+    const lessonByLabel = new Map<string, { count: number; amount: number }>();
+    for (const l of breakdown.lessonLines) {
+      const key = l.matchedRuleLabel ?? "該当ルールなし";
+      const cur = lessonByLabel.get(key) ?? { count: 0, amount: 0 };
+      cur.count += 1;
+      cur.amount += l.rate;
+      lessonByLabel.set(key, cur);
+    }
+
     return [
       csvField(name),
       csvField(`${p.period_start}〜${p.period_end}`),
       csvField(EMPLOYMENT_TYPE_LABEL[p.employment_type as EmploymentType]),
+      ...hourlyNameList.flatMap((n) => {
+        const l = hourlyByName.get(n);
+        return [csvField(l?.quantity ?? 0), csvField(l?.subtotal ?? 0)];
+      }),
+      ...ruleLabelList.flatMap((label) => {
+        const v = lessonByLabel.get(label);
+        return [csvField(v?.count ?? 0), csvField(v?.amount ?? 0)];
+      }),
       csvField(p.gross_amount),
       csvField(p.commute_allowance),
       csvField(p.total_gross),
@@ -551,7 +588,7 @@ export async function exportPayrollCsv(periodStart: string): Promise<ActionResul
     ].join(",");
   });
 
-  const csv = [CSV_HEADERS.join(","), ...rows].join("\n");
+  const csv = [headers.join(","), ...rows].join("\n");
   return { ok: true, data: `﻿${csv}` };
 }
 
