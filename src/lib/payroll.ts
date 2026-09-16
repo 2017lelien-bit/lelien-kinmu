@@ -533,21 +533,33 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
   const admin = createAdminClient();
   const { data: payslips } = await admin
     .from("staff_payslips")
-    .select("*, staff_profiles(name)")
+    .select("*, staff_profiles(name, commute_type, commute_amount)")
     .eq("period_start", periodStart)
     .order("staff_id");
 
   const rulesByStaff = await getPayRateRulesByStaff();
-  const parsed = (payslips ?? []).map((p) => ({
-    p,
-    name: (p as unknown as { staff_profiles: { name: string } | null }).staff_profiles?.name ?? "",
-    breakdown: p.breakdown as PayrollBreakdown,
-  }));
+  const parsed = (payslips ?? []).map((p) => {
+    const profile = (p as unknown as { staff_profiles: { name: string; commute_type: string; commute_amount: number } | null })
+      .staff_profiles;
+    return {
+      p,
+      name: profile?.name ?? "",
+      breakdown: p.breakdown as PayrollBreakdown,
+      // 通勤費は合計額だけでなく、見出しに単価(1日あたり、または固定額)も出す。
+      commuteLabel: profile?.commute_type === "per_day" ? `@${(profile.commute_amount ?? 0).toLocaleString()}` : "(固定)",
+    };
+  });
 
   const ExcelJS = (await import("exceljs")).default;
   const workbook = new ExcelJS.Workbook();
   const YELLOW: ExcelJS.Fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFFF00" } };
   const LIGHT_YELLOW: ExcelJS.Fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFFFCC" } };
+  const THIN_BORDER: Partial<ExcelJS.Borders> = {
+    top: { style: "thin" },
+    left: { style: "thin" },
+    bottom: { style: "thin" },
+    right: { style: "thin" },
+  };
   const [yearStr, monthStr] = periodStart.split("-");
   const monthLabel = `${Number(monthStr)}月分`;
 
@@ -555,7 +567,7 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
   const hourlySheet = workbook.addWorksheet("給料(受付)");
   for (let i = 1; i <= 16; i++) hourlySheet.getColumn(i).width = 13;
 
-  for (const { p, name, breakdown } of parsed) {
+  for (const { p, name, breakdown, commuteLabel } of parsed) {
     const leLienHourly = breakdown.lines.filter((l) => l.unitType === "hourly" && isLeLienCategoryName(l.name));
     const musuhiHourly = breakdown.lines.filter((l) => l.unitType === "hourly" && !isLeLienCategoryName(l.name));
     if (leLienHourly.length === 0 && musuhiHourly.length === 0) continue;
@@ -567,7 +579,7 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
     const leLienRate = leLienHourly[0]?.rate ?? 0;
     const musuhiRate = musuhiHourly[0]?.rate ?? 0;
 
-    hourlySheet.addRow([`${yearStr}年`, monthLabel, "給与", "ル リアン"]);
+    const titleRow = hourlySheet.addRow([`${yearStr}年`, monthLabel, "給与", "ル リアン"]);
     const headerRow = hourlySheet.addRow([
       "パート",
       "",
@@ -576,7 +588,7 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
       "",
       `時給¥${musuhiRate.toLocaleString()} 時間`,
       "支給額計",
-      `通勤費 @${p.commute_allowance.toLocaleString()}`,
+      `通勤費 ${commuteLabel}`,
       "総支給額",
       "課税対象額",
       "所得税",
@@ -603,6 +615,10 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
     const hoursRow = hourlySheet.addRow(["", "", leLienHours, "", "", musuhiHours]);
     hourlySheet.addRow([]);
 
+    for (const row of [titleRow, headerRow, valueRow, hoursRow]) {
+      for (let col = 1; col <= 14; col++) row.getCell(col).border = THIN_BORDER;
+    }
+
     for (const col of [9, 10, 13]) {
       headerRow.getCell(col).fill = YELLOW;
       valueRow.getCell(col).fill = YELLOW;
@@ -617,7 +633,7 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
   const lessonSheet = workbook.addWorksheet("業務委託(レッスン)");
   for (let i = 1; i <= 25; i++) lessonSheet.getColumn(i).width = 13;
 
-  for (const { p, name, breakdown } of parsed) {
+  for (const { p, name, breakdown, commuteLabel } of parsed) {
     if (breakdown.lessonLines.length === 0) continue;
     const rules = rulesByStaff[p.staff_id] ?? [];
 
@@ -642,22 +658,14 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
     const entries = Array.from(byLabel.values()).sort((a, b) => a.rule.sort_order - b.rule.sort_order);
     const hasUnmatched = unmatchedCount > 0;
 
-    lessonSheet.addRow([`${yearStr}年`, "", monthLabel, "給与"]);
+    const titleRow = lessonSheet.addRow([`${yearStr}年`, "", monthLabel, "給与"]);
 
     // B列は空欄にしておき(業務委託/名前の次)、回数行の「回数」ラベルがその位置に収まるようにする
     // (単価ルールの列自体はC列から始まり、3行とも列の位置が揃う)。
     const headerCells: (string | number)[] = ["業務委託", "", ...entries.map((e) => ruleColumnLabel(e.rule))];
     if (hasUnmatched) headerCells.push("該当ルールなし");
     const totalGrossCol = headerCells.length + 3; // 支給額計・通勤費の次(1-indexedなので+1して2つ先)
-    headerCells.push(
-      "支給額計",
-      `通勤費 @${p.commute_allowance.toLocaleString()}`,
-      "総支給額",
-      "課税対象額",
-      "所得税",
-      "差引支給額",
-      "出勤日数",
-    );
+    headerCells.push("支給額計", `通勤費 ${commuteLabel}`, "総支給額", "課税対象額", "所得税", "差引支給額", "出勤日数");
     const headerRow = lessonSheet.addRow(headerCells);
 
     const valueCells: (string | number)[] = [name, "", ...entries.map((e) => e.amount)];
@@ -667,12 +675,16 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
 
     const countCells: (string | number)[] = ["", "回数", ...entries.map((e) => e.count)];
     if (hasUnmatched) countCells.push(unmatchedCount);
-    lessonSheet.addRow(countCells);
+    const countRow = lessonSheet.addRow(countCells);
     lessonSheet.addRow([]);
 
     for (const col of [totalGrossCol, totalGrossCol + 1, totalGrossCol + 3]) {
       headerRow.getCell(col).fill = YELLOW;
       valueRow.getCell(col).fill = YELLOW;
+    }
+    const lastCol = headerCells.length;
+    for (const row of [titleRow, headerRow, valueRow, countRow]) {
+      for (let col = 1; col <= lastCol; col++) row.getCell(col).border = THIN_BORDER;
     }
   }
 
