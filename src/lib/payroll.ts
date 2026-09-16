@@ -668,10 +668,12 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
     const valueRow = hourlySheet.addRow([
       name,
       "",
-      { formula: `C${hoursRowNum}*${leLienRate}`, result: leLienHours * leLienRate },
+      // 時給×時間は端数(0.5時間分など)が出ることがあるため、アプリ本体の計算(四捨五入)と
+      // 合わせてROUNDで丸める(税務上、金額は整数円である必要がある)。
+      { formula: `ROUND(C${hoursRowNum}*${leLienRate},0)`, result: Math.round(leLienHours * leLienRate) },
       "",
       "",
-      { formula: `F${hoursRowNum}*${musuhiRate}`, result: musuhiHours * musuhiRate },
+      { formula: `ROUND(F${hoursRowNum}*${musuhiRate},0)`, result: Math.round(musuhiHours * musuhiRate) },
       { formula: `C${valueRowNum}+F${valueRowNum}`, result: p.gross_amount }, // 支給額計
       p.commute_allowance, // 通勤費
       { formula: `G${valueRowNum}+H${valueRowNum}`, result: p.total_gross }, // 総支給額
@@ -796,7 +798,11 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
   let lessonResidentTaxTotal = 0;
   let lessonNetTotal = 0;
 
-  for (const { p, name, commuteLabel } of parsed) {
+  for (const { p, name, commuteLabel, breakdown } of parsed) {
+    // 受付とレッスンで明細が2枚に分かれているスタッフは、レッスン側の明細(breakdown.lessonLines
+    // が入っている方)だけを使う。staff_idだけで判定すると、受付側の明細でも同じ集計結果が
+    // 見つかってしまい、同じ人が2回出てきてしまうため。
+    if (breakdown.lessonLines.length === 0) continue;
     const agg = lessonAggByStaff.get(p.staff_id);
     if (!agg) continue;
 
