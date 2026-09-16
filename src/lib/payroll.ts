@@ -524,22 +524,42 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
     breakdown: p.breakdown as PayrollBreakdown,
   }));
 
-  // この期間に登場する時給カテゴリ名・レッスン単価ルール名を集めて、列の見出しにする。
-  const hourlyNames = new Set<string>();
-  const ruleLabels = new Set<string>();
-  for (const { breakdown } of parsed) {
-    for (const l of breakdown.lines) hourlyNames.add(l.name);
-    for (const l of breakdown.lessonLines) ruleLabels.add(l.matchedRuleLabel ?? "該当ルールなし");
+  // 人数によって単価が変わるスタッフかどうかで、レッスンの出し方を分ける
+  // (人数依存の人は単価ルールごとの内訳、そうでない人は合計本数・合計金額のみでよい)。
+  const rulesByStaff = await getPayRateRulesByStaff();
+  function headcountMattersFor(staffId: string): boolean {
+    return (rulesByStaff[staffId] ?? []).some((r) => r.min_headcount !== null || r.max_headcount !== null);
   }
-  const hourlyNameList = Array.from(hourlyNames).sort();
+
+  // 時給区分はスタッフごとにカテゴリ名の表記がぶれることがあり(「Lelien受付」「Le lien受付」等)、
+  // 名前をそのまま列にすると同じ意味の列が重複して見えてしまう。実質はLe lien/むすひの2種類しか
+  // ないため、isLeLienCategoryNameで判定して2つの固定列にまとめる。
+  //
+  // レッスンの単価ルール名(例:「ハンモック」)は、時間や人数が違っても同じ名前になっていることが
+  // あり、それだけでは区別がつかない。時間・人数も列名に含めて区別できるようにする。
+  function lessonColumnKey(l: PayrollBreakdownLessonLine): string {
+    const label = l.matchedRuleLabel ?? "該当ルールなし";
+    return `${label}(${l.durationMinutes}分・${l.headcount}人)`;
+  }
+
+  const ruleLabels = new Set<string>();
+  for (const { p, breakdown } of parsed) {
+    if (!headcountMattersFor(p.staff_id)) continue;
+    for (const l of breakdown.lessonLines) ruleLabels.add(lessonColumnKey(l));
+  }
   const ruleLabelList = Array.from(ruleLabels).sort();
 
   const headers = [
     "氏名",
     "対象期間",
     "雇用形態",
-    ...hourlyNameList.flatMap((n) => [`${n}_時間`, `${n}_金額`]),
+    "Lelien受付_時間",
+    "Lelien受付_金額",
+    "むすひ_時間",
+    "むすひ_金額",
     ...ruleLabelList.flatMap((l) => [`${l}_本数`, `${l}_金額`]),
+    "レッスン合計(本数制)_本数",
+    "レッスン合計(本数制)_金額",
     "支給額計",
     "通勤費",
     "総支給額",
@@ -551,28 +571,44 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
   ];
 
   const rows = parsed.map(({ p, name, breakdown }) => {
-    const hourlyByName = new Map(breakdown.lines.map((l) => [l.name, l]));
+    const leLienHourly = breakdown.lines.filter((l) => l.unitType === "hourly" && isLeLienCategoryName(l.name));
+    const musuhiHourly = breakdown.lines.filter((l) => l.unitType === "hourly" && !isLeLienCategoryName(l.name));
+    const leLienHours = leLienHourly.reduce((sum, l) => sum + l.quantity, 0);
+    const leLienAmount = leLienHourly.reduce((sum, l) => sum + l.subtotal, 0);
+    const musuhiHours = musuhiHourly.reduce((sum, l) => sum + l.quantity, 0);
+    const musuhiAmount = musuhiHourly.reduce((sum, l) => sum + l.subtotal, 0);
+
+    const byHeadcount = headcountMattersFor(p.staff_id);
     const lessonByLabel = new Map<string, { count: number; amount: number }>();
+    let flatLessonCount = 0;
+    let flatLessonAmount = 0;
     for (const l of breakdown.lessonLines) {
-      const key = l.matchedRuleLabel ?? "該当ルールなし";
-      const cur = lessonByLabel.get(key) ?? { count: 0, amount: 0 };
-      cur.count += 1;
-      cur.amount += l.rate;
-      lessonByLabel.set(key, cur);
+      if (byHeadcount) {
+        const key = lessonColumnKey(l);
+        const cur = lessonByLabel.get(key) ?? { count: 0, amount: 0 };
+        cur.count += 1;
+        cur.amount += l.rate;
+        lessonByLabel.set(key, cur);
+      } else {
+        flatLessonCount += 1;
+        flatLessonAmount += l.rate;
+      }
     }
 
     return [
       name,
       `${p.period_start}〜${p.period_end}`,
       EMPLOYMENT_TYPE_LABEL[p.employment_type as EmploymentType],
-      ...hourlyNameList.flatMap((n) => {
-        const l = hourlyByName.get(n);
-        return [l?.quantity ?? 0, l?.subtotal ?? 0];
-      }),
+      leLienHours,
+      leLienAmount,
+      musuhiHours,
+      musuhiAmount,
       ...ruleLabelList.flatMap((label) => {
         const v = lessonByLabel.get(label);
         return [v?.count ?? 0, v?.amount ?? 0];
       }),
+      flatLessonCount,
+      flatLessonAmount,
       p.gross_amount,
       p.commute_allowance,
       p.total_gross,
