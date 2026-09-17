@@ -641,9 +641,9 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
     const leLienRate = leLienHourly[0]?.rate ?? 0;
     const musuhiRate = musuhiHourly[0]?.rate ?? 0;
 
-    // 「給与」と「ル リアン」を1マスにまとめ、空いたマスに「むすひ」を入れて
-    // むすひ側の列がどちらの区分か一目でわかるようにする。
-    const titleRow = hourlySheet.addRow([`${yearStr}年`, monthLabel, "給与 ル リアン", "むすひ"]);
+    // 「給与」と「ル リアン」を1マスにまとめ、「むすひ」はむすひの時給列(F列)の
+    // 真上に表示して、どちらの区分の列かひと目でわかるようにする。
+    const titleRow = hourlySheet.addRow([`${yearStr}年`, monthLabel, "給与 ル リアン", "", "", "むすひ"]);
     const headerRow = hourlySheet.addRow([
       "パート",
       "",
