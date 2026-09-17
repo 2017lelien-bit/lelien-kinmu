@@ -1,4 +1,14 @@
-import type { StaffPayslip } from "@/lib/types";
+import type { PayrollBreakdownLine, StaffPayslip } from "@/lib/types";
+
+// 同じ支払区分が2行に分かれていれば、期の途中で単価が変わった区分がある、ということ。
+function hasRateChangeSplit(lines: PayrollBreakdownLine[]): boolean {
+  const seen = new Set<string>();
+  for (const l of lines) {
+    if (seen.has(l.payCategoryId)) return true;
+    seen.add(l.payCategoryId);
+  }
+  return false;
+}
 
 export default function MyPayslipList({ payslips }: { payslips: StaffPayslip[] }) {
   if (payslips.length === 0) {
@@ -23,6 +33,9 @@ export default function MyPayslipList({ payslips }: { payslips: StaffPayslip[] }
                 </li>
               ))}
             </ul>
+          )}
+          {hasRateChangeSplit(p.breakdown.lines) && (
+            <p className="mt-1 text-xs text-neutral-400">※期間の途中で時給が変わったため、分けて計算しています。</p>
           )}
 
           {p.breakdown.lessonLines.length > 0 && (

@@ -37,6 +37,17 @@ function isLeLienCategoryName(name: string): boolean {
   return !name.trim().includes("むすひ");
 }
 
+// 同じ支払区分(payCategoryId)が2行に分かれていれば、期の途中で単価が変わった区分がある
+// (calculatePayrollが日付で新旧単価に振り分けた結果)ということ。明細にその旨を一言添える。
+function hasRateChangeSplit(lines: { payCategoryId: string }[]): boolean {
+  const seen = new Set<string>();
+  for (const l of lines) {
+    if (seen.has(l.payCategoryId)) return true;
+    seen.add(l.payCategoryId);
+  }
+  return false;
+}
+
 async function requireAdmin(): Promise<{ ok: false; error: string } | null> {
   const staff = await getStaffUser();
   if (!staff || staff.role !== "admin") return { ok: false, error: "管理者としてログインしてください。" };
@@ -516,6 +527,9 @@ function formatPayslipText(staffName: string, p: StaffPayslip): string {
 
   for (const l of breakdown.lines) {
     lines.push(`・${l.name}: ${l.quantity}${l.unitType === "hourly" ? "時間" : "回"} × ¥${l.rate.toLocaleString()} = ¥${l.subtotal.toLocaleString()}`);
+  }
+  if (hasRateChangeSplit(breakdown.lines)) {
+    lines.push("※期間の途中で時給が変わったため、上記のように分けて計算しています。");
   }
   if (leLienHours > 0) lines.push(`・Lelien時間合計: ${leLienHours}時間`);
   if (musuhiHours > 0) lines.push(`・むすひ時間合計: ${musuhiHours}時間`);

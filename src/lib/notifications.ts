@@ -13,6 +13,16 @@ function isLeLienCategoryName(name: string): boolean {
   return !name.trim().includes("むすひ");
 }
 
+// 同じ支払区分が2行に分かれていれば、期の途中で単価が変わった区分がある、ということ。
+function hasRateChangeSplit(lines: { payCategoryId: string }[]): boolean {
+  const seen = new Set<string>();
+  for (const l of lines) {
+    if (seen.has(l.payCategoryId)) return true;
+    seen.add(l.payCategoryId);
+  }
+  return false;
+}
+
 // レッスン本数が多いスタッフだと1本ずつの明細が長くなりすぎるため、レッスンは合計本数だけに
 // まとめ、時間制のカテゴリはむすひ/Lelienの時間合計を添えて示す。
 function payslipBreakdownHtml(breakdown: PayrollBreakdown): string {
@@ -30,7 +40,10 @@ function payslipBreakdownHtml(breakdown: PayrollBreakdown): string {
   if (leLienHours > 0) categoryItems.push(`<li>Lelien時間合計: ${leLienHours}時間</li>`);
   if (musuhiHours > 0) categoryItems.push(`<li>むすひ時間合計: ${musuhiHours}時間</li>`);
 
-  const categoryHtml = categoryItems.length > 0 ? `<ul>${categoryItems.join("")}</ul>` : "";
+  const noteHtml = hasRateChangeSplit(breakdown.lines)
+    ? "<p>※期間の途中で時給が変わったため、上記のように分けて計算しています。</p>"
+    : "";
+  const categoryHtml = categoryItems.length > 0 ? `<ul>${categoryItems.join("")}</ul>${noteHtml}` : noteHtml;
 
   const lessonTotal = breakdown.lessonLines.reduce((sum, l) => sum + l.rate, 0);
   const lessonHtml =

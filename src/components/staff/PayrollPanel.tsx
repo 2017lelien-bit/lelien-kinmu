@@ -4,7 +4,17 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { calculatePayroll, deletePayslip, generatePayslip, getPayslipText, sendPayslipEmail, type PayrollResult } from "@/lib/payroll";
 import { currentPayPeriod } from "@/lib/date";
-import type { CommuteType, StaffPayslip } from "@/lib/types";
+import type { CommuteType, PayrollBreakdownLine, StaffPayslip } from "@/lib/types";
+
+// 同じ支払区分が2行に分かれていれば、期の途中で単価が変わった区分がある、ということ。
+function hasRateChangeSplit(lines: PayrollBreakdownLine[]): boolean {
+  const seen = new Set<string>();
+  for (const l of lines) {
+    if (seen.has(l.payCategoryId)) return true;
+    seen.add(l.payCategoryId);
+  }
+  return false;
+}
 
 export default function PayrollPanel({
   staffId,
@@ -170,6 +180,9 @@ export default function PayrollPanel({
                 </li>
               ))}
             </ul>
+          )}
+          {hasRateChangeSplit(preview.breakdown.lines) && (
+            <p className="text-xs text-neutral-400">※期間の途中で時給が変わったため、分けて計算しています。</p>
           )}
           {preview.breakdown.lessonLines.length > 0 && (
             <p className="text-sm font-semibold">
