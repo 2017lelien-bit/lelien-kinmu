@@ -71,6 +71,9 @@ export interface PayCategory {
   rate: number;
   sort_order: number;
   is_active: boolean;
+  // 最低賃金改定などで、特定の日から単価を切り替えたい場合に使う(両方揃って初めて有効)。
+  next_rate: number | null;
+  next_rate_effective_from: string | null;
 }
 
 export interface PayEntry {

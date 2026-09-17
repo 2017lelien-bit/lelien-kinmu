@@ -16,7 +16,7 @@ export default function MyPayslipList({ payslips }: { payslips: StaffPayslip[] }
           {p.breakdown.lines.length > 0 && (
             <ul className="mt-2 flex flex-col gap-0.5 text-neutral-600 dark:text-neutral-400">
               {p.breakdown.lines.map((line) => (
-                <li key={line.payCategoryId}>
+                <li key={`${line.payCategoryId}-${line.name}`}>
                   {line.name}: {line.quantity}
                   {line.unitType === "hourly" ? "時間" : "回"} × ¥{line.rate.toLocaleString()} = ¥
                   {line.subtotal.toLocaleString()}

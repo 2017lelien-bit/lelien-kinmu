@@ -18,6 +18,8 @@ function CategoryRow({
   const [name, setName] = useState(category.name);
   const [unitType, setUnitType] = useState<PayUnitType>(category.unit_type);
   const [rate, setRate] = useState(category.rate);
+  const [nextRate, setNextRate] = useState(category.next_rate?.toString() ?? "");
+  const [nextRateEffectiveFrom, setNextRateEffectiveFrom] = useState(category.next_rate_effective_from ?? "");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -25,7 +27,15 @@ function CategoryRow({
   async function handleSave() {
     setSubmitting(true);
     setError(null);
-    const result = await upsertPayCategory({ id: category.id, staffId, name, unitType, rate });
+    const result = await upsertPayCategory({
+      id: category.id,
+      staffId,
+      name,
+      unitType,
+      rate,
+      nextRate: nextRate ? Number(nextRate) : null,
+      nextRateEffectiveFrom: nextRateEffectiveFrom || null,
+    });
     setSubmitting(false);
     if (!result.ok) {
       setError(result.error);
@@ -71,12 +81,38 @@ function CategoryRow({
         onChange={(e) => setRate(Number(e.target.value))}
         className="w-28 rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
       />
+      <label className="flex flex-col gap-1 text-xs text-neutral-500">
+        改定後単価(任意)
+        <input
+          type="number"
+          min={0}
+          placeholder="変更なし"
+          value={nextRate}
+          onFocus={(e) => e.target.select()}
+          onChange={(e) => setNextRate(e.target.value)}
+          className="w-24 rounded-lg border border-neutral-200 px-2 py-1 text-sm text-neutral-900 dark:border-neutral-800 dark:text-neutral-100"
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-xs text-neutral-500">
+        適用開始日(任意)
+        <input
+          type="date"
+          value={nextRateEffectiveFrom}
+          onChange={(e) => setNextRateEffectiveFrom(e.target.value)}
+          className="w-36 rounded-lg border border-neutral-200 px-2 py-1 text-sm text-neutral-900 dark:border-neutral-800 dark:text-neutral-100"
+        />
+      </label>
       <button onClick={handleSave} disabled={submitting} className="underline disabled:opacity-40">
         {submitting ? "保存中..." : "保存"}
       </button>
       <button onClick={handleDelete} disabled={deleting} className="text-red-600 underline disabled:opacity-40">
         {deleting ? "削除中..." : "削除"}
       </button>
+      {category.next_rate != null && category.next_rate_effective_from && (
+        <span className="w-full text-xs text-neutral-400">
+          {category.next_rate_effective_from}から¥{category.next_rate.toLocaleString()}に変わります(それより前の分は現在の単価のまま)
+        </span>
+      )}
       {error && <span className="text-red-600">{error}</span>}
     </div>
   );

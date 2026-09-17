@@ -163,7 +163,7 @@ export default function PayrollPanel({
           {preview.breakdown.lines.length > 0 && (
             <ul className="text-sm">
               {preview.breakdown.lines.map((line) => (
-                <li key={line.payCategoryId}>
+                <li key={`${line.payCategoryId}-${line.name}`}>
                   {line.name}: {line.quantity}
                   {line.unitType === "hourly" ? "時間" : "回"} × ¥{line.rate.toLocaleString()} = ¥
                   {line.subtotal.toLocaleString()}

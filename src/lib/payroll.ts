@@ -6,7 +6,7 @@ import { getStaffUser } from "@/lib/auth";
 import { sendStaffPayslipEmail } from "@/lib/notifications";
 import { calculateContractorWithholding, calculateEmployeeWithholding } from "@/lib/tax";
 import { payPeriodEnd, computeWorkedMinutes, todayJstDateString } from "@/lib/date";
-import { getLeLienDeductionsByDate } from "@/lib/time-log";
+import { computeCategoryMinutesByDate, getLeLienDeductionsByDate } from "@/lib/time-log";
 import type ExcelJS from "exceljs";
 import type {
   ActionResult,
@@ -14,8 +14,22 @@ import type {
   PayRateRule,
   PayrollBreakdown,
   PayrollBreakdownLessonLine,
+  PayrollBreakdownLine,
   StaffPayslip,
 } from "@/lib/types";
+
+// 単価改定日をまたぐ区分の内訳行の名前に使う「◯/◯まで」「◯/◯から」のラベル。
+// カレンダー日付の文字列(YYYY-MM-DD)だけで計算し、タイムゾーンのずれを避ける。
+function monthDayLabel(dateStr: string): string {
+  const [, m, d] = dateStr.split("-").map(Number);
+  return `${m}/${d}`;
+}
+function dayBeforeLabel(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() - 1);
+  return `${dt.getUTCMonth() + 1}/${dt.getUTCDate()}`;
+}
 
 // 時給区分は現状「Le lien受付」系(名前の付け方は人によってばらつきがある)と「むすひ」の
 // 2種類しかないため、"むすひ"を含まない=Le lien側、という判定にする方が確実。
@@ -278,17 +292,58 @@ export async function calculatePayroll(staffId: string, periodStart: string): Pr
   const daysWorked = workedDates.size;
 
   const entryByCategory = new Map((entries ?? []).map((e) => [e.pay_category_id as string, e.quantity as number]));
-  const lines = (categories ?? []).map((c) => {
+  const lines: PayrollBreakdownLine[] = [];
+  for (const c of categories ?? []) {
+    const unitType = c.unit_type as "hourly" | "per_lesson";
+    const effectiveFrom = c.next_rate_effective_from as string | null;
+    const nextRate = c.next_rate as number | null;
+
+    // 単価改定日(next_rate_effective_from)が設定されている時給区分は、「今期の合計時間」を
+    // 1つの数字として扱う通常の仕組みでは新旧単価を区別できないため、出退勤記録から
+    // 日付ごとの実働時間を集計し直し、改定日の前後で行を分けて計算する。
+    if (unitType === "hourly" && effectiveFrom && nextRate != null) {
+      const minutesByDate = await computeCategoryMinutesByDate(admin, staffId, c.id, periodStart, periodEnd);
+      let oldMinutes = 0;
+      let newMinutes = 0;
+      for (const [date, minutes] of minutesByDate) {
+        if (date >= effectiveFrom) newMinutes += minutes;
+        else oldMinutes += minutes;
+      }
+      if (oldMinutes > 0) {
+        const quantity = Math.round((oldMinutes / 60) * 100) / 100;
+        lines.push({
+          payCategoryId: c.id,
+          name: `${c.name}(〜${dayBeforeLabel(effectiveFrom)})`,
+          unitType,
+          rate: c.rate,
+          quantity,
+          subtotal: Math.round(quantity * c.rate),
+        });
+      }
+      if (newMinutes > 0) {
+        const quantity = Math.round((newMinutes / 60) * 100) / 100;
+        lines.push({
+          payCategoryId: c.id,
+          name: `${c.name}(${monthDayLabel(effectiveFrom)}〜)`,
+          unitType,
+          rate: nextRate,
+          quantity,
+          subtotal: Math.round(quantity * nextRate),
+        });
+      }
+      continue;
+    }
+
     const quantity = entryByCategory.get(c.id) ?? 0;
-    return {
-      payCategoryId: c.id as string,
-      name: c.name as string,
-      unitType: c.unit_type as "hourly" | "per_lesson",
-      rate: c.rate as number,
+    lines.push({
+      payCategoryId: c.id,
+      name: c.name,
+      unitType,
+      rate: c.rate,
       quantity,
       subtotal: Math.round(quantity * (c.rate as number)),
-    };
-  });
+    });
+  }
 
   const lessonLines: PayrollBreakdownLessonLine[] = (logEntries ?? []).map((e) => {
     const matched = matchPayRateRule((rules ?? []) as PayRateRule[], {
@@ -640,6 +695,19 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
     const musuhiHours = musuhiHourly.reduce((sum, l) => sum + l.quantity, 0);
     const leLienRate = leLienHourly[0]?.rate ?? 0;
     const musuhiRate = musuhiHourly[0]?.rate ?? 0;
+    // 期の途中で最低賃金改定などにより単価が変わった人は、複数の単価の行に分かれている
+    // (calculatePayrollが日付で振り分ける)。その場合はhours×単価の数式では表現できないため、
+    // アプリの計算結果(各行のsubtotalの合計)をそのまま金額として入れ、見出しに新旧の単価を並べる。
+    const leLienMultiRate = new Set(leLienHourly.map((l) => l.rate)).size > 1;
+    const musuhiMultiRate = new Set(musuhiHourly.map((l) => l.rate)).size > 1;
+    const leLienHeaderText = leLienMultiRate
+      ? `時給改定 ${leLienHourly.map((l) => `@${l.rate.toLocaleString()}×${l.quantity}h`).join("+")}`
+      : `時給 @${leLienRate.toLocaleString()}- 時間`;
+    const musuhiHeaderText = musuhiMultiRate
+      ? `時給改定 ${musuhiHourly.map((l) => `@${l.rate.toLocaleString()}×${l.quantity}h`).join("+")}`
+      : `時給¥${musuhiRate.toLocaleString()} 時間`;
+    const leLienAmount = leLienHourly.reduce((sum, l) => sum + l.subtotal, 0);
+    const musuhiAmount = musuhiHourly.reduce((sum, l) => sum + l.subtotal, 0);
 
     // 「給与」と「ル リアン」を1マスにまとめ、「むすひ」はむすひの時給列(F列)の
     // 真上に表示して、どちらの区分の列かひと目でわかるようにする。
@@ -647,10 +715,10 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
     const headerRow = hourlySheet.addRow([
       "パート",
       "",
-      `時給 @${leLienRate.toLocaleString()}- 時間`,
+      leLienHeaderText,
       "",
       "",
-      `時給¥${musuhiRate.toLocaleString()} 時間`,
+      musuhiHeaderText,
       "支給額計",
       `通勤費 ${commuteLabel}`,
       "総支給額",
@@ -669,11 +737,16 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
       name,
       "",
       // 時給×時間は端数(0.5時間分など)が出ることがあるため、アプリ本体の計算(四捨五入)と
-      // 合わせてROUNDで丸める(税務上、金額は整数円である必要がある)。
-      { formula: `ROUND(C${hoursRowNum}*${leLienRate},0)`, result: Math.round(leLienHours * leLienRate) },
+      // 合わせてROUNDで丸める(税務上、金額は整数円である必要がある)。単価改定で複数単価が
+      // 混在する月は数式で表現できないため、アプリの計算結果をそのまま金額として入れる。
+      leLienMultiRate
+        ? leLienAmount
+        : { formula: `ROUND(C${hoursRowNum}*${leLienRate},0)`, result: Math.round(leLienHours * leLienRate) },
       "",
       "",
-      { formula: `ROUND(F${hoursRowNum}*${musuhiRate},0)`, result: Math.round(musuhiHours * musuhiRate) },
+      musuhiMultiRate
+        ? musuhiAmount
+        : { formula: `ROUND(F${hoursRowNum}*${musuhiRate},0)`, result: Math.round(musuhiHours * musuhiRate) },
       { formula: `C${valueRowNum}+F${valueRowNum}`, result: p.gross_amount }, // 支給額計
       p.commute_allowance, // 通勤費
       { formula: `G${valueRowNum}+H${valueRowNum}`, result: p.total_gross }, // 総支給額

@@ -38,19 +38,33 @@ export async function upsertPayCategory(input: {
   name: string;
   unitType: PayUnitType;
   rate: number;
+  nextRate?: number | null;
+  nextRateEffectiveFrom?: string | null;
 }): Promise<ActionResult> {
   const staff = await getStaffUser();
   if (!staff || staff.role !== "admin") return { ok: false, error: "管理者としてログインしてください。" };
 
   if (!input.name.trim()) return { ok: false, error: "区分名を入力してください。" };
   if (input.rate < 0) return { ok: false, error: "単価は0以上で入力してください。" };
+  const nextRate = input.nextRate ?? null;
+  const nextRateEffectiveFrom = input.nextRateEffectiveFrom || null;
+  if ((nextRate == null) !== (nextRateEffectiveFrom == null)) {
+    return { ok: false, error: "改定後単価と適用開始日は両方入力するか、両方空欄にしてください。" };
+  }
+  if (nextRate != null && nextRate < 0) return { ok: false, error: "改定後単価は0以上で入力してください。" };
 
   const admin = createAdminClient();
 
   if (input.id) {
     const { error } = await admin
       .from("pay_categories")
-      .update({ name: input.name.trim(), unit_type: input.unitType, rate: input.rate })
+      .update({
+        name: input.name.trim(),
+        unit_type: input.unitType,
+        rate: input.rate,
+        next_rate: nextRate,
+        next_rate_effective_from: nextRateEffectiveFrom,
+      })
       .eq("id", input.id);
     if (error) return { ok: false, error: "支払区分の更新に失敗しました。" };
   } else {
@@ -63,6 +77,8 @@ export async function upsertPayCategory(input: {
       name: input.name.trim(),
       unit_type: input.unitType,
       rate: input.rate,
+      next_rate: nextRate,
+      next_rate_effective_from: nextRateEffectiveFrom,
       sort_order: count ?? 0,
     });
     if (error) return { ok: false, error: "支払区分の追加に失敗しました。" };

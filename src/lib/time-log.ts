@@ -117,13 +117,15 @@ export async function getLeLienDeductionsByDate(
   return Object.fromEntries(deductionsByDate);
 }
 
-async function syncPayEntryFromTimeLog(
+// 実働時間を日付ごとに集計する(受付とレッスンが重なっている分の差し引きも反映)。
+// 通常の合計時間の計算だけでなく、単価改定日をまたぐ場合の日付ごとの振り分けにも使う。
+export async function computeCategoryMinutesByDate(
   admin: ReturnType<typeof createAdminClient>,
   staffId: string,
   payCategoryId: string,
   periodStart: string,
   periodEnd: string,
-): Promise<void> {
+): Promise<Map<string, number>> {
   const [{ data: category }, { data: timeEntries }] = await Promise.all([
     admin.from("pay_categories").select("name").eq("id", payCategoryId).maybeSingle(),
     admin
@@ -158,6 +160,17 @@ async function syncPayEntryFromTimeLog(
     }
   }
 
+  return minutesByDate;
+}
+
+async function syncPayEntryFromTimeLog(
+  admin: ReturnType<typeof createAdminClient>,
+  staffId: string,
+  payCategoryId: string,
+  periodStart: string,
+  periodEnd: string,
+): Promise<void> {
+  const minutesByDate = await computeCategoryMinutesByDate(admin, staffId, payCategoryId, periodStart, periodEnd);
   const totalMinutes = [...minutesByDate.values()].reduce((sum, m) => sum + m, 0);
 
   await admin.from("pay_entries").upsert(
