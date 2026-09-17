@@ -805,7 +805,17 @@ export async function exportPayrollXlsx(periodStart: string): Promise<ActionResu
     if (!agg) continue;
 
     const titleRow = lessonSheet.addRow([`${yearStr}年`, "", monthLabel, "給与"]);
-    const headerCells: (string | number)[] = ["業務委託", "", ...lessonColumnKeys, "該当ルールなし"];
+    // 列の位置は全スタッフ共通だが、見出しの単価はこの人の実際の単価ルールを反映する
+    // (税理士が検算できるよう、単価そのものが見えている必要があるため)。
+    const headerCells: (string | number)[] = [
+      "業務委託",
+      "",
+      ...lessonColumnKeys.map((key) => {
+        const entry = agg.byKey.get(key);
+        return entry ? `${key} @${entry.rate.toLocaleString()}-` : key;
+      }),
+      "該当ルールなし",
+    ];
     headerCells.push("支給額計", `通勤費 ${commuteLabel}`, "総支給額", "課税対象額", "所得税", "住民税", "差引支給額", "出勤日数");
     const headerRow = lessonSheet.addRow(headerCells);
 
