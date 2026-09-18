@@ -9,13 +9,16 @@ export default function CorrectionRequestButton({
   entryType,
   entryDate,
   staffId,
+  defaultNote,
 }: {
   entryType: string;
   entryDate: string;
   staffId?: string;
+  // 提出済みロックで保存できなかった内容など、あらかじめ本文を埋めておきたい場合に使う。
+  defaultNote?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState(defaultNote ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);

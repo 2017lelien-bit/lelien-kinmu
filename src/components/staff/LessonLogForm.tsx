@@ -135,6 +135,17 @@ export default function LessonLogForm({
     <div className="flex flex-col gap-4 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
       <h3 className="text-sm font-semibold">{editingId ? "レッスン実績の編集" : "レッスン実績の登録"}</h3>
       {error && <p className="text-sm text-red-600">{error}</p>}
+      {/* 「本日の勤務」提出済みでロックされて保存できなかった場合、本人がその場で管理者に
+          依頼を送れるようにする(エラー文面だけだと、本人はそれ以上何もできず行き詰まるため)。 */}
+      {!staffId && error?.includes("本日の勤務") && (
+        <CorrectionRequestButton
+          entryType="lesson_log"
+          entryDate={entryDate}
+          defaultNote={`${entryDate} ${lessonName} ${durationMinutes}分${
+            headcountMatters ? `・${headcount}人` : `・${quantity}本`
+          }${startTime ? `・${startTime}〜` : ""}を追加してください`}
+        />
+      )}
 
       <div className="flex flex-wrap gap-3">
         <label className="flex flex-col gap-1 text-sm">

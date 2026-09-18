@@ -122,6 +122,15 @@ export default function TimeLogForm({
     <div className="flex flex-col gap-4 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
       <h3 className="text-sm font-semibold">{categoryName}(出退勤の記録)</h3>
       {error && <p className="text-sm text-red-600">{error}</p>}
+      {/* 「本日の勤務」提出済みでロックされて保存できなかった場合、本人がその場で管理者に
+          依頼を送れるようにする(エラー文面だけだと、本人はそれ以上何もできず行き詰まるため)。 */}
+      {!staffId && error?.includes("本日の勤務") && (
+        <CorrectionRequestButton
+          entryType="time_log"
+          entryDate={entryDate}
+          defaultNote={`${entryDate} ${startTime}〜${endTime}(${categoryName})を追加してください`}
+        />
+      )}
 
       <div className="flex flex-wrap gap-3">
         <label className="flex flex-col gap-1 text-sm">
