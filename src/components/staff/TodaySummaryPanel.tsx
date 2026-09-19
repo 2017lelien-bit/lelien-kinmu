@@ -15,6 +15,17 @@ import {
 import { LESSON_NAMES } from "@/lib/types";
 import { payPeriodForDate, currentPayPeriod, payPeriodEnd } from "@/lib/date";
 
+function toMinutes(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function formatHM(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${h}時間${m > 0 ? `${m}分` : ""}`;
+}
+
 export default function TodaySummaryPanel({
   staffId,
   lessons,
@@ -536,6 +547,10 @@ export default function TodaySummaryPanel({
         </li>
       );
     }
+    const breakMinutes =
+      s.breakStart && s.breakEnd ? Math.max(0, toMinutes(s.breakEnd) - toMinutes(s.breakStart)) : 0;
+    const spanMinutes = Math.max(0, toMinutes(s.endTime) - toMinutes(s.startTime));
+    const totalDeductionMinutes = breakMinutes + s.deductionMinutes;
     return (
       <li key={s.id} className="flex flex-col gap-1">
         <div className="flex flex-wrap items-center gap-3">
@@ -543,6 +558,11 @@ export default function TodaySummaryPanel({
           <span>
             {s.startTime.slice(0, 5)}〜{s.endTime.slice(0, 5)}({s.hours}時間)
           </span>
+          {breakMinutes > 0 && (
+            <span className="text-neutral-500">
+              休憩 {s.breakStart?.slice(0, 5)}〜{s.breakEnd?.slice(0, 5)}
+            </span>
+          )}
           <span className="font-semibold">¥{s.amount.toLocaleString()}</span>
           <button onClick={() => startEditShift(s)} className="ml-auto text-xs underline">
             訂正する
@@ -555,11 +575,15 @@ export default function TodaySummaryPanel({
             {deletingId === s.id ? "削除中..." : "削除"}
           </button>
         </div>
-        {s.deductionMinutes > 0 && (
+        {totalDeductionMinutes > 0 && (
           <p className="rounded bg-amber-100 px-2 py-1 text-xs text-amber-900 dark:bg-amber-900 dark:text-amber-100">
-            ⚠️ レッスンと時間が重なっているため、この日は-{Math.floor(s.deductionMinutes / 60)}時間
-            {s.deductionMinutes % 60 > 0 ? `${s.deductionMinutes % 60}分` : ""}
-            されます(実際にカウントされるのは{s.netHours}時間・¥{s.netAmount.toLocaleString()})
+            ⚠️ 拘束{formatHM(spanMinutes)} -{formatHM(totalDeductionMinutes)}
+            {breakMinutes > 0 && s.deductionMinutes > 0
+              ? `(休憩${formatHM(breakMinutes)}+レッスン重複${formatHM(s.deductionMinutes)})`
+              : breakMinutes > 0
+                ? "(休憩)"
+                : "(レッスン重複)"}
+            → 実際にカウントされるのは{s.netHours}時間・¥{s.netAmount.toLocaleString()}
           </p>
         )}
       </li>
