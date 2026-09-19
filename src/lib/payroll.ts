@@ -215,7 +215,7 @@ async function buildSummaryForRange(staffId: string, startDate: string, endDate:
     const deductionMinutes = deductionsByCategoryDate.get(e.pay_category_id)?.[e.entry_date] ?? 0;
     const showDeduction = deductionMinutes > 0 && !deductionShownFor.has(groupKey);
     if (showDeduction) deductionShownFor.add(groupKey);
-    const netHours = Math.max(0, hours - deductionMinutes / 60);
+    const netHours = Math.max(0, hours - (showDeduction ? deductionMinutes : 0) / 60);
     return {
       id: e.id,
       payCategoryId: e.pay_category_id,

@@ -556,14 +556,16 @@ export default function TodaySummaryPanel({
         <div className="flex flex-wrap items-center gap-3">
           <span>{s.categoryName}</span>
           <span>
-            {s.startTime.slice(0, 5)}〜{s.endTime.slice(0, 5)}({s.hours}時間)
+            {s.startTime.slice(0, 5)}〜{s.endTime.slice(0, 5)}
           </span>
           {breakMinutes > 0 && (
             <span className="text-neutral-500">
               休憩 {s.breakStart?.slice(0, 5)}〜{s.breakEnd?.slice(0, 5)}
             </span>
           )}
-          <span className="font-semibold">¥{s.amount.toLocaleString()}</span>
+          <span className="font-semibold">
+            {s.netHours}時間 ¥{s.netAmount.toLocaleString()}
+          </span>
           <button onClick={() => startEditShift(s)} className="ml-auto text-xs underline">
             訂正する
           </button>
