@@ -15,6 +15,7 @@ import {
   type MusuhiShift,
 } from "@/lib/musuhi-schedule";
 import { dayOfWeekForDate, monthEnd } from "@/lib/date";
+import { isJapaneseHoliday } from "@/lib/holidays";
 import { CLOSED_DAY_OF_WEEK, DAY_OF_WEEK_LABEL, isClosedOnDate } from "@/lib/types";
 import SaveImageButton from "@/components/staff/SaveImageButton";
 
@@ -402,7 +403,7 @@ export default function MusuhiScheduleBuilderPanel({
                 const dayShifts = (shiftsByDate.get(date) ?? []).slice().sort((a, b) => a.start_time.localeCompare(b.start_time));
                 return (
                   <div key={date} className={`flex min-h-20 flex-col gap-0.5 p-1 ${isClosedDay ? "bg-neutral-100" : "bg-white"}`}>
-                    <p className={`font-semibold ${dow === 0 ? "text-red-600" : ""}`}>{day}</p>
+                    <p className={`font-semibold ${dow === 0 || isJapaneseHoliday(date) ? "text-red-600" : ""}`}>{day}</p>
                     {isClosedDay ? (
                       <p className="text-neutral-400">休業</p>
                     ) : (

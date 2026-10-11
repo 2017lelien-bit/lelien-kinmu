@@ -13,6 +13,7 @@ import { getScheduleNotes, upsertScheduleNote, type ScheduleNote } from "@/lib/s
 import { getMusuhiNotes, getMusuhiShifts, type MusuhiNote, type MusuhiShift } from "@/lib/musuhi-schedule";
 import type { LessonColor } from "@/lib/lesson-colors";
 import { dayOfWeekForDate, monthEnd } from "@/lib/date";
+import { isJapaneseHoliday } from "@/lib/holidays";
 import { CLOSED_DAY_OF_WEEK, DAY_OF_WEEK_LABEL, isClosedOnDate } from "@/lib/types";
 import type { LessonOption, PayRateRule, ScheduleSubmission } from "@/lib/types";
 import SaveImageButton from "@/components/staff/SaveImageButton";
@@ -564,7 +565,7 @@ export default function ScheduleBuilderPanel({
               className={`flex min-h-28 flex-col gap-0.5 p-1 ${isClosedDay ? "bg-neutral-100 dark:bg-neutral-900" : "bg-white dark:bg-neutral-950"}`}
             >
               <div className="flex flex-wrap items-baseline gap-x-1">
-                <p className={`shrink-0 font-semibold ${dow === 0 ? "text-red-600" : ""}`}>{day}</p>
+                <p className={`shrink-0 font-semibold ${dow === 0 || isJapaneseHoliday(date) ? "text-red-600" : ""}`}>{day}</p>
                 {!isClosedDay && (
                   <span className="min-w-0 text-neutral-600">
                     {reception.map((e) => `${e.staffName}${formatTimeCompact(e.start_time)}-${formatTimeCompact(e.end_time)}`).join(" ")}

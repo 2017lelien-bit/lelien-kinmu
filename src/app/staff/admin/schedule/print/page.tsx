@@ -5,6 +5,7 @@ import { getAllScheduleSubmissions } from "@/lib/schedule-submissions";
 import { getLessonColors, type LessonColor } from "@/lib/lesson-colors";
 import { getScheduleNotes } from "@/lib/schedule-notes";
 import { nextMonthStart, monthEnd, dayOfWeekForDate } from "@/lib/date";
+import { isJapaneseHoliday } from "@/lib/holidays";
 import { DAY_OF_WEEK_LABEL, isClosedOnDate } from "@/lib/types";
 import PrintButton from "@/components/staff/PrintButton";
 import PrintFitToPage from "@/components/staff/PrintFitToPage";
@@ -164,7 +165,7 @@ export default async function SchedulePrintPage({
           return (
             <div key={date} className={`flex min-h-28 flex-col gap-0.5 p-1 ${isClosedDay ? "bg-neutral-100" : "bg-white"}`}>
               <div className="flex flex-wrap items-baseline gap-x-1">
-                <p className={`font-semibold ${dow === 0 ? "text-red-600" : ""}`}>{day}</p>
+                <p className={`font-semibold ${dow === 0 || isJapaneseHoliday(date) ? "text-red-600" : ""}`}>{day}</p>
                 {!isClosedDay &&
                   type === "staff" &&
                   reception.map((e) => (

@@ -10,6 +10,7 @@ import {
 } from "@/lib/schedule-submissions";
 import { getScheduleNotes, type ScheduleNote } from "@/lib/schedule-notes";
 import { addMonthsToMonthStart, dayOfWeekForDate, monthEnd as monthEndOf } from "@/lib/date";
+import { isJapaneseHoliday } from "@/lib/holidays";
 import { DAY_OF_WEEK_LABEL, SCHEDULE_KIND_LABEL, isClosedOnDate } from "@/lib/types";
 import type { LessonOption, ScheduleSubmission } from "@/lib/types";
 
@@ -335,7 +336,7 @@ export default function ScheduleSubmissionForm({
                         : ""
                 }`}
               >
-                <span className={isClosedDay ? "text-neutral-400" : ""}>{day}</span>
+                <span className={isClosedDay ? "text-neutral-400" : isJapaneseHoliday(dateStr) ? "text-red-600" : ""}>{day}</span>
                 {isClosedDay && !isUnavailable && <span className="text-neutral-400">定休</span>}
                 {isUnavailable && <span className="text-red-600">休</span>}
                 {otherCount > 0 && <span className="text-neutral-500">{otherCount}件</span>}
