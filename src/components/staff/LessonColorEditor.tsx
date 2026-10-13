@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import DebouncedColorInput from "@/components/staff/DebouncedColorInput";
 import { upsertLessonColor, type LessonColorStyle } from "@/lib/lesson-colors";
 
 const STYLE_LABEL: Record<LessonColorStyle, string> = {
@@ -49,12 +50,11 @@ export default function LessonColorEditor({
         ))}
       </select>
       {localStyle !== "none" && (
-        <input
-          type="color"
+        <DebouncedColorInput
           value={localColor}
-          onChange={(e) => {
-            setLocalColor(e.target.value);
-            save(localStyle, e.target.value);
+          onCommit={(c) => {
+            setLocalColor(c);
+            save(localStyle, c);
           }}
           className="h-5 w-6 rounded border border-neutral-200 dark:border-neutral-800"
         />

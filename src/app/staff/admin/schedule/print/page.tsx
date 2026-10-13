@@ -4,6 +4,7 @@ import { getStaffUser } from "@/lib/auth";
 import { getAllScheduleSubmissions } from "@/lib/schedule-submissions";
 import { getLessonColors, type LessonColor } from "@/lib/lesson-colors";
 import { getScheduleNotes } from "@/lib/schedule-notes";
+import { noteStyle } from "@/lib/color";
 import { nextMonthStart, monthEnd, dayOfWeekForDate } from "@/lib/date";
 import { isJapaneseHoliday } from "@/lib/holidays";
 import { DAY_OF_WEEK_LABEL, isClosedOnDate } from "@/lib/types";
@@ -176,13 +177,13 @@ export default async function SchedulePrintPage({
                   ))}
               </div>
               {isClosedDay ? (
-                <p className="text-neutral-400" style={noteEntry?.color ? { color: noteEntry.color } : undefined}>
+                <p className="text-neutral-400" style={noteStyle(noteEntry)}>
                   {noteEntry?.note || "定休日"}
                 </p>
               ) : (
                 <>
                   {noteEntry?.note && (
-                    <p className="italic text-neutral-500" style={noteEntry.color ? { color: noteEntry.color } : undefined}>
+                    <p className="rounded px-1 italic text-neutral-500" style={noteStyle(noteEntry)}>
                       {noteEntry.note}
                     </p>
                   )}

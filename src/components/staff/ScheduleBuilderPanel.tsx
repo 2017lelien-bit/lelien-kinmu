@@ -10,6 +10,8 @@ import {
   updateScheduleEntryTime,
 } from "@/lib/schedule-submissions";
 import { getScheduleNotes, upsertScheduleNote, type ScheduleNote } from "@/lib/schedule-notes";
+import { noteStyle } from "@/lib/color";
+import DebouncedColorInput from "@/components/staff/DebouncedColorInput";
 import { getMusuhiNotes, getMusuhiShifts, type MusuhiNote, type MusuhiShift } from "@/lib/musuhi-schedule";
 import type { LessonColor } from "@/lib/lesson-colors";
 import { dayOfWeekForDate, monthEnd } from "@/lib/date";
@@ -159,7 +161,8 @@ export default function ScheduleBuilderPanel({
   }
 
   // 休館日の上書き(臨時休業/臨時営業)とイベントなどのメモ・その表示色を保存する。
-  async function handleNoteSave(date: string, patch: { isClosedOverride?: boolean | null; note?: string; color?: string | null }) {
+  async function handleNoteSave(date: string, patch: { isClosedOverride?: boolean | null; note?: string; color?: string | null; bgColor?: string | null },
+  ) {
     setError(null);
     const existing = notes.find((n) => n.entry_date === date);
     const nextNote: ScheduleNote = {
@@ -167,6 +170,7 @@ export default function ScheduleBuilderPanel({
       is_closed_override: patch.isClosedOverride !== undefined ? patch.isClosedOverride : (existing?.is_closed_override ?? null),
       note: patch.note !== undefined ? patch.note : (existing?.note ?? null),
       color: patch.color !== undefined ? patch.color : (existing?.color ?? null),
+      bg_color: patch.bgColor !== undefined ? patch.bgColor : (existing?.bg_color ?? null),
     };
     setNotes((prev) => [...prev.filter((n) => n.entry_date !== date), nextNote]);
     const result = await upsertScheduleNote({
@@ -174,6 +178,7 @@ export default function ScheduleBuilderPanel({
       isClosedOverride: nextNote.is_closed_override,
       note: nextNote.note ?? "",
       color: nextNote.color,
+      bgColor: nextNote.bg_color,
     });
     if (!result.ok) {
       setError(result.error);
@@ -589,13 +594,13 @@ export default function ScheduleBuilderPanel({
                 )
               )}
               {isClosedDay ? (
-                <p className="text-neutral-400" style={noteEntry?.color ? { color: noteEntry.color } : undefined}>
+                <p className="text-neutral-400" style={noteStyle(noteEntry)}>
                   {noteEntry?.note || "定休日"}
                 </p>
               ) : (
                 <>
                   {noteEntry?.note && (
-                    <p className="italic text-neutral-500" style={noteEntry.color ? { color: noteEntry.color } : undefined}>
+                    <p className="rounded px-1 italic text-neutral-500" style={noteStyle(noteEntry)}>
                       {noteEntry.note}
                     </p>
                   )}
@@ -748,13 +753,30 @@ export default function ScheduleBuilderPanel({
                       onBlur={(e) => handleNoteSave(date, { note: e.target.value })}
                       className="w-full min-w-0 rounded border border-neutral-200 px-0.5 text-[9px] dark:border-neutral-800"
                     />
-                    <input
-                      type="color"
+                    <DebouncedColorInput
+                      key={`text-${date}-${noteEntry?.color ?? ""}`}
                       title="メモの文字色"
                       value={noteEntry?.color ?? "#737373"}
-                      onChange={(e) => handleNoteSave(date, { color: e.target.value })}
+                      onCommit={(c) => handleNoteSave(date, { color: c })}
                       className="h-4 w-4 shrink-0 rounded border border-neutral-200 p-0 dark:border-neutral-800"
                     />
+                    <DebouncedColorInput
+                      key={`bg-${date}-${noteEntry?.bg_color ?? ""}`}
+                      title="メモの帯色(背景色)"
+                      value={noteEntry?.bg_color ?? "#ffff00"}
+                      onCommit={(c) => handleNoteSave(date, { bgColor: c })}
+                      className="h-4 w-4 shrink-0 rounded border border-neutral-200 p-0 dark:border-neutral-800"
+                    />
+                    {noteEntry?.bg_color && (
+                      <button
+                        type="button"
+                        title="帯色を外す"
+                        onClick={() => handleNoteSave(date, { bgColor: null })}
+                        className="shrink-0 text-[9px] leading-none text-neutral-400"
+                      >
+                        ×
+                      </button>
+                    )}
                   </div>
                   {isClosedDay ? (
                     <p className="text-[10px] text-neutral-400">休館</p>
