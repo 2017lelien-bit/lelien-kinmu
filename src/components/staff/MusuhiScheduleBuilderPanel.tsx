@@ -4,14 +4,18 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   addMusuhiShift,
-  backfillMusuhiBookingAvailability,
   deleteMusuhiShift,
   fillMusuhiFromLelienReception,
   getMusuhiNotes,
   getMusuhiShifts,
+  previewMusuhiPublish,
+  publishMusuhiBooking,
+  undoLastMusuhiPublish,
   updateMusuhiShift,
   upsertMusuhiNote,
+  type MusuhiLastPublish,
   type MusuhiNote,
+  type MusuhiPublishChange,
   type MusuhiShift,
 } from "@/lib/musuhi-schedule";
 import { dayOfWeekForDate, monthEnd } from "@/lib/date";
@@ -36,11 +40,13 @@ export default function MusuhiScheduleBuilderPanel({
   initialMonthStart,
   initialShifts,
   initialNotes,
+  initialLastPublish,
   staffList,
 }: {
   initialMonthStart: string;
   initialShifts: ShiftWithName[];
   initialNotes: MusuhiNote[];
+  initialLastPublish: MusuhiLastPublish | null;
   staffList: { id: string; name: string }[];
 }) {
   const router = useRouter();
@@ -55,8 +61,16 @@ export default function MusuhiScheduleBuilderPanel({
   const [pairStaffBId, setPairStaffBId] = useState(staffList[1]?.id ?? "");
   const [filling, setFilling] = useState(false);
   const [fillMessage, setFillMessage] = useState<string | null>(null);
-  const [backfilling, setBackfilling] = useState(false);
-  const [backfillMessage, setBackfillMessage] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [undoing, setUndoing] = useState(false);
+  const [publishMessage, setPublishMessage] = useState<string | null>(null);
+  const [pendingChanges, setPendingChanges] = useState<{
+    changes: MusuhiPublishChange[];
+    unchangedDays: number;
+    monthStart: string;
+  } | null>(null);
+  const [lastPublish, setLastPublish] = useState(initialLastPublish);
 
   async function handleShowMonth() {
     setLoading(true);
@@ -104,28 +118,81 @@ export default function MusuhiScheduleBuilderPanel({
     router.refresh();
   }
 
-  // むすひ予約サイトの予約可能時間は、通常は保存した瞬間に自動で反映されるが、環境変数を
-  // 設定する前から入っていた過去の予定は自動連携が一度も走っていない。その月をまとめて
-  // 手動で反映し直すためのボタン。
-  async function handleBackfill() {
-    setBackfilling(true);
+  // 保存しただけでは予約サイトは変わらない。まず「反映内容を確認」で変更点を見て、
+  // 問題なければ「この内容で反映する」を押す。反映後も「取り消す」で元に戻せる。
+  async function handleCheckPublish() {
+    setChecking(true);
     setError(null);
-    setBackfillMessage(null);
+    setPublishMessage(null);
+    setPendingChanges(null);
     let result;
     try {
-      result = await backfillMusuhiBookingAvailability(monthStart, monthEnd(monthStart));
+      result = await previewMusuhiPublish(monthStart, monthEnd(monthStart));
     } catch (e) {
-      console.error("[handleBackfill] failed", e);
-      setBackfilling(false);
-      setError("反映に失敗しました(通信エラーまたはタイムアウト)。もう一度お試しください。");
+      console.error("[handleCheckPublish] failed", e);
+      setChecking(false);
+      setError("確認に失敗しました(通信エラーまたはタイムアウト)。もう一度お試しください。");
       return;
     }
-    setBackfilling(false);
+    setChecking(false);
     if (!result.ok) {
       setError(result.error);
       return;
     }
-    setBackfillMessage(`${formatMonthLabel(monthStart)}分(${result.data.synced}日分)をむすひ予約サイトへ反映しました。`);
+    setPendingChanges({ ...result.data, monthStart });
+  }
+
+  async function handlePublish() {
+    if (!pendingChanges) return;
+    setPublishing(true);
+    setError(null);
+    let result;
+    try {
+      result = await publishMusuhiBooking(pendingChanges.monthStart, monthEnd(pendingChanges.monthStart));
+    } catch (e) {
+      console.error("[handlePublish] failed", e);
+      setPublishing(false);
+      setError("反映に失敗しました(通信エラーまたはタイムアウト)。もう一度お試しください。");
+      return;
+    }
+    setPublishing(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setPendingChanges(null);
+    setPublishMessage(`${formatMonthLabel(pendingChanges.monthStart)}分(${result.data.published}日分)をむすひ予約サイトへ反映しました。`);
+    setLastPublish({
+      id: "latest",
+      publishedAt: new Date().toISOString(),
+      monthStart: pendingChanges.monthStart,
+      changedDays: result.data.published,
+    });
+  }
+
+  async function handleUndoPublish() {
+    if (!window.confirm("直前の反映を取り消して、むすひ予約サイトを反映前の状態に戻します。よろしいですか?")) return;
+    setUndoing(true);
+    setError(null);
+    setPublishMessage(null);
+    let result;
+    try {
+      result = await undoLastMusuhiPublish();
+    } catch (e) {
+      console.error("[handleUndoPublish] failed", e);
+      setUndoing(false);
+      setError("取り消しに失敗しました(通信エラーまたはタイムアウト)。もう一度お試しください。");
+      return;
+    }
+    setUndoing(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setLastPublish(null);
+    setPendingChanges(null);
+    setPublishMessage(`直前の反映を取り消しました(${result.data.restored}日分を元に戻しました)。`);
+    router.refresh();
   }
 
   async function handleAdd(date: string) {
@@ -270,20 +337,79 @@ export default function MusuhiScheduleBuilderPanel({
       </div>
 
       <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
-        <p className="text-sm font-semibold">むすひの予約サイトへ今すぐ反映</p>
+        <p className="text-sm font-semibold">むすひの予約サイトへ反映(確認してから反映)</p>
         <p className="text-xs text-neutral-400">
-          通常は保存した瞬間にむすひ予約サイトの予約可能時間へ自動で反映されますが、それより前から入っていた予定は反映されていません。表示中の月をまとめて反映し直したいときに使ってください。
+          ここで保存したスケジュールは、まだお客様向けの予約サイトには反映されません。「反映内容を確認」で変更点を見て、問題なければ「この内容で反映する」を押してください。反映したあとでも「直前の反映を取り消す」で元に戻せます。
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={handleBackfill}
-            disabled={backfilling}
+            onClick={handleCheckPublish}
+            disabled={checking || publishing || undoing}
             className="self-start rounded-lg bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-40 dark:bg-white dark:text-black"
           >
-            {backfilling ? "反映中..." : `${formatMonthLabel(monthStart)}分を今すぐ反映`}
+            {checking ? "確認中..." : `${formatMonthLabel(monthStart)}分の反映内容を確認`}
           </button>
-          {backfillMessage && <span className="text-xs text-neutral-500">{backfillMessage}</span>}
+          {lastPublish && (
+            <button
+              onClick={handleUndoPublish}
+              disabled={checking || publishing || undoing}
+              className="self-start rounded-lg border border-red-300 px-4 py-2 text-sm text-red-600 disabled:opacity-40 dark:border-red-800"
+            >
+              {undoing ? "取り消し中..." : "直前の反映を取り消す"}
+            </button>
+          )}
+          {publishMessage && <span className="text-xs text-neutral-500">{publishMessage}</span>}
         </div>
+        {lastPublish && (
+          <p className="text-xs text-neutral-400">
+            直前の反映: {new Date(lastPublish.publishedAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}(
+            {formatMonthLabel(lastPublish.monthStart)}分・{lastPublish.changedDays}日分)
+          </p>
+        )}
+        {pendingChanges && (
+          <div className="flex flex-col gap-2 rounded-lg bg-neutral-50 p-3 dark:bg-neutral-900">
+            {pendingChanges.changes.length === 0 ? (
+              <p className="text-sm">
+                {formatMonthLabel(pendingChanges.monthStart)}分は、すべて予約サイトと同じ内容です。反映する変更はありません。
+              </p>
+            ) : (
+              <>
+                <p className="text-sm font-semibold">
+                  {formatMonthLabel(pendingChanges.monthStart)}分: {pendingChanges.changes.length}日分が変わります
+                  (変更なし{pendingChanges.unchangedDays}日)
+                </p>
+                <ul className="flex max-h-72 flex-col gap-1 overflow-y-auto text-sm">
+                  {pendingChanges.changes.map((c) => (
+                    <li key={c.date} className="flex flex-wrap gap-x-2">
+                      <span className="font-semibold">
+                        {Number(c.date.split("-")[1])}/{Number(c.date.split("-")[2])}
+                      </span>
+                      <span className="text-neutral-500">{c.before}</span>
+                      <span>→</span>
+                      <span>{c.after}</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handlePublish}
+                    disabled={publishing}
+                    className="rounded-lg bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-40 dark:bg-white dark:text-black"
+                  >
+                    {publishing ? "反映中..." : "この内容で反映する"}
+                  </button>
+                  <button
+                    onClick={() => setPendingChanges(null)}
+                    disabled={publishing}
+                    className="rounded-lg border border-neutral-300 px-4 py-2 text-sm dark:border-neutral-700"
+                  >
+                    やめる
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}

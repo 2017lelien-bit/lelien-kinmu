@@ -4,7 +4,16 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStaffUser, resolveActingStaffId } from "@/lib/auth";
 import { invalidateScheduleConfirmation } from "@/lib/schedule-confirmations";
-import { syncMusuhiBookingAvailability } from "@/lib/musuhi-booking-sync";
+import {
+  bookingStateEquals,
+  computeDesiredBookingState,
+  createMusuhiYoyakuAdminClient,
+  describeBookingState,
+  readCurrentBookingState,
+  restoreBookingDay,
+  syncMusuhiBookingAvailability,
+  type BookingDayState,
+} from "@/lib/musuhi-booking-sync";
 import { dayOfWeekForDate } from "@/lib/date";
 import type { ActionResult } from "@/lib/types";
 
@@ -57,7 +66,6 @@ export async function upsertMusuhiNote(input: { entryDate: string; isClosedOverr
     .from("musuhi_notes")
     .upsert({ entry_date: input.entryDate, is_closed_override: input.isClosedOverride }, { onConflict: "entry_date" });
   if (error) return { ok: false, error: "保存に失敗しました。" };
-  await syncMusuhiBookingAvailability(input.entryDate);
 
   revalidatePath("/staff/admin/schedule");
   revalidatePath("/staff/mypage");
@@ -131,7 +139,6 @@ export async function addMusuhiShift(input: {
     .single();
   if (error || !data) return { ok: false, error: "登録に失敗しました。" };
   await invalidateScheduleConfirmation(input.staffId, input.entryDate);
-  await syncMusuhiBookingAvailability(input.entryDate);
 
   revalidatePath("/staff/admin/schedule");
   return { ok: true, data: data as MusuhiShift };
@@ -158,7 +165,6 @@ export async function updateMusuhiShift(
     if (input.staffId !== undefined && input.staffId !== existing.staff_id) {
       await invalidateScheduleConfirmation(input.staffId, existing.entry_date);
     }
-    await syncMusuhiBookingAvailability(existing.entry_date);
   }
 
   revalidatePath("/staff/admin/schedule");
@@ -175,20 +181,13 @@ export async function deleteMusuhiShift(id: string): Promise<ActionResult> {
   if (error) return { ok: false, error: "削除に失敗しました。" };
   if (existing) {
     await invalidateScheduleConfirmation(existing.staff_id, existing.entry_date);
-    await syncMusuhiBookingAvailability(existing.entry_date);
   }
 
   revalidatePath("/staff/admin/schedule");
   return { ok: true, data: undefined };
 }
 
-// 環境変数を設定する前から既に入っていた過去のむすひスケジュールは、自動連携の
-// 対象になっていない(保存イベントが一度も発生していないため)。管理者が任意の月を
-// 選んで手動でまとめて反映できるようにする。
-export async function backfillMusuhiBookingAvailability(monthStart: string, monthEndDate: string): Promise<ActionResult<{ synced: number }>> {
-  const adminCheck = await requireAdmin();
-  if (adminCheck) return adminCheck;
-
+function datesInMonth(monthStart: string, monthEndDate: string): string[] {
   const dates: string[] = [];
   const cursor = new Date(`${monthStart}T00:00:00Z`);
   const end = new Date(`${monthEndDate}T00:00:00Z`);
@@ -196,14 +195,131 @@ export async function backfillMusuhiBookingAvailability(monthStart: string, mont
     dates.push(cursor.toISOString().slice(0, 10));
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
+  return dates;
+}
 
-  // 日付ごとに直列で待つと合計時間が長くなり、サーバー関数のタイムアウトにかかりやすいため、
-  // 独立した処理である日付間は並行して実行する。
-  const results = await Promise.all(dates.map((date) => syncMusuhiBookingAvailability(date)));
+export interface MusuhiPublishChange {
+  date: string;
+  before: string;
+  after: string;
+}
+
+export interface MusuhiLastPublish {
+  id: string;
+  publishedAt: string;
+  monthStart: string;
+  changedDays: number;
+}
+
+// むすひスケジュールは、保存しただけではお客様向けの予約サイトに反映されない。
+// 管理者が内容を確認してから「反映する」を押したときだけ、予約サイト側に書き込む。
+// ここでは、いま反映したらどの日がどう変わるかを一覧にして返す(書き込みはしない)。
+export async function previewMusuhiPublish(
+  monthStart: string,
+  monthEndDate: string,
+): Promise<ActionResult<{ changes: MusuhiPublishChange[]; unchangedDays: number }>> {
+  const adminCheck = await requireAdmin();
+  if (adminCheck) return adminCheck;
+
+  const musuhiYoyaku = createMusuhiYoyakuAdminClient();
+  if (!musuhiYoyaku) return { ok: false, error: "むすひ予約サイトとの連携設定が未設定です。" };
+
+  const dates = datesInMonth(monthStart, monthEndDate);
+  const [desired, current] = await Promise.all([
+    computeDesiredBookingState(dates),
+    readCurrentBookingState(musuhiYoyaku, dates),
+  ]);
+
+  const changes: MusuhiPublishChange[] = [];
+  for (const date of dates) {
+    const d = desired.get(date)!;
+    const c = current.get(date)!;
+    if (bookingStateEquals(c, d)) continue;
+    changes.push({ date, before: describeBookingState(c), after: describeBookingState(d) });
+  }
+  return { ok: true, data: { changes, unchangedDays: dates.length - changes.length } };
+}
+
+// 確認した変更を予約サイトに反映する。反映前の予約サイト側の状態を保存しておき、取り消せるようにする。
+export async function publishMusuhiBooking(
+  monthStart: string,
+  monthEndDate: string,
+): Promise<ActionResult<{ published: number }>> {
+  const adminCheck = await requireAdmin();
+  if (adminCheck) return adminCheck;
+
+  const musuhiYoyaku = createMusuhiYoyakuAdminClient();
+  if (!musuhiYoyaku) return { ok: false, error: "むすひ予約サイトとの連携設定が未設定です。" };
+
+  const dates = datesInMonth(monthStart, monthEndDate);
+  const [desired, current] = await Promise.all([
+    computeDesiredBookingState(dates),
+    readCurrentBookingState(musuhiYoyaku, dates),
+  ]);
+  const changedDates = dates.filter((date) => !bookingStateEquals(current.get(date)!, desired.get(date)!));
+  if (changedDates.length === 0) return { ok: true, data: { published: 0 } };
+
+  const snapshot = changedDates.map((date) => ({ date, ...current.get(date)! }));
+  const admin = createAdminClient();
+  const { data: history, error: historyError } = await admin
+    .from("musuhi_publish_history")
+    .insert({ month_start: monthStart, changed_days: changedDates.length, snapshot })
+    .select("id")
+    .single();
+  if (historyError || !history) {
+    return { ok: false, error: "取り消し用の記録を保存できなかったため、反映を中止しました(お客様向けの予約サイトは変更していません)。" };
+  }
+
+  const results = await Promise.all(changedDates.map((date) => syncMusuhiBookingAvailability(date)));
   const succeeded = results.filter((r) => r.ok).length;
-  const firstError = results.find((r) => !r.ok)?.error ?? null;
-  if (succeeded === 0 && firstError) return { ok: false, error: firstError };
-  return { ok: true, data: { synced: succeeded } };
+  const firstError = results.find((r) => !r.ok);
+  if (firstError && !firstError.ok) {
+    return { ok: false, error: `${firstError.error}(${succeeded}/${changedDates.length}日分は反映済み。「直前の反映を取り消す」で元に戻せます)` };
+  }
+  return { ok: true, data: { published: succeeded } };
+}
+
+export async function getLastMusuhiPublish(): Promise<MusuhiLastPublish | null> {
+  const staff = await getStaffUser();
+  if (!staff || staff.role !== "admin") return null;
+
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("musuhi_publish_history")
+    .select("id, published_at, month_start, changed_days")
+    .is("undone_at", null)
+    .order("published_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!data) return null;
+  return { id: data.id, publishedAt: data.published_at, monthStart: data.month_start, changedDays: data.changed_days };
+}
+
+// 直前の反映を取り消し、予約サイト側をその反映の前の状態に戻す。
+export async function undoLastMusuhiPublish(): Promise<ActionResult<{ restored: number }>> {
+  const adminCheck = await requireAdmin();
+  if (adminCheck) return adminCheck;
+
+  const musuhiYoyaku = createMusuhiYoyakuAdminClient();
+  if (!musuhiYoyaku) return { ok: false, error: "むすひ予約サイトとの連携設定が未設定です。" };
+
+  const admin = createAdminClient();
+  const { data: last } = await admin
+    .from("musuhi_publish_history")
+    .select("id, snapshot")
+    .is("undone_at", null)
+    .order("published_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!last) return { ok: false, error: "取り消せる反映がありません。" };
+
+  const snapshot = last.snapshot as ({ date: string } & BookingDayState)[];
+  const results = await Promise.all(snapshot.map((s) => restoreBookingDay(musuhiYoyaku, s.date, s)));
+  const firstError = results.find((r) => !r.ok);
+  if (firstError && !firstError.ok) return { ok: false, error: firstError.error };
+
+  await admin.from("musuhi_publish_history").update({ undone_at: new Date().toISOString() }).eq("id", last.id);
+  return { ok: true, data: { restored: snapshot.length } };
 }
 
 function timeToMinutes(t: string): number {
@@ -269,10 +385,6 @@ export async function fillMusuhiFromLelienReception(input: {
     for (const key of affected) {
       const [staffId, entryDate] = key.split("|");
       await invalidateScheduleConfirmation(staffId, entryDate);
-    }
-    const affectedDates = new Set(rows.map((r) => r.entry_date));
-    for (const date of affectedDates) {
-      await syncMusuhiBookingAvailability(date);
     }
   }
 

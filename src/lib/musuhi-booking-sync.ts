@@ -7,7 +7,7 @@ import { isClosedOnDate } from "@/lib/types";
 // 別のSupabaseデータベース。ここでの「むすひスケジュール」(誰がいつ受付にいるか)を、
 // そのままmusuhi-yoyaku側の「お客様が予約できる時間帯」(schedule_overrides /
 // schedule_override_windows)に反映するための連携。ユーザーの明示的な許可のもとで実装している。
-function createMusuhiYoyakuAdminClient() {
+export function createMusuhiYoyakuAdminClient() {
   const url = process.env.MUSUHI_YOYAKU_SUPABASE_URL;
   const key = process.env.MUSUHI_YOYAKU_SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) return null;
@@ -118,6 +118,133 @@ export async function syncMusuhiBookingAvailability(entryDate: string): Promise<
       console.error("[musuhi-booking-sync] schedule_override_windows insert failed", insertError);
       return { ok: false, error: `schedule_override_windowsへの書き込みに失敗しました: ${insertError.message}` };
     }
+  }
+  return { ok: true };
+}
+
+export interface BookingDayState {
+  existed: boolean;
+  isClosed: boolean;
+  note: string | null;
+  windows: { open: string; close: string }[];
+}
+
+type MusuhiYoyakuClient = NonNullable<ReturnType<typeof createMusuhiYoyakuAdminClient>>;
+
+function hhmm(t: string): string {
+  return t.slice(0, 5);
+}
+
+// Le lien側のむすひスケジュールから、その日の予約サイトの「あるべき状態」を計算する(書き込みはしない)。
+export async function computeDesiredBookingState(dates: string[]): Promise<Map<string, BookingDayState>> {
+  const lelien = createAdminClient();
+  const first = dates[0];
+  const last = dates[dates.length - 1];
+  const [{ data: shifts }, { data: notes }] = await Promise.all([
+    lelien.from("musuhi_shifts").select("entry_date, start_time, end_time").gte("entry_date", first).lte("entry_date", last),
+    lelien.from("musuhi_notes").select("entry_date, is_closed_override").gte("entry_date", first).lte("entry_date", last),
+  ]);
+  const noteByDate = new Map((notes ?? []).map((n) => [n.entry_date as string, n.is_closed_override as boolean | null]));
+  const result = new Map<string, BookingDayState>();
+  for (const date of dates) {
+    const raw = (shifts ?? [])
+      .filter((s) => s.entry_date === date)
+      .map((s) => ({ start: timeToMinutes(s.start_time), end: timeToMinutes(s.end_time) }));
+    const closedOverride = isClosedOnDate(date, noteByDate.get(date));
+    const merged = closedOverride ? [] : clampWindowsToBookingHours(mergeWindows(raw));
+    result.set(date, {
+      existed: true,
+      isClosed: merged.length === 0,
+      note: null,
+      windows: merged.map((w) => ({ open: hhmm(minutesToTime(w.start)), close: hhmm(minutesToTime(w.end)) })),
+    });
+  }
+  return result;
+}
+
+// 予約サイト側の現在の状態を読む。
+export async function readCurrentBookingState(
+  musuhiYoyaku: MusuhiYoyakuClient,
+  dates: string[],
+): Promise<Map<string, BookingDayState>> {
+  const { data: overrides } = await musuhiYoyaku
+    .from("schedule_overrides")
+    .select("id, date, is_closed, note")
+    .gte("date", dates[0])
+    .lte("date", dates[dates.length - 1]);
+  const ids = (overrides ?? []).map((o) => o.id as string);
+  const { data: windows } =
+    ids.length > 0
+      ? await musuhiYoyaku
+          .from("schedule_override_windows")
+          .select("schedule_override_id, open_time, close_time, sort_order")
+          .in("schedule_override_id", ids)
+          .order("sort_order", { ascending: true })
+      : { data: [] as { schedule_override_id: string; open_time: string; close_time: string; sort_order: number }[] };
+
+  const result = new Map<string, BookingDayState>();
+  for (const date of dates) result.set(date, { existed: false, isClosed: false, note: null, windows: [] });
+  for (const o of overrides ?? []) {
+    result.set(o.date as string, {
+      existed: true,
+      isClosed: o.is_closed as boolean,
+      note: (o.note as string | null) ?? null,
+      windows: (windows ?? [])
+        .filter((w) => w.schedule_override_id === o.id)
+        .map((w) => ({ open: hhmm(w.open_time as string), close: hhmm(w.close_time as string) })),
+    });
+  }
+  return result;
+}
+
+export function bookingStateEquals(current: BookingDayState, desired: BookingDayState): boolean {
+  if (!current.existed) return false;
+  if (current.isClosed !== desired.isClosed) return false;
+  if (desired.isClosed) return true;
+  if (current.windows.length !== desired.windows.length) return false;
+  return current.windows.every((w, i) => w.open === desired.windows[i].open && w.close === desired.windows[i].close);
+}
+
+export function describeBookingState(state: BookingDayState): string {
+  if (!state.existed) return "通常の営業時間(個別設定なし)";
+  if (state.isClosed) return "休業";
+  return state.windows.map((w) => `${w.open}〜${w.close}`).join("、");
+}
+
+// 取り消し用: 予約サイト側を、保存しておいた元の状態に戻す。
+export async function restoreBookingDay(
+  musuhiYoyaku: MusuhiYoyakuClient,
+  date: string,
+  state: BookingDayState,
+): Promise<MusuhiSyncResult> {
+  const { data: existing } = await musuhiYoyaku.from("schedule_overrides").select("id").eq("date", date).maybeSingle();
+
+  if (!state.existed) {
+    if (existing) {
+      await musuhiYoyaku.from("schedule_override_windows").delete().eq("schedule_override_id", existing.id);
+      const { error } = await musuhiYoyaku.from("schedule_overrides").delete().eq("id", existing.id);
+      if (error) return { ok: false, error: `${date}を元に戻せませんでした: ${error.message}` };
+    }
+    return { ok: true };
+  }
+
+  const { data: upserted, error } = await musuhiYoyaku
+    .from("schedule_overrides")
+    .upsert({ date, is_closed: state.isClosed, note: state.note }, { onConflict: "date" })
+    .select("id")
+    .single();
+  if (error || !upserted) return { ok: false, error: `${date}を元に戻せませんでした: ${error?.message ?? "unknown"}` };
+  await musuhiYoyaku.from("schedule_override_windows").delete().eq("schedule_override_id", upserted.id);
+  if (state.windows.length > 0) {
+    const { error: insertError } = await musuhiYoyaku.from("schedule_override_windows").insert(
+      state.windows.map((w, index) => ({
+        schedule_override_id: upserted.id,
+        open_time: `${w.open}:00`,
+        close_time: `${w.close}:00`,
+        sort_order: index,
+      })),
+    );
+    if (insertError) return { ok: false, error: `${date}を元に戻せませんでした: ${insertError.message}` };
   }
   return { ok: true };
 }

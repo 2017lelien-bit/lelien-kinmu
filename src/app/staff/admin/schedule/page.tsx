@@ -9,7 +9,7 @@ import { getScheduleNotes } from "@/lib/schedule-notes";
 import { getScheduleConfirmationStatusList } from "@/lib/schedule-confirmations";
 import { getLessonColors } from "@/lib/lesson-colors";
 import { getLeLienHourlyRateByStaff, getMusuhiHourlyRateByStaff, getPayRateRulesByStaff } from "@/lib/payroll";
-import { getMusuhiNotes, getMusuhiShifts } from "@/lib/musuhi-schedule";
+import { getLastMusuhiPublish, getMusuhiNotes, getMusuhiShifts } from "@/lib/musuhi-schedule";
 import { getAllStaff } from "@/lib/staff-admin";
 import { nextMonthStart, monthEnd, formatDateTimeJst } from "@/lib/date";
 import ScheduleReviewPanel from "@/components/staff/ScheduleReviewPanel";
@@ -36,6 +36,7 @@ export default async function AdminSchedulePage() {
     musuhiHourlyRateByStaff,
     confirmationStatusList,
     musuhiNotes,
+    lastMusuhiPublish,
   ] = await Promise.all([
     getAllScheduleSubmissions(initialMonthStart, monthEnd(initialMonthStart)),
     getScheduleSubmissionStatusList(initialMonthStart),
@@ -49,6 +50,7 @@ export default async function AdminSchedulePage() {
     getMusuhiHourlyRateByStaff(),
     getScheduleConfirmationStatusList(initialMonthStart),
     getMusuhiNotes(initialMonthStart, monthEnd(initialMonthStart)),
+    getLastMusuhiPublish(),
   ]);
   const staffList = allStaff
     .filter((s) => s.is_active)
@@ -96,6 +98,7 @@ export default async function AdminSchedulePage() {
           initialMonthStart={initialMonthStart}
           initialShifts={musuhiShifts}
           initialNotes={musuhiNotes}
+          initialLastPublish={lastMusuhiPublish}
           staffList={staffList}
         />
       </div>
