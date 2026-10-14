@@ -160,8 +160,7 @@ export interface ScheduleSubmission {
   kind: ScheduleKind;
   start_time: string | null; // "HH:MM:SS"(unavailableはnull)
   end_time: string | null; // 受付のみ
-  break_start: string | null; // 受付のみ(任意)。"HH:MM:SS"
-  break_end: string | null; // 受付のみ(任意)
+  break_minutes: number | null; // 受付のみ(任意)。休憩の長さ(分)
   lesson_name: string | null; // レッスンのみ
   note: string | null;
   confirmed: boolean;
@@ -181,11 +180,21 @@ export interface ScheduleTemplate {
   kind: ScheduleKind;
   start_time: string; // "HH:MM:SS"
   end_time: string | null; // 受付のみ
-  break_start: string | null; // 受付のみ(任意)
-  break_end: string | null; // 受付のみ(任意)
+  break_minutes: number | null; // 受付のみ(任意)。休憩の長さ(分)
   lesson_name: string | null; // レッスンのみ
   note: string | null;
   weeks_of_month: number[] | null; // null/空 = 毎週。[2,4]なら第2・第4週のその曜日だけ
+}
+
+// 受付シフトの休憩時間(長さ)の選択肢(分)。
+export const BREAK_MINUTE_OPTIONS = [15, 30, 45, 60, 90, 120] as const;
+
+// 休憩の長さを「30min」「1h」「1h30min」の形で表示する。
+export function formatBreakMinutes(minutes: number): string {
+  if (minutes < 60) return `${minutes}min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `${h}h` : `${h}h${m}min`;
 }
 
 export const DAY_OF_WEEK_LABEL = ["日", "月", "火", "水", "木", "金", "土"] as const;

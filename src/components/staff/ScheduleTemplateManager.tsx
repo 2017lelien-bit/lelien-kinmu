@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { addScheduleTemplate, deleteScheduleTemplate } from "@/lib/schedule-submissions";
-import { DAY_OF_WEEK_LABEL } from "@/lib/types";
+import { BREAK_MINUTE_OPTIONS, DAY_OF_WEEK_LABEL, formatBreakMinutes } from "@/lib/types";
 import type { LessonOption, ScheduleTemplate } from "@/lib/types";
 
 export default function ScheduleTemplateManager({
@@ -20,8 +20,7 @@ export default function ScheduleTemplateManager({
   const [kind, setKind] = useState<"reception" | "lesson">("reception");
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("13:00");
-  const [breakStart, setBreakStart] = useState("");
-  const [breakEnd, setBreakEnd] = useState("");
+  const [breakMinutes, setBreakMinutes] = useState(0);
   const [lessonName, setLessonName] = useState(lessonOptions[0]?.name ?? "");
   const [weeksOfMonth, setWeeksOfMonth] = useState<number[]>([1, 2, 3, 4, 5]);
   const [error, setError] = useState<string | null>(null);
@@ -43,8 +42,7 @@ export default function ScheduleTemplateManager({
         kind,
         startTime,
         endTime: kind === "reception" ? endTime : undefined,
-        breakStart: kind === "reception" ? breakStart : undefined,
-        breakEnd: kind === "reception" ? breakEnd : undefined,
+        breakMinutes: kind === "reception" ? breakMinutes : undefined,
         lessonName: kind === "lesson" ? lessonName : undefined,
         weeksOfMonth: isEveryWeek ? undefined : weeksOfMonth,
       },
@@ -56,8 +54,7 @@ export default function ScheduleTemplateManager({
       return;
     }
     setWeeksOfMonth([1, 2, 3, 4, 5]);
-    setBreakStart("");
-    setBreakEnd("");
+    setBreakMinutes(0);
     router.refresh();
   }
 
@@ -93,11 +90,9 @@ export default function ScheduleTemplateManager({
                 {t.start_time.slice(0, 5)}
                 {t.end_time ? `〜${t.end_time.slice(0, 5)}` : ""}
               </span>
-              {t.break_start && t.break_end && (
-                <span className="text-neutral-500">
-                  (休憩 {t.break_start.slice(0, 5)}〜{t.break_end.slice(0, 5)})
-                </span>
-              )}
+              {t.break_minutes ? (
+                <span className="text-neutral-500">(休憩{formatBreakMinutes(t.break_minutes)})</span>
+              ) : null}
               <span>{t.kind === "reception" ? "受付" : t.lesson_name}</span>
               <button
                 onClick={() => handleDelete(t.id)}
@@ -170,22 +165,19 @@ export default function ScheduleTemplateManager({
               />
             </label>
             <label className="flex flex-col gap-1 text-sm">
-              休憩 開始(任意)
-              <input
-                type="time"
-                value={breakStart}
-                onChange={(e) => setBreakStart(e.target.value)}
+              休憩(任意)
+              <select
+                value={breakMinutes}
+                onChange={(e) => setBreakMinutes(Number(e.target.value))}
                 className="rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              休憩 終了(任意)
-              <input
-                type="time"
-                value={breakEnd}
-                onChange={(e) => setBreakEnd(e.target.value)}
-                className="rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
-              />
+              >
+                <option value={0}>なし</option>
+                {BREAK_MINUTE_OPTIONS.map((m) => (
+                  <option key={m} value={m}>
+                    {formatBreakMinutes(m)}
+                  </option>
+                ))}
+              </select>
             </label>
           </>
         ) : lessonOptions.length > 0 ? (

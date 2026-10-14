@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import {
   addScheduleEntry,
   assignScheduleEntryLessonName,
@@ -17,7 +17,13 @@ import { getMusuhiNotes, getMusuhiShifts, type MusuhiNote, type MusuhiShift } fr
 import type { LessonColor } from "@/lib/lesson-colors";
 import { dayOfWeekForDate, monthEnd } from "@/lib/date";
 import { isJapaneseHoliday } from "@/lib/holidays";
-import { CLOSED_DAY_OF_WEEK, DAY_OF_WEEK_LABEL, isClosedOnDate } from "@/lib/types";
+import {
+  BREAK_MINUTE_OPTIONS,
+  CLOSED_DAY_OF_WEEK,
+  DAY_OF_WEEK_LABEL,
+  formatBreakMinutes,
+  isClosedOnDate,
+} from "@/lib/types";
 import type { LessonOption, PayRateRule, ScheduleSubmission } from "@/lib/types";
 import SaveImageButton from "@/components/staff/SaveImageButton";
 
@@ -29,73 +35,11 @@ function formatMonthLabel(monthStart: string): string {
   return `${y}年${Number(m)}月`;
 }
 
-// 受付の休憩時間の入力欄。開始・終了の片方だけを入れた途中の状態で保存してエラーになり、
-// 入力が消えてしまわないよう、入力中の値はここで持ち、両方そろった(または両方空にした)ときだけ保存する。
-function ReceptionBreakInputs({
-  initialStart,
-  initialEnd,
-  onSave,
-}: {
-  initialStart: string;
-  initialEnd: string;
-  onSave: (breakStart: string, breakEnd: string) => Promise<boolean>;
-}) {
-  // 時刻入力は、時・分を入力している途中は値が空になるため、入力欄を状態で制御すると
-  // 途中の入力が消えてしまう。入力欄はブラウザに任せ(非制御)、欄から離れたときに確定・保存する。
-  const startRef = useRef<HTMLInputElement>(null);
-  const endRef = useRef<HTMLInputElement>(null);
-  const [incomplete, setIncomplete] = useState(false);
-  const savedRef = useRef({ start: initialStart, end: initialEnd });
-
-  function commit() {
-    const start = startRef.current?.value ?? "";
-    const end = endRef.current?.value ?? "";
-    setIncomplete((start !== "") !== (end !== ""));
-    if (start === savedRef.current.start && end === savedRef.current.end) return;
-    const bothFilled = start !== "" && end !== "";
-    const bothEmpty = start === "" && end === "";
-    if (bothFilled || bothEmpty) {
-      const previous = savedRef.current;
-      savedRef.current = { start, end };
-      // 保存に失敗したときは、同じ内容でもう一度保存を試せるよう、保存済みの記録を元に戻す。
-      onSave(start, end).then((ok) => {
-        if (!ok) savedRef.current = previous;
-      });
-    }
-  }
-
-  return (
-    <div className="flex flex-col gap-0.5 text-[10px]">
-      <div className="flex items-center gap-0.5">
-        休憩
-        <input
-          ref={startRef}
-          type="time"
-          defaultValue={initialStart}
-          onBlur={commit}
-          className="w-14 rounded border border-neutral-200 px-0.5 py-0.5 text-[10px] dark:border-neutral-800"
-        />
-        〜
-        <input
-          ref={endRef}
-          type="time"
-          defaultValue={initialEnd}
-          onBlur={commit}
-          className="w-14 rounded border border-neutral-200 px-0.5 py-0.5 text-[10px] dark:border-neutral-800"
-        />
-      </div>
-      {incomplete && <span className="text-neutral-400">開始と終了の両方を入れると保存されます</span>}
-    </div>
-  );
-}
-
 function candidateLabel(e: EntryWithName): string {
   const time = e.start_time ? `${e.start_time.slice(0, 5)}${e.end_time ? `〜${e.end_time.slice(0, 5)}` : ""}` : "";
   const what = e.kind === "lesson" ? (e.lesson_name ?? "レッスン希望(未定)") : "受付";
   const breakLabel =
-    e.kind === "reception" && e.break_start && e.break_end
-      ? `(休憩${e.break_start.slice(0, 5)}〜${e.break_end.slice(0, 5)})`
-      : "";
+    e.kind === "reception" && e.break_minutes ? `(休憩${formatBreakMinutes(e.break_minutes)})` : "";
   return [e.staffName, time, what, breakLabel].filter(Boolean).join(" ");
 }
 
@@ -296,27 +240,20 @@ export default function ScheduleBuilderPanel({
     }
   }
 
-  // 受付の休憩時間を設定・解除する(両方空欄にすると休憩なし)。
-  async function handleBreakEdit(entry: EntryWithName, breakStart: string, breakEnd: string): Promise<boolean> {
+  // 受付の休憩時間(長さ)を設定・解除する(0にすると休憩なし)。
+  async function handleBreakEdit(entry: EntryWithName, breakMinutes: number) {
     setError(null);
-    const prevBreakStart = entry.break_start;
-    const prevBreakEnd = entry.break_end;
-    setEntries((prev) =>
-      prev.map((e) => (e.id === entry.id ? { ...e, break_start: breakStart || null, break_end: breakEnd || null } : e)),
-    );
+    const prevBreakMinutes = entry.break_minutes;
+    setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, break_minutes: breakMinutes || null } : e)));
     const result = await updateScheduleEntryTime(entry.id, {
       startTime: entry.start_time?.slice(0, 5) ?? "",
       endTime: entry.end_time?.slice(0, 5) || undefined,
-      breakStart,
-      breakEnd,
+      breakMinutes,
     });
     if (!result.ok) {
       setError(result.error);
-      setEntries((prev) =>
-        prev.map((e) => (e.id === entry.id ? { ...e, break_start: prevBreakStart, break_end: prevBreakEnd } : e)),
-      );
+      setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, break_minutes: prevBreakMinutes } : e)));
     }
-    return result.ok;
   }
 
   // 確定済みの予定の担当スタッフを、別のスタッフに差し替える。
@@ -441,7 +378,7 @@ export default function ScheduleBuilderPanel({
     } else if (e.kind === "reception") {
       const rate = leLienHourlyRateByStaff[e.staff_id] ?? 0;
       // 休憩時間は時給の対象外なので、その分を差し引く。
-      const workHours = hoursBetween(e.start_time, e.end_time) - hoursBetween(e.break_start, e.break_end);
+      const workHours = hoursBetween(e.start_time, e.end_time) - (e.break_minutes ?? 0) / 60;
       current.receptionCost += Math.max(0, workHours) * rate;
     }
     costByStaff.set(e.staff_id, current);
@@ -548,12 +485,21 @@ export default function ScheduleBuilderPanel({
                 </div>
               )}
               {selected && kind === "reception" && (
-                <ReceptionBreakInputs
-                  key={selected.id}
-                  initialStart={selected.break_start?.slice(0, 5) ?? ""}
-                  initialEnd={selected.break_end?.slice(0, 5) ?? ""}
-                  onSave={(breakStart, breakEnd) => handleBreakEdit(selected, breakStart, breakEnd)}
-                />
+                <div className="flex items-center gap-0.5 text-[10px]">
+                  休憩
+                  <select
+                    value={selected.break_minutes ?? 0}
+                    onChange={(e) => handleBreakEdit(selected, Number(e.target.value))}
+                    className="rounded border border-neutral-200 px-0.5 py-0.5 text-[10px] dark:border-neutral-800"
+                  >
+                    <option value={0}>なし</option>
+                    {BREAK_MINUTE_OPTIONS.map((m) => (
+                      <option key={m} value={m}>
+                        {formatBreakMinutes(m)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               )}
               {selected &&
                 kind === "lesson" &&
@@ -675,7 +621,7 @@ export default function ScheduleBuilderPanel({
                     .map((e) => (
                       <span key={e.id} className="text-neutral-600">
                         {e.staffName} {formatTimeCompact(e.start_time)}-{formatTimeCompact(e.end_time)}
-                        {e.break_start && e.break_end ? ` 休${formatTimeCompact(e.break_start)}-${formatTimeCompact(e.break_end)}` : ""}
+                        {e.break_minutes ? ` (休憩${formatBreakMinutes(e.break_minutes)})` : ""}
                       </span>
                     ))}
               </FitText>

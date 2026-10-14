@@ -7,7 +7,7 @@ import { getScheduleNotes } from "@/lib/schedule-notes";
 import { noteStyle } from "@/lib/color";
 import { nextMonthStart, monthEnd, dayOfWeekForDate } from "@/lib/date";
 import { isJapaneseHoliday } from "@/lib/holidays";
-import { DAY_OF_WEEK_LABEL, isClosedOnDate } from "@/lib/types";
+import { DAY_OF_WEEK_LABEL, formatBreakMinutes, isClosedOnDate } from "@/lib/types";
 import PrintButton from "@/components/staff/PrintButton";
 import PrintFitToPage from "@/components/staff/PrintFitToPage";
 import SaveImageButton from "@/components/staff/SaveImageButton";
@@ -174,7 +174,7 @@ export default async function SchedulePrintPage({
                     .map((e) => (
                       <span key={e.id} className="text-neutral-600">
                         {e.staffName} {formatTimeCompact(e.start_time)}-{formatTimeCompact(e.end_time)}
-                        {e.break_start && e.break_end ? ` 休${formatTimeCompact(e.break_start)}-${formatTimeCompact(e.break_end)}` : ""}
+                        {e.break_minutes ? ` (休憩${formatBreakMinutes(e.break_minutes)})` : ""}
                       </span>
                     ))}
               </FitText>

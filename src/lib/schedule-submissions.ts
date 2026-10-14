@@ -14,19 +14,23 @@ async function requireAdmin(): Promise<{ ok: false; error: string } | null> {
   return null;
 }
 
-// 受付シフトの休憩時間(任意)の入力チェック。開始・終了は両方入れるか両方空にし、
-// 受付の開始〜終了の範囲内で、開始より終了が後になっている必要がある("HH:MM"形式の文字列比較でよい)。
-function validateReceptionBreak(
+function toMinutes(time: string): number {
+  const [h, m] = time.slice(0, 5).split(":").map(Number);
+  return h * 60 + m;
+}
+
+// 受付シフトの休憩時間(長さ・分、任意)の入力チェック。空・0なら休憩なし。
+// 受付の時間(開始〜終了)より長い休憩は入れられない。
+function validateBreakMinutes(
   startTime: string | undefined,
   endTime: string | undefined,
-  breakStart: string | undefined,
-  breakEnd: string | undefined,
+  breakMinutes: number | null | undefined,
 ): string | null {
-  if (!breakStart && !breakEnd) return null;
-  if (!breakStart || !breakEnd) return "休憩は開始・終了の両方を入力してください。";
-  if (breakEnd <= breakStart) return "休憩の終了時刻は開始時刻より後にしてください。";
-  if (startTime && breakStart < startTime) return "休憩は受付の時間内に入れてください。";
-  if (endTime && breakEnd > endTime) return "休憩は受付の時間内に入れてください。";
+  if (!breakMinutes) return null;
+  if (!Number.isInteger(breakMinutes) || breakMinutes < 0) return "休憩の時間が正しくありません。";
+  if (startTime && endTime && breakMinutes > toMinutes(endTime) - toMinutes(startTime)) {
+    return "休憩が受付の時間より長くなっています。";
+  }
   return null;
 }
 
@@ -56,8 +60,7 @@ export async function addScheduleEntry(
     kind: "reception" | "lesson" | "unavailable";
     startTime?: string;
     endTime?: string;
-    breakStart?: string;
-    breakEnd?: string;
+    breakMinutes?: number | null;
     lessonName?: string;
     note?: string;
   },
@@ -70,7 +73,7 @@ export async function addScheduleEntry(
     return { ok: false, error: "受付は開始・終了時刻を入力してください。" };
   }
   if (input.kind === "reception") {
-    const breakError = validateReceptionBreak(input.startTime, input.endTime, input.breakStart, input.breakEnd);
+    const breakError = validateBreakMinutes(input.startTime, input.endTime, input.breakMinutes);
     if (breakError) return { ok: false, error: breakError };
   }
   const normalizedLessonName = input.lessonName ? normalizeLessonName(input.lessonName) : input.lessonName;
@@ -93,8 +96,7 @@ export async function addScheduleEntry(
       start_time: input.kind === "unavailable" ? input.startTime || null : input.startTime,
       // レッスン名を決めている場合は開始時刻だけ、決めていない場合(時間帯だけ伝える)は終了時刻も持つ。
       end_time: input.kind === "lesson" ? (normalizedLessonName ? null : input.endTime || null) : input.endTime || null,
-      break_start: input.kind === "reception" ? input.breakStart || null : null,
-      break_end: input.kind === "reception" ? input.breakEnd || null : null,
+      break_minutes: input.kind === "reception" ? input.breakMinutes || null : null,
       lesson_name: input.kind === "lesson" ? normalizedLessonName || null : null,
       note: input.note || null,
     })
@@ -167,7 +169,7 @@ export async function setScheduleEntryConfirmed(id: string, confirmed: boolean):
 // レッスン名を決めずに時間帯だけ提出された候補には、ここでレッスン名を割り当てられるようにする。
 export async function updateScheduleEntryTime(
   id: string,
-  input: { startTime: string; endTime?: string; lessonName?: string; breakStart?: string; breakEnd?: string },
+  input: { startTime: string; endTime?: string; lessonName?: string; breakMinutes?: number | null },
 ): Promise<ActionResult> {
   const adminCheck = await requireAdmin();
   if (adminCheck) return adminCheck;
@@ -178,19 +180,17 @@ export async function updateScheduleEntryTime(
     start_time: string;
     end_time: string | null;
     lesson_name?: string | null;
-    break_start?: string | null;
-    break_end?: string | null;
+    break_minutes?: number | null;
   } = {
     start_time: input.startTime,
     end_time: input.endTime || null,
   };
   if (input.lessonName !== undefined) update.lesson_name = normalizeLessonName(input.lessonName) || null;
-  // 休憩は、指定があった(空文字で解除する場合も含む)ときだけ更新する。
-  if (input.breakStart !== undefined || input.breakEnd !== undefined) {
-    const breakError = validateReceptionBreak(input.startTime, input.endTime, input.breakStart, input.breakEnd);
+  // 休憩は、指定があった(0やnullで解除する場合も含む)ときだけ更新する。
+  if (input.breakMinutes !== undefined) {
+    const breakError = validateBreakMinutes(input.startTime, input.endTime, input.breakMinutes);
     if (breakError) return { ok: false, error: breakError };
-    update.break_start = input.breakStart || null;
-    update.break_end = input.breakEnd || null;
+    update.break_minutes = input.breakMinutes || null;
   }
 
   const { error } = await admin.from("schedule_submissions").update(update).eq("id", id);
@@ -319,8 +319,7 @@ export async function addScheduleTemplate(
     kind: "reception" | "lesson";
     startTime: string;
     endTime?: string;
-    breakStart?: string;
-    breakEnd?: string;
+    breakMinutes?: number | null;
     lessonName?: string;
     note?: string;
     weeksOfMonth?: number[];
@@ -334,7 +333,7 @@ export async function addScheduleTemplate(
     return { ok: false, error: "受付は終了時刻を入力してください。" };
   }
   if (input.kind === "reception") {
-    const breakError = validateReceptionBreak(input.startTime, input.endTime, input.breakStart, input.breakEnd);
+    const breakError = validateBreakMinutes(input.startTime, input.endTime, input.breakMinutes);
     if (breakError) return { ok: false, error: breakError };
   }
   const normalizedLessonName = input.lessonName ? normalizeLessonName(input.lessonName) : input.lessonName;
@@ -349,8 +348,7 @@ export async function addScheduleTemplate(
     kind: input.kind,
     start_time: input.startTime,
     end_time: input.kind === "reception" ? input.endTime : null,
-    break_start: input.kind === "reception" ? input.breakStart || null : null,
-    break_end: input.kind === "reception" ? input.breakEnd || null : null,
+    break_minutes: input.kind === "reception" ? input.breakMinutes || null : null,
     lesson_name: input.kind === "lesson" ? normalizedLessonName : null,
     note: input.note || null,
     weeks_of_month: input.weeksOfMonth && input.weeksOfMonth.length > 0 ? input.weeksOfMonth : null,
@@ -405,8 +403,7 @@ export async function applyTemplatesToMonth(
     kind: string;
     start_time: string;
     end_time: string | null;
-    break_start: string | null;
-    break_end: string | null;
+    break_minutes: number | null;
     lesson_name: string | null;
     note: string | null;
   }[] = [];
@@ -430,8 +427,7 @@ export async function applyTemplatesToMonth(
         kind: t.kind,
         start_time: t.start_time,
         end_time: t.kind === "reception" ? t.end_time : null,
-        break_start: t.kind === "reception" ? t.break_start : null,
-        break_end: t.kind === "reception" ? t.break_end : null,
+        break_minutes: t.kind === "reception" ? t.break_minutes : null,
         lesson_name: t.kind === "lesson" ? t.lesson_name : null,
         note: t.note,
       });
