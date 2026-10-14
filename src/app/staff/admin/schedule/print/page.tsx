@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getStaffUser } from "@/lib/auth";
 import { getAllScheduleSubmissions } from "@/lib/schedule-submissions";
 import { getLessonColors, type LessonColor } from "@/lib/lesson-colors";
+import { buildLessonColorMap, lessonColorKey } from "@/lib/lesson-color-key";
 import { getScheduleNotes } from "@/lib/schedule-notes";
 import { noteStyle } from "@/lib/color";
 import { nextMonthStart, monthEnd, dayOfWeekForDate } from "@/lib/date";
@@ -53,7 +54,7 @@ function readableTextColor(hex: string): string {
 }
 
 function lessonStyle(name: string, colorMap: Map<string, LessonColor>): { backgroundColor?: string; color?: string } {
-  const config = colorMap.get(name);
+  const config = colorMap.get(lessonColorKey(name));
   if (config?.style === "none") return {};
   if (config?.style === "text") return { color: config.color };
   const bg = config?.color ?? DEFAULT_COLOR;
@@ -78,7 +79,7 @@ export default async function SchedulePrintPage({
     getScheduleNotes(monthStart, monthEnd(monthStart)),
   ]);
   const confirmed = entries.filter((e) => e.confirmed && e.kind !== "unavailable");
-  const colorMap = new Map(lessonColorRows.map((c) => [c.lesson_name, c]));
+  const colorMap = buildLessonColorMap(lessonColorRows);
   const notesByDate = new Map(scheduleNotes.map((n) => [n.entry_date, n]));
 
   const [y, m] = monthStart.split("-").map(Number);
@@ -98,9 +99,14 @@ export default async function SchedulePrintPage({
     list.sort((a, b) => (a.start_time ?? "").localeCompare(b.start_time ?? ""));
   }
 
-  const lessonNamesUsed = Array.from(
-    new Set(confirmed.filter((e) => e.kind === "lesson").map((e) => e.lesson_name ?? "(レッスン名未定)")),
-  ).sort();
+  // 凡例は、表記ゆれ(全角/半角など)の違うレッスン名を1つにまとめて表示する(色は同じ設定を共有する)。
+  const lessonNamesByKey = new Map<string, string>();
+  for (const e of confirmed.filter((e) => e.kind === "lesson")) {
+    const name = e.lesson_name ?? "(レッスン名未定)";
+    const key = lessonColorKey(name);
+    if (!lessonNamesByKey.has(key)) lessonNamesByKey.set(key, name);
+  }
+  const lessonNamesUsed = Array.from(lessonNamesByKey.values()).sort();
 
   // カレンダーの見た目に合わせて、月初の曜日分だけ空マスを差し込む。
   const leadingBlanks: (string | null)[] = Array(dayOfWeekForDate(dates[0])).fill(null);
@@ -128,7 +134,7 @@ export default async function SchedulePrintPage({
         <div className="flex flex-nowrap items-center gap-3 overflow-x-auto pb-1 text-xs print:gap-1.5 print:text-[8px]">
           {lessonNamesUsed.map((name) => {
             const style = lessonStyle(name, colorMap);
-            const config = colorMap.get(name);
+            const config = colorMap.get(lessonColorKey(name));
             return (
               <span key={name} className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap">
                 <span

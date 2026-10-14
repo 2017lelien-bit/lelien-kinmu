@@ -15,6 +15,7 @@ import FitText from "@/components/staff/FitText";
 import DebouncedColorInput from "@/components/staff/DebouncedColorInput";
 import { getMusuhiNotes, getMusuhiShifts, type MusuhiNote, type MusuhiShift } from "@/lib/musuhi-schedule";
 import type { LessonColor } from "@/lib/lesson-colors";
+import { buildLessonColorMap, lessonColorKey } from "@/lib/lesson-color-key";
 import { dayOfWeekForDate, monthEnd } from "@/lib/date";
 import { isJapaneseHoliday } from "@/lib/holidays";
 import {
@@ -55,7 +56,7 @@ function readableTextColor(hex: string): string {
 }
 
 function lessonStyle(name: string, colorMap: Map<string, LessonColor>): { backgroundColor?: string; color?: string } {
-  const config = colorMap.get(name);
+  const config = colorMap.get(lessonColorKey(name));
   if (config?.style === "none") return {};
   if (config?.style === "text") return { color: config.color };
   const bg = config?.color ?? DEFAULT_COLOR;
@@ -584,7 +585,7 @@ export default function ScheduleBuilderPanel({
 
   // 確定済みの予定だけを、印刷ページと同じ配色・同じ文字サイズで表示するプレビュー
   // (文字を小さくしすぎると名前が読めなくなるため、幅は縮めず下に表示する)。
-  const colorMap = new Map(lessonColorRows.map((c) => [c.lesson_name, c]));
+  const colorMap = buildLessonColorMap(lessonColorRows);
   function renderPreview() {
     return (
       <div className="grid grid-cols-7 gap-px rounded border border-neutral-400 bg-neutral-400 text-[10px] dark:border-neutral-700 dark:bg-neutral-700">
