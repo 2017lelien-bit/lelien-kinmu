@@ -9,7 +9,7 @@ import {
   updateScheduleEntryStaff,
   updateScheduleEntryTime,
 } from "@/lib/schedule-submissions";
-import { getScheduleNotes, upsertScheduleNote, type ScheduleNote } from "@/lib/schedule-notes";
+import { getScheduleNotes, setScheduleClosures, upsertScheduleNote, type ScheduleNote } from "@/lib/schedule-notes";
 import { noteStyle } from "@/lib/color";
 import DebouncedColorInput from "@/components/staff/DebouncedColorInput";
 import { getMusuhiNotes, getMusuhiShifts, type MusuhiNote, type MusuhiShift } from "@/lib/musuhi-schedule";
@@ -151,6 +151,11 @@ export default function ScheduleBuilderPanel({
   const [manualStaffId, setManualStaffId] = useState(staffList[0]?.id ?? "");
   const [manualSubmitting, setManualSubmitting] = useState(false);
   const [manualError, setManualError] = useState<string | null>(null);
+  const [closureStart, setClosureStart] = useState(monthStart);
+  const [closureEnd, setClosureEnd] = useState(monthStart);
+  const [closureNote, setClosureNote] = useState("");
+  const [closureBusy, setClosureBusy] = useState(false);
+  const [closureMessage, setClosureMessage] = useState<string | null>(null);
 
   async function handleShowMonth() {
     setLoading(true);
@@ -193,6 +198,28 @@ export default function ScheduleBuilderPanel({
       setError(result.error);
       if (existing) setNotes((prev) => [...prev.filter((n) => n.entry_date !== date), existing]);
     }
+  }
+
+  async function handleClosure(closed: boolean) {
+    setClosureBusy(true);
+    setClosureMessage(null);
+    setError(null);
+    const result = await setScheduleClosures({
+      startDate: closureStart,
+      endDate: closureEnd,
+      closed,
+      note: closureNote,
+    });
+    setClosureBusy(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setNotes(await getScheduleNotes(monthStart, monthEnd(monthStart)));
+    setClosureMessage(
+      closed ? `${result.data.days}日分を休業にしました。` : `${result.data.days}日分の臨時休業を取り消しました。`,
+    );
+    if (closed) setClosureNote("");
   }
 
   async function handleSelect(key: string, prevId: string, nextId: string) {
@@ -837,6 +864,72 @@ export default function ScheduleBuilderPanel({
             })}
           </div>
         </div>
+
+      <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
+        <p className="text-sm font-semibold">Le lienの休業を入れる</p>
+        <p className="text-xs text-neutral-400">
+          定休日(月曜)以外の臨時休業を、日付を指定してまとめて入れられます(1日だけなら開始日と終了日を同じにしてください)。休業の日は、スケジュールに「休館」と表示され、受付・レッスンは表示されません。
+        </p>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1 text-sm">
+            開始日
+            <input
+              type="date"
+              value={closureStart}
+              onChange={(e) => {
+                setClosureStart(e.target.value);
+                if (closureEnd < e.target.value) setClosureEnd(e.target.value);
+              }}
+              className="rounded-lg border border-neutral-200 px-3 py-2 text-sm dark:border-neutral-800"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            終了日
+            <input
+              type="date"
+              value={closureEnd}
+              min={closureStart}
+              onChange={(e) => setClosureEnd(e.target.value)}
+              className="rounded-lg border border-neutral-200 px-3 py-2 text-sm dark:border-neutral-800"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            メモ(任意)
+            <input
+              value={closureNote}
+              onChange={(e) => setClosureNote(e.target.value)}
+              placeholder="例: 年末年始休業"
+              className="w-48 rounded-lg border border-neutral-200 px-3 py-2 text-sm dark:border-neutral-800"
+            />
+          </label>
+          <button
+            onClick={() => handleClosure(true)}
+            disabled={closureBusy}
+            className="rounded-lg bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-40 dark:bg-white dark:text-black"
+          >
+            {closureBusy ? "保存中..." : "休業にする"}
+          </button>
+          <button
+            onClick={() => handleClosure(false)}
+            disabled={closureBusy}
+            className="rounded-lg border border-neutral-300 px-4 py-2 text-sm disabled:opacity-40 dark:border-neutral-700"
+          >
+            休業を取り消す
+          </button>
+        </div>
+        {closureMessage && <p className="text-xs text-neutral-500">{closureMessage}</p>}
+        {notes.some((n) => n.is_closed_override === true) && (
+          <p className="text-xs text-neutral-500">
+            {formatMonthLabel(monthStart)}の臨時休業:{" "}
+            {notes
+                .filter((n) => n.is_closed_override === true)
+                .map((n) => n.entry_date)
+                .sort()
+              .map((d) => `${Number(d.split("-")[1])}/${Number(d.split("-")[2])}`)
+              .join("、")}
+          </p>
+        )}
+      </div>
 
       <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
         <p className="text-sm font-semibold">手動で追加する</p>
