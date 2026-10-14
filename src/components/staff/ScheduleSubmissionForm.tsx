@@ -347,7 +347,7 @@ export default function ScheduleSubmissionForm({
                 }`}
               >
                 <span className={isClosedDay ? "text-neutral-400" : isJapaneseHoliday(dateStr) ? "text-red-600" : ""}>{day}</span>
-                {isClosedDay && !isUnavailable && <span className="text-neutral-400">定休</span>}
+                {isClosedDay && !isUnavailable && <span className="text-neutral-400">休館日</span>}
                 {isUnavailable && <span className="text-red-600">休</span>}
                 {otherCount > 0 && <span className="text-neutral-500">{otherCount}件</span>}
                 {noteEntry?.note && (

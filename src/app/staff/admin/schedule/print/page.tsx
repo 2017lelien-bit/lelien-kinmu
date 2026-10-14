@@ -186,7 +186,7 @@ export default async function SchedulePrintPage({
               </div>
               {isClosedDay ? (
                 <p className="text-neutral-400" style={noteStyle(noteEntry)}>
-                  {noteEntry?.note || "定休日"}
+                  {noteEntry?.note || "休館日"}
                 </p>
               ) : (
                 <>

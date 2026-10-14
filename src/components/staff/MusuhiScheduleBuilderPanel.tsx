@@ -448,7 +448,7 @@ export default function MusuhiScheduleBuilderPanel({
                   }}
                   className="w-full rounded border border-neutral-200 text-[9px] dark:border-neutral-800"
                 >
-                  <option value="default">{isDefaultClosed ? "定休" : "営業"}</option>
+                  <option value="default">{isDefaultClosed ? "休館日" : "営業"}</option>
                   <option value="closed">臨時休業</option>
                   <option value="open">臨時営業</option>
                 </select>

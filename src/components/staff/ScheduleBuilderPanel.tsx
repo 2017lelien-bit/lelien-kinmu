@@ -670,7 +670,7 @@ export default function ScheduleBuilderPanel({
               )}
               {isClosedDay ? (
                 <p className="text-neutral-400" style={noteStyle(noteEntry)}>
-                  {noteEntry?.note || "定休日"}
+                  {noteEntry?.note || "休館日"}
                 </p>
               ) : (
                 <>
@@ -816,7 +816,7 @@ export default function ScheduleBuilderPanel({
                     }}
                     className="w-full rounded border border-neutral-200 text-[9px] dark:border-neutral-800"
                   >
-                    <option value="default">{isDefaultClosed ? "定休" : "営業"}</option>
+                    <option value="default">{isDefaultClosed ? "休館日" : "営業"}</option>
                     <option value="closed">臨時休業</option>
                     <option value="open">臨時営業</option>
                   </select>
@@ -868,7 +868,7 @@ export default function ScheduleBuilderPanel({
       <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
         <p className="text-sm font-semibold">Le lienの休業を入れる</p>
         <p className="text-xs text-neutral-400">
-          定休日(月曜)以外の臨時休業を、日付を指定してまとめて入れられます(1日だけなら開始日と終了日を同じにしてください)。休業の日は、スケジュールに「休館」と表示され、受付・レッスンは表示されません。
+          休館日(月曜)以外の臨時休業を、日付を指定してまとめて入れられます(1日だけなら開始日と終了日を同じにしてください)。休業の日は、スケジュールに「休館」と表示され、受付・レッスンは表示されません。
         </p>
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1 text-sm">
