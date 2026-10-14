@@ -754,14 +754,12 @@ export default function ScheduleBuilderPanel({
                       className="w-full min-w-0 rounded border border-neutral-200 px-0.5 text-[9px] dark:border-neutral-800"
                     />
                     <DebouncedColorInput
-                      key={`text-${date}-${noteEntry?.color ?? ""}`}
                       title="メモの文字色"
                       value={noteEntry?.color ?? "#737373"}
                       onCommit={(c) => handleNoteSave(date, { color: c })}
                       className="h-4 w-4 shrink-0 rounded border border-neutral-200 p-0 dark:border-neutral-800"
                     />
                     <DebouncedColorInput
-                      key={`bg-${date}-${noteEntry?.bg_color ?? ""}`}
                       title="メモの帯色(背景色)"
                       value={noteEntry?.bg_color ?? "#ffff00"}
                       onCommit={(c) => handleNoteSave(date, { bgColor: c })}
