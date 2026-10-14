@@ -29,6 +29,53 @@ function formatMonthLabel(monthStart: string): string {
   return `${y}年${Number(m)}月`;
 }
 
+// 受付の休憩時間の入力欄。開始・終了の片方だけを入れた途中の状態で保存してエラーになり、
+// 入力が消えてしまわないよう、入力中の値はここで持ち、両方そろった(または両方空にした)ときだけ保存する。
+function ReceptionBreakInputs({
+  initialStart,
+  initialEnd,
+  onSave,
+}: {
+  initialStart: string;
+  initialEnd: string;
+  onSave: (breakStart: string, breakEnd: string) => void;
+}) {
+  const [start, setStart] = useState(initialStart);
+  const [end, setEnd] = useState(initialEnd);
+
+  function update(nextStart: string, nextEnd: string) {
+    setStart(nextStart);
+    setEnd(nextEnd);
+    const hadBreak = initialStart !== "" || initialEnd !== "";
+    if ((nextStart && nextEnd) || (!nextStart && !nextEnd && hadBreak)) {
+      onSave(nextStart, nextEnd);
+    }
+  }
+
+  const incomplete = (start !== "") !== (end !== "");
+  return (
+    <div className="flex flex-col gap-0.5 text-[10px]">
+      <div className="flex items-center gap-0.5">
+        休憩
+        <input
+          type="time"
+          value={start}
+          onChange={(e) => update(e.target.value, end)}
+          className="w-14 rounded border border-neutral-200 px-0.5 py-0.5 text-[10px] dark:border-neutral-800"
+        />
+        〜
+        <input
+          type="time"
+          value={end}
+          onChange={(e) => update(start, e.target.value)}
+          className="w-14 rounded border border-neutral-200 px-0.5 py-0.5 text-[10px] dark:border-neutral-800"
+        />
+      </div>
+      {incomplete && <span className="text-neutral-400">開始と終了の両方を入れると保存されます</span>}
+    </div>
+  );
+}
+
 function candidateLabel(e: EntryWithName): string {
   const time = e.start_time ? `${e.start_time.slice(0, 5)}${e.end_time ? `〜${e.end_time.slice(0, 5)}` : ""}` : "";
   const what = e.kind === "lesson" ? (e.lesson_name ?? "レッスン希望(未定)") : "受付";
@@ -487,22 +534,12 @@ export default function ScheduleBuilderPanel({
                 </div>
               )}
               {selected && kind === "reception" && (
-                <div className="flex items-center gap-0.5 text-[10px]">
-                  休憩
-                  <input
-                    type="time"
-                    value={selected.break_start?.slice(0, 5) ?? ""}
-                    onChange={(e) => handleBreakEdit(selected, e.target.value, selected.break_end?.slice(0, 5) ?? "")}
-                    className="w-14 rounded border border-neutral-200 px-0.5 py-0.5 text-[10px] dark:border-neutral-800"
-                  />
-                  〜
-                  <input
-                    type="time"
-                    value={selected.break_end?.slice(0, 5) ?? ""}
-                    onChange={(e) => handleBreakEdit(selected, selected.break_start?.slice(0, 5) ?? "", e.target.value)}
-                    className="w-14 rounded border border-neutral-200 px-0.5 py-0.5 text-[10px] dark:border-neutral-800"
-                  />
-                </div>
+                <ReceptionBreakInputs
+                  key={selected.id}
+                  initialStart={selected.break_start?.slice(0, 5) ?? ""}
+                  initialEnd={selected.break_end?.slice(0, 5) ?? ""}
+                  onSave={(breakStart, breakEnd) => handleBreakEdit(selected, breakStart, breakEnd)}
+                />
               )}
               {selected &&
                 kind === "lesson" &&
