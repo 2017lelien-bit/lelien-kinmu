@@ -32,7 +32,11 @@ function formatMonthLabel(monthStart: string): string {
 function candidateLabel(e: EntryWithName): string {
   const time = e.start_time ? `${e.start_time.slice(0, 5)}${e.end_time ? `〜${e.end_time.slice(0, 5)}` : ""}` : "";
   const what = e.kind === "lesson" ? (e.lesson_name ?? "レッスン希望(未定)") : "受付";
-  return [e.staffName, time, what].filter(Boolean).join(" ");
+  const breakLabel =
+    e.kind === "reception" && e.break_start && e.break_end
+      ? `(休憩${e.break_start.slice(0, 5)}〜${e.break_end.slice(0, 5)})`
+      : "";
+  return [e.staffName, time, what, breakLabel].filter(Boolean).join(" ");
 }
 
 // プレビュー(印刷イメージ)用。印刷ページと同じ配色ルールを使う。
@@ -232,6 +236,28 @@ export default function ScheduleBuilderPanel({
     }
   }
 
+  // 受付の休憩時間を設定・解除する(両方空欄にすると休憩なし)。
+  async function handleBreakEdit(entry: EntryWithName, breakStart: string, breakEnd: string) {
+    setError(null);
+    const prevBreakStart = entry.break_start;
+    const prevBreakEnd = entry.break_end;
+    setEntries((prev) =>
+      prev.map((e) => (e.id === entry.id ? { ...e, break_start: breakStart || null, break_end: breakEnd || null } : e)),
+    );
+    const result = await updateScheduleEntryTime(entry.id, {
+      startTime: entry.start_time?.slice(0, 5) ?? "",
+      endTime: entry.end_time?.slice(0, 5) || undefined,
+      breakStart,
+      breakEnd,
+    });
+    if (!result.ok) {
+      setError(result.error);
+      setEntries((prev) =>
+        prev.map((e) => (e.id === entry.id ? { ...e, break_start: prevBreakStart, break_end: prevBreakEnd } : e)),
+      );
+    }
+  }
+
   // 確定済みの予定の担当スタッフを、別のスタッフに差し替える。
   async function handleStaffChange(entry: EntryWithName, staffId: string) {
     setError(null);
@@ -353,7 +379,9 @@ export default function ScheduleBuilderPanel({
       current.lessonCost += rate;
     } else if (e.kind === "reception") {
       const rate = leLienHourlyRateByStaff[e.staff_id] ?? 0;
-      current.receptionCost += hoursBetween(e.start_time, e.end_time) * rate;
+      // 休憩時間は時給の対象外なので、その分を差し引く。
+      const workHours = hoursBetween(e.start_time, e.end_time) - hoursBetween(e.break_start, e.break_end);
+      current.receptionCost += Math.max(0, workHours) * rate;
     }
     costByStaff.set(e.staff_id, current);
   }
@@ -456,6 +484,24 @@ export default function ScheduleBuilderPanel({
                       />
                     </>
                   )}
+                </div>
+              )}
+              {selected && kind === "reception" && (
+                <div className="flex items-center gap-0.5 text-[10px]">
+                  休憩
+                  <input
+                    type="time"
+                    value={selected.break_start?.slice(0, 5) ?? ""}
+                    onChange={(e) => handleBreakEdit(selected, e.target.value, selected.break_end?.slice(0, 5) ?? "")}
+                    className="w-14 rounded border border-neutral-200 px-0.5 py-0.5 text-[10px] dark:border-neutral-800"
+                  />
+                  〜
+                  <input
+                    type="time"
+                    value={selected.break_end?.slice(0, 5) ?? ""}
+                    onChange={(e) => handleBreakEdit(selected, selected.break_start?.slice(0, 5) ?? "", e.target.value)}
+                    className="w-14 rounded border border-neutral-200 px-0.5 py-0.5 text-[10px] dark:border-neutral-800"
+                  />
                 </div>
               )}
               {selected &&
@@ -578,6 +624,7 @@ export default function ScheduleBuilderPanel({
                     .map((e) => (
                       <span key={e.id} className="text-neutral-600">
                         {e.staffName} {formatTimeCompact(e.start_time)}-{formatTimeCompact(e.end_time)}
+                        {e.break_start && e.break_end ? ` 休${formatTimeCompact(e.break_start)}-${formatTimeCompact(e.break_end)}` : ""}
                       </span>
                     ))}
               </FitText>

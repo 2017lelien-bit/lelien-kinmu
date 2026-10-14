@@ -160,6 +160,8 @@ export interface ScheduleSubmission {
   kind: ScheduleKind;
   start_time: string | null; // "HH:MM:SS"(unavailableはnull)
   end_time: string | null; // 受付のみ
+  break_start: string | null; // 受付のみ(任意)。"HH:MM:SS"
+  break_end: string | null; // 受付のみ(任意)
   lesson_name: string | null; // レッスンのみ
   note: string | null;
   confirmed: boolean;
@@ -179,6 +181,8 @@ export interface ScheduleTemplate {
   kind: ScheduleKind;
   start_time: string; // "HH:MM:SS"
   end_time: string | null; // 受付のみ
+  break_start: string | null; // 受付のみ(任意)
+  break_end: string | null; // 受付のみ(任意)
   lesson_name: string | null; // レッスンのみ
   note: string | null;
   weeks_of_month: number[] | null; // null/空 = 毎週。[2,4]なら第2・第4週のその曜日だけ

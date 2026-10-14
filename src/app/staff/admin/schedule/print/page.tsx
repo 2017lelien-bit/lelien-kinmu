@@ -174,6 +174,7 @@ export default async function SchedulePrintPage({
                     .map((e) => (
                       <span key={e.id} className="text-neutral-600">
                         {e.staffName} {formatTimeCompact(e.start_time)}-{formatTimeCompact(e.end_time)}
+                        {e.break_start && e.break_end ? ` 休${formatTimeCompact(e.break_start)}-${formatTimeCompact(e.break_end)}` : ""}
                       </span>
                     ))}
               </FitText>

@@ -53,6 +53,9 @@ export default function ScheduleSubmissionForm({
   const [entryDate, setEntryDate] = useState(monthStart);
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("21:00");
+  // 受付の休憩時間(任意)。空欄なら休憩なし。
+  const [breakStart, setBreakStart] = useState("");
+  const [breakEnd, setBreakEnd] = useState("");
   // 「両方可能」のときは、受付の時間(startTime/endTime)とは別にレッスンの希望を持つ。
   // レッスンは任意なので、希望する人だけチェックを入れて入力する。2本連続などにも対応できるよう、
   // 複数のレッスン(開始時刻+名前)を追加できる形にしている。
@@ -88,6 +91,8 @@ export default function ScheduleSubmissionForm({
     setEntryDate(viewMonth);
     setStartTime("09:00");
     setEndTime("21:00");
+    setBreakStart("");
+    setBreakEnd("");
     setWantsLesson(false);
     setLessonSlots([{ startTime: "10:00", name: lessonOptions[0]?.name ?? "" }]);
     setLessonName(lessonOptions[0]?.name ?? "");
@@ -117,7 +122,7 @@ export default function ScheduleSubmissionForm({
 
     if (kind === "both") {
       const receptionResult = await addScheduleEntry(
-        { entryDate, kind: "reception", startTime, endTime, note: note || undefined },
+        { entryDate, kind: "reception", startTime, endTime, breakStart, breakEnd, note: note || undefined },
         staffId,
       );
       if (!receptionResult.ok) {
@@ -161,6 +166,8 @@ export default function ScheduleSubmissionForm({
         kind,
         startTime: kind === "unavailable" ? (unavailableWithTime ? startTime : undefined) : startTime,
         endTime: kind === "reception" || unavailableWithTime || lessonWithoutName ? endTime : undefined,
+        breakStart: kind === "reception" ? breakStart : undefined,
+        breakEnd: kind === "reception" ? breakEnd : undefined,
         lessonName: kind === "lesson" && !lessonFlexible ? lessonName : undefined,
         note: note || undefined,
       },
@@ -414,6 +421,28 @@ export default function ScheduleSubmissionForm({
             />
           </label>
         )}
+        {(kind === "reception" || kind === "both") && (
+          <>
+            <label className="flex flex-col gap-1 text-sm">
+              休憩 開始(任意)
+              <input
+                type="time"
+                value={breakStart}
+                onChange={(e) => setBreakStart(e.target.value)}
+                className="rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              休憩 終了(任意)
+              <input
+                type="time"
+                value={breakEnd}
+                onChange={(e) => setBreakEnd(e.target.value)}
+                className="rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
+              />
+            </label>
+          </>
+        )}
         {kind === "both" && (
           <label className="flex items-center gap-1 self-end pb-2 text-sm">
             <input type="checkbox" checked={wantsLesson} onChange={(e) => setWantsLesson(e.target.checked)} />
@@ -555,6 +584,11 @@ export default function ScheduleSubmissionForm({
                   <span>
                     {e.start_time.slice(0, 5)}
                     {e.end_time ? `〜${e.end_time.slice(0, 5)}` : ""}
+                  </span>
+                )}
+                {e.break_start && e.break_end && (
+                  <span className="text-neutral-500">
+                    (休憩 {e.break_start.slice(0, 5)}〜{e.break_end.slice(0, 5)})
                   </span>
                 )}
                 <span>{e.kind === "lesson" ? (e.lesson_name ?? "レッスン希望(内容は未定)") : SCHEDULE_KIND_LABEL[e.kind]}</span>
