@@ -17,6 +17,7 @@ export default function SchedulePrintLinks({ initialMonthStart }: { initialMonth
           className="rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
         />
       </label>
+      <span className="text-xs text-neutral-400 self-center">Le lien:</span>
       {[
         { type: "staff", label: "スタッフ用" },
         { type: "customer", label: "お客様用" },
@@ -25,6 +26,19 @@ export default function SchedulePrintLinks({ initialMonthStart }: { initialMonth
         <Link
           key={type}
           href={`/staff/admin/schedule/print?month=${month}&type=${type}`}
+          className="rounded-lg border border-neutral-300 px-4 py-2 text-sm dark:border-neutral-700"
+        >
+          {label}を開く
+        </Link>
+      ))}
+      <span className="text-xs text-neutral-400 self-center">むすひ:</span>
+      {[
+        { type: "staff", label: "スタッフ用(担当者と時間)" },
+        { type: "customer", label: "お客様用(営業時間)" },
+      ].map(({ type, label }) => (
+        <Link
+          key={type}
+          href={`/staff/admin/schedule/musuhi-print?month=${month}&type=${type}`}
           className="rounded-lg border border-neutral-300 px-4 py-2 text-sm dark:border-neutral-700"
         >
           {label}を開く

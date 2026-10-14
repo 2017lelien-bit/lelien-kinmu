@@ -57,6 +57,21 @@ function clampWindowsToBookingHours(windows: Window[]): Window[] {
     .filter((w) => w.start < w.end);
 }
 
+// お客様向けの掲載用に、受付シフトから営業時間を「10:00～14:00、15:00～20:00」の形にまとめる
+// (予約サイトに反映される時間帯と同じ計算。受付がいない・休業の日はnull)。
+export function musuhiBusinessHoursLabel(
+  shifts: { start_time: string; end_time: string }[],
+  isClosed: boolean,
+): string | null {
+  if (isClosed) return null;
+  const windows = clampWindowsToBookingHours(
+    mergeWindows(shifts.map((s) => ({ start: timeToMinutes(s.start_time), end: timeToMinutes(s.end_time) }))),
+  );
+  if (windows.length === 0) return null;
+  const fmt = (min: number) => `${Math.floor(min / 60)}:${String(min % 60).padStart(2, "0")}`;
+  return windows.map((w) => `${fmt(w.start)}～${fmt(w.end)}`).join("、");
+}
+
 export type MusuhiSyncResult = { ok: true } | { ok: false; error: string };
 
 // 指定日について、Le lien側の「むすひスケジュール」から、むすひ予約サイト側の
