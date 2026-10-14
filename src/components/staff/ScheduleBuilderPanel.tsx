@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   addScheduleEntry,
   assignScheduleEntryLessonName,
@@ -38,36 +38,49 @@ function ReceptionBreakInputs({
 }: {
   initialStart: string;
   initialEnd: string;
-  onSave: (breakStart: string, breakEnd: string) => void;
+  onSave: (breakStart: string, breakEnd: string) => Promise<boolean>;
 }) {
-  const [start, setStart] = useState(initialStart);
-  const [end, setEnd] = useState(initialEnd);
+  // 時刻入力は、時・分を入力している途中は値が空になるため、入力欄を状態で制御すると
+  // 途中の入力が消えてしまう。入力欄はブラウザに任せ(非制御)、欄から離れたときに確定・保存する。
+  const startRef = useRef<HTMLInputElement>(null);
+  const endRef = useRef<HTMLInputElement>(null);
+  const [incomplete, setIncomplete] = useState(false);
+  const savedRef = useRef({ start: initialStart, end: initialEnd });
 
-  function update(nextStart: string, nextEnd: string) {
-    setStart(nextStart);
-    setEnd(nextEnd);
-    const hadBreak = initialStart !== "" || initialEnd !== "";
-    if ((nextStart && nextEnd) || (!nextStart && !nextEnd && hadBreak)) {
-      onSave(nextStart, nextEnd);
+  function commit() {
+    const start = startRef.current?.value ?? "";
+    const end = endRef.current?.value ?? "";
+    setIncomplete((start !== "") !== (end !== ""));
+    if (start === savedRef.current.start && end === savedRef.current.end) return;
+    const bothFilled = start !== "" && end !== "";
+    const bothEmpty = start === "" && end === "";
+    if (bothFilled || bothEmpty) {
+      const previous = savedRef.current;
+      savedRef.current = { start, end };
+      // 保存に失敗したときは、同じ内容でもう一度保存を試せるよう、保存済みの記録を元に戻す。
+      onSave(start, end).then((ok) => {
+        if (!ok) savedRef.current = previous;
+      });
     }
   }
 
-  const incomplete = (start !== "") !== (end !== "");
   return (
     <div className="flex flex-col gap-0.5 text-[10px]">
       <div className="flex items-center gap-0.5">
         休憩
         <input
+          ref={startRef}
           type="time"
-          value={start}
-          onChange={(e) => update(e.target.value, end)}
+          defaultValue={initialStart}
+          onBlur={commit}
           className="w-14 rounded border border-neutral-200 px-0.5 py-0.5 text-[10px] dark:border-neutral-800"
         />
         〜
         <input
+          ref={endRef}
           type="time"
-          value={end}
-          onChange={(e) => update(start, e.target.value)}
+          defaultValue={initialEnd}
+          onBlur={commit}
           className="w-14 rounded border border-neutral-200 px-0.5 py-0.5 text-[10px] dark:border-neutral-800"
         />
       </div>
@@ -284,7 +297,7 @@ export default function ScheduleBuilderPanel({
   }
 
   // 受付の休憩時間を設定・解除する(両方空欄にすると休憩なし)。
-  async function handleBreakEdit(entry: EntryWithName, breakStart: string, breakEnd: string) {
+  async function handleBreakEdit(entry: EntryWithName, breakStart: string, breakEnd: string): Promise<boolean> {
     setError(null);
     const prevBreakStart = entry.break_start;
     const prevBreakEnd = entry.break_end;
@@ -303,6 +316,7 @@ export default function ScheduleBuilderPanel({
         prev.map((e) => (e.id === entry.id ? { ...e, break_start: prevBreakStart, break_end: prevBreakEnd } : e)),
       );
     }
+    return result.ok;
   }
 
   // 確定済みの予定の担当スタッフを、別のスタッフに差し替える。
