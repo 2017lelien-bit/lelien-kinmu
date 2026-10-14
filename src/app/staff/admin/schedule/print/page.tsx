@@ -171,19 +171,19 @@ export default async function SchedulePrintPage({
 
           return (
             <div key={date} className={`flex min-h-28 flex-col gap-0.5 p-1 ${isClosedDay ? "bg-neutral-100" : "bg-white"}`}>
-              <FitText className="flex items-baseline gap-x-1.5">
+              <div className="flex flex-wrap items-baseline gap-x-1.5">
                 <span className={`font-semibold ${dow === 0 || isJapaneseHoliday(date) ? "text-red-600" : ""}`}>{day}</span>
                 {!isClosedDay &&
                   type === "staff" &&
                   [...reception]
                     .sort((x, y) => (x.start_time ?? "").localeCompare(y.start_time ?? ""))
                     .map((e) => (
-                      <span key={e.id} className="text-neutral-600">
+                      <span key={e.id} className="whitespace-nowrap text-neutral-600">
                         {e.staffName} {formatTimeCompact(e.start_time)}-{formatTimeCompact(e.end_time)}
                         {e.break_minutes ? ` (休憩${formatBreakMinutes(e.break_minutes)})` : ""}
                       </span>
                     ))}
-              </FitText>
+              </div>
               {isClosedDay ? (
                 <p className="text-neutral-400" style={noteStyle(noteEntry)}>
                   {noteEntry?.note || "定休日"}

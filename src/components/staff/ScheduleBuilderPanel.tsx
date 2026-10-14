@@ -11,7 +11,6 @@ import {
 } from "@/lib/schedule-submissions";
 import { getScheduleNotes, upsertScheduleNote, type ScheduleNote } from "@/lib/schedule-notes";
 import { noteStyle } from "@/lib/color";
-import FitText from "@/components/staff/FitText";
 import DebouncedColorInput from "@/components/staff/DebouncedColorInput";
 import { getMusuhiNotes, getMusuhiShifts, type MusuhiNote, type MusuhiShift } from "@/lib/musuhi-schedule";
 import type { LessonColor } from "@/lib/lesson-colors";
@@ -614,18 +613,18 @@ export default function ScheduleBuilderPanel({
               key={date}
               className={`flex min-h-28 flex-col gap-0.5 p-1 ${isClosedDay ? "bg-neutral-100 dark:bg-neutral-900" : "bg-white dark:bg-neutral-950"}`}
             >
-              <FitText className="flex items-baseline gap-x-1.5">
+              <div className="flex flex-wrap items-baseline gap-x-1.5">
                 <span className={`font-semibold ${dow === 0 || isJapaneseHoliday(date) ? "text-red-600" : ""}`}>{day}</span>
                 {!isClosedDay &&
                   [...reception]
                     .sort((x, y) => (x.start_time ?? "").localeCompare(y.start_time ?? ""))
                     .map((e) => (
-                      <span key={e.id} className="text-neutral-600">
+                      <span key={e.id} className="whitespace-nowrap text-neutral-600">
                         {e.staffName} {formatTimeCompact(e.start_time)}-{formatTimeCompact(e.end_time)}
                         {e.break_minutes ? ` (休憩${formatBreakMinutes(e.break_minutes)})` : ""}
                       </span>
                     ))}
-              </FitText>
+              </div>
               {isMusuhiClosedDay ? (
                 !isClosedDay && (
                   <p className="rounded bg-neutral-100 px-1 text-[9px] text-neutral-400 dark:bg-neutral-900">むすひ: 休業</p>
