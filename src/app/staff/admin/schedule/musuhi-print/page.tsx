@@ -80,12 +80,22 @@ export default async function MusuhiSchedulePrintPage({
         </h1>
         <PrintButton />
         <SaveImageButton targetId="schedule-capture" filename={`${monthStart.slice(0, 7)}-musuhi-schedule-${type}.png`} />
-        <SaveImageButton
-          targetId="schedule-capture"
-          filename={`${monthStart.slice(0, 7)}-musuhi-schedule-${type}-instagram.png`}
-          variant="instagram"
-          label="Instagram用で保存"
-        />
+        {type === "customer" ? (
+          <SaveImageButton
+            targetId="schedule-capture"
+            filename={`${monthStart.slice(0, 7)}-musuhi-schedule-customer-instagram.png`}
+            variant="instagram"
+            label="Instagram用で保存"
+          />
+        ) : (
+          // Instagramに載せるのはお客様向けの営業時間なので、担当者名が入るスタッフ用ではなく、お客様用のページで保存する。
+          <Link
+            href={`/staff/admin/schedule/musuhi-print?month=${monthStart.slice(0, 7)}&type=customer`}
+            className="rounded-lg border border-neutral-300 px-4 py-2 text-sm dark:border-neutral-700"
+          >
+            Instagram用はお客様用(営業時間)で開く →
+          </Link>
+        )}
       </div>
 
       <PrintFitToPage>
