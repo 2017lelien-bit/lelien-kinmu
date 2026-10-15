@@ -93,7 +93,11 @@ function ReviewCard({
             {item.workDays.map((day) => (
               <li key={day.date} className="flex flex-wrap gap-x-3 border-b border-neutral-100 pb-0.5 text-xs dark:border-neutral-900">
                 <span className="w-20 shrink-0 font-semibold">{formatDay(day.date)}</span>
-                <span>{day.lines.join(" / ")}</span>
+                <span className="flex flex-col">
+                  {day.lines.map((line, i) => (
+                    <span key={i}>{line}</span>
+                  ))}
+                </span>
               </li>
             ))}
           </ul>

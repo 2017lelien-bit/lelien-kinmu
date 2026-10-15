@@ -682,6 +682,7 @@ export async function getPayrollReviewList(periodStart: string): Promise<ActionR
     { data: periodTimeLogs },
     { data: periodLessonLogs },
     { data: categoryRows },
+    rulesByStaff,
   ] = await Promise.all([
     admin
       .from("staff_profiles")
@@ -708,10 +709,11 @@ export async function getPayrollReviewList(periodStart: string): Promise<ActionR
       .lte("entry_date", periodEnd),
     admin
       .from("lesson_log_entries")
-      .select("staff_id, entry_date, start_time, lesson_name")
+      .select("staff_id, entry_date, start_time, lesson_name, duration_minutes, headcount")
       .gte("entry_date", periodStart)
       .lte("entry_date", periodEnd),
     admin.from("pay_categories").select("id, name"),
+    getPayRateRulesByStaff(),
   ]);
 
   const categoryNameById = new Map((categoryRows ?? []).map((c) => [c.id as string, c.name as string]));
@@ -733,10 +735,16 @@ export async function getPayrollReviewList(periodStart: string): Promise<ActionR
     );
   }
   for (const e of periodLessonLogs ?? []) {
+    const matched = matchPayRateRule(rulesByStaff[e.staff_id as string] ?? [], {
+      lessonName: e.lesson_name as string,
+      durationMinutes: e.duration_minutes as number,
+      headcount: e.headcount as number,
+    });
+    const applied = matched ? `${matched.label} ¥${matched.rate.toLocaleString()}` : "該当ルールなし ¥0";
     pushDayLine(
       e.staff_id as string,
       e.entry_date as string,
-      `${e.start_time ? `${hm(e.start_time)} ` : ""}${e.lesson_name}`,
+      `${e.start_time ? `${hm(e.start_time)} ` : ""}${e.lesson_name} ${e.duration_minutes}分・${e.headcount}人 → ${applied}`,
     );
   }
   const workDaysFor = (staffId: string) =>
