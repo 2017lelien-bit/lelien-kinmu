@@ -24,7 +24,9 @@ export default function LessonLogForm({
   const [entryDate, setEntryDate] = useState(todayJstDateString());
   const [lessonName, setLessonName] = useState<string>(LESSON_NAMES[0]);
   const [durationMinutes, setDurationMinutes] = useState(60);
-  const [headcount, setHeadcount] = useState(1);
+  // 単価が人数で変わらないスタッフも、クラスごとの採算を見るために参加人数を入力してもらう
+  // (金額には影響しない)。0は「まだ入力していない」。
+  const [headcount, setHeadcount] = useState(headcountMatters ? 1 : 0);
   const [quantity, setQuantity] = useState(1);
   const [startTime, setStartTime] = useState("");
   const [note, setNote] = useState("");
@@ -48,7 +50,7 @@ export default function LessonLogForm({
         e.entry_date === entryDate &&
         e.lesson_name === lessonName &&
         e.duration_minutes === durationMinutes &&
-        e.headcount === (headcountMatters ? headcount : 1),
+        e.headcount === headcount,
     );
 
   function resetForm() {
@@ -57,7 +59,7 @@ export default function LessonLogForm({
     setEntryDate(todayJstDateString());
     setLessonName(LESSON_NAMES[0]);
     setDurationMinutes(60);
-    setHeadcount(1);
+    setHeadcount(headcountMatters ? 1 : 0);
     setQuantity(1);
     setStartTime("");
     setNote("");
@@ -75,6 +77,10 @@ export default function LessonLogForm({
   }
 
   async function handleSubmit() {
+    if (headcount < 1) {
+      setError("参加人数を入力してください(分かる範囲で構いません)。");
+      return;
+    }
     setSubmitting(true);
     setError(null);
 
@@ -86,7 +92,7 @@ export default function LessonLogForm({
             entryDate,
             lessonName,
             durationMinutes,
-            headcount: 1,
+            headcount,
             startTime: startTime || undefined,
             note: note || undefined,
           },
@@ -196,22 +202,22 @@ export default function LessonLogForm({
             className="w-24 rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
           />
         </label>
-        {headcountMatters || editingId ? (
-          <label className="flex flex-col gap-1 text-sm">
-            参加人数
-            <input
-              type="number"
-              min={1}
-              value={headcount}
-              onFocus={(e) => e.target.select()}
-              onChange={(e) => {
+        <label className="flex flex-col gap-1 text-sm">
+          参加人数
+          <input
+            type="number"
+            min={1}
+            placeholder="人数"
+            value={headcount > 0 ? headcount : ""}
+            onFocus={(e) => e.target.select()}
+            onChange={(e) => {
               setTouched(true);
-              setHeadcount(Number(e.target.value));
+              setHeadcount(e.target.value === "" ? 0 : Number(e.target.value));
             }}
-              className="w-24 rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
-            />
-          </label>
-        ) : (
+            className="w-24 rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
+          />
+        </label>
+        {!headcountMatters && !editingId && (
           <label className="flex flex-col gap-1 text-sm">
             本数
             <input
@@ -220,9 +226,9 @@ export default function LessonLogForm({
               value={quantity}
               onFocus={(e) => e.target.select()}
               onChange={(e) => {
-              setTouched(true);
-              setQuantity(Number(e.target.value));
-            }}
+                setTouched(true);
+                setQuantity(Number(e.target.value));
+              }}
               className="w-24 rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
             />
           </label>
@@ -240,6 +246,11 @@ export default function LessonLogForm({
           />
         </label>
       </div>
+      {!headcountMatters && (
+        <p className="text-xs text-neutral-400">
+          参加人数は、金額には影響しません。どのクラスに何人来ているかを、経営の判断に使うために入力してください。2本以上を同じ人数でまとめて登録するときは、本数を2以上にしてください。
+        </p>
+      )}
       <p className="text-xs text-neutral-400">
         開始時刻を入れると、同じ日の受付シフトと時間が重なっているレッスンだけが、受付の時給から差し引かれます。
       </p>
@@ -255,7 +266,7 @@ export default function LessonLogForm({
 
       {duplicateExisting && (
         <p className="rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
-          ⚠️ {entryDate}に同じ内容({lessonName}・{durationMinutes}分{headcountMatters ? `・${headcount}人` : ""})の実績が、すでに登録されています。二重登録ではないか確認してから登録してください。
+          ⚠️ {entryDate}に同じ内容({lessonName}・{durationMinutes}分・${headcount}人)の実績が、すでに登録されています。二重登録ではないか確認してから登録してください。
         </p>
       )}
 
