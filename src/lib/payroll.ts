@@ -646,6 +646,143 @@ function colLetter(n: number): string {
 // 送る想定)。これまで手作業でExcelに1人ずつ「見出し行・金額行・時間(回数)行」のブロックを
 // 積み重ねていた形式(表記ゆれのある単価ルール名ではなく、人数区分だけで揃えたもの)を、
 // そのまま自動生成する。
+export interface PayrollPreviewTotals {
+  gross: number;
+  commute: number;
+  totalGross: number;
+  taxable: number;
+  incomeTax: number;
+  residentTax: number;
+  net: number;
+}
+
+export interface PayrollPreviewHourlyRow extends PayrollPreviewTotals {
+  payslipId: string;
+  staffName: string;
+  commuteLabel: string;
+  days: number;
+  // Le lien / むすひの「時間 × 単価 = 金額」。期の途中で単価が変わった人は複数単価を並べた文章にする。
+  leLien: string | null;
+  musuhi: string | null;
+}
+
+export interface PayrollPreviewLessonRow extends PayrollPreviewTotals {
+  payslipId: string;
+  staffName: string;
+  commuteLabel: string;
+  days: number;
+  // 「1〜3人 @3,000- × 5本 = ¥15,000」のような単価区分ごとの内訳。
+  items: string[];
+}
+
+export interface PayrollPreview {
+  hourly: PayrollPreviewHourlyRow[];
+  lesson: PayrollPreviewLessonRow[];
+  // この期間に出退勤・レッスンの記録があるのに、給与明細がまだ作られていないスタッフ。
+  missing: string[];
+}
+
+// 給与データ出力のExcelと同じ内容を、ダウンロードする前に画面で確認できるようにする。
+export async function getPayrollPreview(periodStart: string): Promise<ActionResult<PayrollPreview>> {
+  const adminCheck = await requireAdmin();
+  if (adminCheck) return adminCheck;
+
+  const admin = createAdminClient();
+  const periodEnd = payPeriodEnd(periodStart);
+  const [{ data: payslips }, rulesByStaff, { data: timeStaff }, { data: lessonStaff }] = await Promise.all([
+    admin
+      .from("staff_payslips")
+      .select("*, staff_profiles(name, commute_type, commute_amount)")
+      .eq("period_start", periodStart)
+      .order("staff_id"),
+    getPayRateRulesByStaff(),
+    admin.from("time_log_entries").select("staff_id").gte("entry_date", periodStart).lte("entry_date", periodEnd),
+    admin.from("lesson_log_entries").select("staff_id").gte("entry_date", periodStart).lte("entry_date", periodEnd),
+  ]);
+
+  const yen = (n: number) => `¥${n.toLocaleString()}`;
+  const hourly: PayrollPreviewHourlyRow[] = [];
+  const lesson: PayrollPreviewLessonRow[] = [];
+
+  const describeHourly = (lines: PayrollBreakdownLine[]): string | null => {
+    if (lines.length === 0) return null;
+    const hours = lines.reduce((sum, l) => sum + l.quantity, 0);
+    const amount = lines.reduce((sum, l) => sum + l.subtotal, 0);
+    const rates = new Set(lines.map((l) => l.rate));
+    if (rates.size > 1) {
+      return `${lines.map((l) => `${l.quantity}時間 × ${yen(l.rate)}`).join(" + ")} = ${yen(amount)}`;
+    }
+    return `${hours}時間 × ${yen(lines[0].rate)} = ${yen(amount)}`;
+  };
+
+  for (const p of payslips ?? []) {
+    const profile = (p as unknown as { staff_profiles: { name: string; commute_type: string; commute_amount: number } | null })
+      .staff_profiles;
+    const staffName = profile?.name ?? "";
+    const commuteLabel =
+      profile?.commute_type === "per_day" ? `@${(profile.commute_amount ?? 0).toLocaleString()}/日` : "固定";
+    const breakdown = p.breakdown as PayrollBreakdown;
+    const totals: PayrollPreviewTotals = {
+      gross: p.gross_amount,
+      commute: p.commute_allowance,
+      totalGross: p.total_gross,
+      taxable: p.taxable_amount,
+      incomeTax: p.income_tax,
+      residentTax: p.resident_tax,
+      net: p.net_amount,
+    };
+    const base = { payslipId: p.id as string, staffName, commuteLabel, days: p.days_worked as number };
+
+    const leLienLines = breakdown.lines.filter((l) => l.unitType === "hourly" && isLeLienCategoryName(l.name));
+    const musuhiLines = breakdown.lines.filter((l) => l.unitType === "hourly" && !isLeLienCategoryName(l.name));
+    if (leLienLines.length > 0 || musuhiLines.length > 0) {
+      hourly.push({ ...base, ...totals, leLien: describeHourly(leLienLines), musuhi: describeHourly(musuhiLines) });
+    }
+
+    if (breakdown.lessonLines.length > 0) {
+      const rules = rulesByStaff[p.staff_id] ?? [];
+      const byKey = new Map<string, { rate: number; count: number; amount: number }>();
+      let unmatchedCount = 0;
+      let unmatchedAmount = 0;
+      for (const l of breakdown.lessonLines) {
+        const matched = matchPayRateRule(rules, { lessonName: l.lessonName, durationMinutes: l.durationMinutes, headcount: l.headcount });
+        if (!matched) {
+          unmatchedCount += 1;
+          unmatchedAmount += l.rate;
+          continue;
+        }
+        const key = ruleColumnKey(matched);
+        const cur = byKey.get(key) ?? { rate: matched.rate, count: 0, amount: 0 };
+        cur.count += 1;
+        cur.amount += l.rate;
+        byKey.set(key, cur);
+      }
+      const items = Array.from(byKey.entries())
+        .sort((a, b) => {
+          const ka = columnSortKey(a[0]);
+          const kb = columnSortKey(b[0]);
+          return ka[0] - kb[0] || ka[1] - kb[1] || ka[2].localeCompare(kb[2]);
+        })
+        .map(([key, v]) => `${key} @${v.rate.toLocaleString()}- × ${v.count}本 = ${yen(v.amount)}`);
+      if (unmatchedCount > 0) items.push(`該当ルールなし × ${unmatchedCount}本 = ${yen(unmatchedAmount)}`);
+      lesson.push({ ...base, ...totals, items });
+    }
+  }
+
+  const withPayslip = new Set((payslips ?? []).map((p) => p.staff_id as string));
+  const activeIds = new Set<string>();
+  for (const r of timeStaff ?? []) activeIds.add(r.staff_id as string);
+  for (const r of lessonStaff ?? []) activeIds.add(r.staff_id as string);
+  const missingIds = Array.from(activeIds).filter((id) => !withPayslip.has(id));
+  let missing: string[] = [];
+  if (missingIds.length > 0) {
+    const { data: staffRows } = await admin.from("staff_profiles").select("id, name").in("id", missingIds);
+    missing = (staffRows ?? []).map((r) => r.name as string);
+  }
+
+  return { ok: true, data: { hourly, lesson, missing } };
+}
+
 export async function exportPayrollXlsx(periodStart: string): Promise<ActionResult<string>> {
   const adminCheck = await requireAdmin();
   if (adminCheck) return adminCheck;
