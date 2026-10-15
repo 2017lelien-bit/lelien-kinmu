@@ -162,7 +162,7 @@ export default function ScheduleBuilderPanel({
   const [manualSubmitting, setManualSubmitting] = useState(false);
   const [manualError, setManualError] = useState<string | null>(null);
   // プレビューのカレンダー上で、日付や予定をクリックして直接追加・編集するための状態。
-  const [editMode, setEditMode] = useState(false);
+  const [editMode, setEditMode] = useState(true);
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
   const [editBusy, setEditBusy] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
