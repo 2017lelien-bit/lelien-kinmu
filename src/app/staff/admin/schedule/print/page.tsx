@@ -130,7 +130,7 @@ export default async function SchedulePrintPage({
             <Link
               key={o}
               href={`/staff/admin/schedule/print?month=${monthStart.slice(0, 7)}&type=${type}&orient=${o}`}
-              className={`rounded border px-2 py-1 ${orientation === o ? "border-neutral-900 bg-neutral-900 text-white dark:border-white dark:bg-white dark:text-black" : "border-neutral-300 dark:border-neutral-700"}`}
+              className={`rounded border px-2 py-1 ${orientation === o ? "border-neutral-900 bg-neutral-900 text-white dark:border-white dark:bg-white dark:text-black" : "border-neutral-300 dark:border-neutral-600"}`}
             >
               {o === "landscape" ? "横" : "縦"}
             </Link>
@@ -171,17 +171,17 @@ export default async function SchedulePrintPage({
 
       {/* 罫線は「マス同士の隙間(gap)に背景色を見せる」方式だと、縮小印刷で1px未満になり消えることがあるため、
           各マスに枠線(右・下)を持たせ、外枠は左・上で受ける方式にしている。印刷時の太さは PrintFitToPage が補正する。 */}
-      <div className="print-cal-grid grid grid-cols-[repeat(7,minmax(0,1fr))] border-l border-t border-neutral-500 text-[10px]">
+      <div className="print-cal-grid grid grid-cols-[repeat(7,minmax(0,1fr))] border-l border-t border-neutral-600 text-[10px]">
         {DAY_OF_WEEK_LABEL.map((label, i) => (
           <div
             key={label}
-            className={`print-cal-cell border-b border-r border-neutral-500 bg-neutral-100 py-1 text-center text-xs font-semibold print:bg-white ${i === 0 ? "text-red-600" : ""}`}
+            className={`print-cal-cell border-b border-r border-neutral-600 bg-neutral-100 py-1 text-center text-xs font-semibold print:bg-white ${i === 0 ? "text-red-600" : ""}`}
           >
             {label}
           </div>
         ))}
         {calendarCells.map((date, i) => {
-          if (!date) return <div key={`empty-${i}`} className="print-cal-cell min-h-28 border-b border-r border-neutral-500 bg-white" />;
+          if (!date) return <div key={`empty-${i}`} className="print-cal-cell print-cal-day min-h-28 border-b border-r border-neutral-600 bg-white" />;
 
           const day = Number(date.split("-")[2]);
           const dow = dayOfWeekForDate(date);
@@ -194,7 +194,7 @@ export default async function SchedulePrintPage({
           const lessons = dayEntries.filter((e) => e.kind === "lesson");
 
           return (
-            <div key={date} className={`print-cal-cell flex min-h-28 flex-col gap-0.5 border-b border-r border-neutral-500 p-1 ${isClosedDay ? "bg-neutral-100 print:bg-white" : "bg-white"}`}>
+            <div key={date} className={`print-cal-cell print-cal-day flex min-h-28 flex-col gap-0.5 border-b border-r border-neutral-600 p-1 ${isClosedDay ? "bg-neutral-100 print:bg-white" : "bg-white"}`}>
               <div className="flex flex-wrap items-baseline gap-x-1.5">
                 <span className={`font-semibold ${dow === 0 || isJapaneseHoliday(date) ? "text-red-600" : ""}`}>{day}</span>
                 {!isClosedDay &&

@@ -12,8 +12,10 @@ const PAPER_MM = { landscape: { w: 297, h: 210 }, portrait: { w: 210, h: 297 } }
 const WIDTH_SAFETY = 0.995;
 // ブラウザの「ヘッダーとフッター」を出す設定だと上下を消費することがあるため、高さは多めに余裕を持たせる。
 const HEIGHT_SAFETY = 0.97;
-// 縮小(zoom)しても罫線が細くなりすぎて消えないよう、紙の上で最低このくらいの太さ(px)になるよう補正する。
-const LINE_VISUAL_PX = 1.2;
+// 縮小(zoom)しても罫線が細くなりすぎて消えないよう、紙の上でこのくらいの太さ(px)になるよう補正する。
+// (ブラウザは罫線の太さを整数pxに切り捨てるため、2px確保する。印刷プレビューや画像は縮小表示されるので、
+// 1px前後の細い線は途中で消えやすい。)
+const LINE_VISUAL_PX = 2.1;
 
 export default function PrintFitToPage({
   children,
@@ -28,10 +30,12 @@ export default function PrintFitToPage({
   const printableH = (paper.h - PAGE_MARGIN_MM * 2) * MM_TO_PX;
   const reactId = useId();
   const id = `print-fit-${reactId.replace(/[:]/g, "")}`;
-  const [layout, setLayout] = useState<{ scale: number; pageWidth: number }>({
+  const [layout, setLayout] = useState<{ scale: number; pageWidth: number; rowExtra: number }>({
     scale: 1,
     // 縮小前に中身を並べる幅(これで1行に収める文字の大きさが決まる)
     pageWidth: printableW * WIDTH_SAFETY,
+    // 縮小しなくても高さに余りがあるとき、日付マス(1行ぶん)の高さに足す量(px)。上に寄って下が余るのを防ぐ。
+    rowExtra: 0,
   });
 
   useLayoutEffect(() => {
@@ -47,6 +51,10 @@ export default function PrintFitToPage({
       // (今の画面の横幅のまま測ると、ウィンドウ幅によって結果が変わり、実際に紙へ印刷したときと
       // ズレて2ページ目に溢れることがあった。)
       const clone = inner.cloneNode(true) as HTMLElement;
+      // 複製には元のidを持たせない。印刷用のCSSは本物の要素(#...-inner)だけに当て、
+      // 複製は常に「素の状態(行の高さの余りの配分や縮小の前)」で測る。
+      // (idが同じだと、印刷表示のまま測り直したときに、前回の配分が複製にも効いて結果がずれる。)
+      clone.removeAttribute("id");
       const measureBox = document.createElement("div");
       measureBox.style.position = "fixed";
       measureBox.style.top = "0";
@@ -60,6 +68,8 @@ export default function PrintFitToPage({
       const fitSizes = fitSingleLine(clone, { apply: true });
       const measuredWidth = clone.scrollWidth || pageWidth;
       const measuredHeight = clone.scrollHeight;
+      // 日付マスの行数(7マスで1行)。余った高さを各行に配るために使う。
+      const rowCount = clone.querySelectorAll(".print-cal-day").length / 7;
       document.body.removeChild(measureBox);
 
       // 印刷用のCSS(下の<style>)が使う文字の大きさを、本物の要素に渡しておく。
@@ -68,7 +78,12 @@ export default function PrintFitToPage({
       });
 
       const scale = Math.min(pageWidth / measuredWidth, pageHeight / measuredHeight, 1);
-      setLayout({ scale, pageWidth });
+      // 高さに余りがあるなら(縮小後の大きさで見て)、余りの9割を各行の高さに均等に足してページいっぱいに広げる
+      // (1割は、行の中身が最低の高さを超えている行ができても確実に収まるための余裕)。
+      // 高さで縮小が決まっている場合は、余りは0になる。
+      const slack = Math.max(0, pageHeight / scale - measuredHeight);
+      const rowExtra = rowCount > 0 ? (slack * 0.9) / rowCount : 0;
+      setLayout({ scale, pageWidth, rowExtra });
     };
     recompute();
     window.addEventListener("beforeprint", recompute);
@@ -114,6 +129,10 @@ export default function PrintFitToPage({
           #${id}-inner .print-cal-cell {
             border-right-width: var(--print-line);
             border-bottom-width: var(--print-line);
+          }
+          /* 高さに余りがあるときは、日付マスを縦に広げてページいっぱいに使う(7rem=画面上の最低の高さ)。 */
+          #${id}-inner .print-cal-day {
+            min-height: calc(7rem + ${layout.rowExtra}px);
           }
         }
       `}</style>
