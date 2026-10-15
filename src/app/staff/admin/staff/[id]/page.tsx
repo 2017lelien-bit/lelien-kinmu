@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import { getStaffUser } from "@/lib/auth";
 import { getStaffDetail, getPendingSubmissions } from "@/lib/staff-admin";
 import { getPayslipsForStaff, getTodaySummary } from "@/lib/payroll";
 import { getOwnPayEntries } from "@/lib/staff-self";
 import { getOwnLessonLogEntries } from "@/lib/lesson-log";
+import { getLeLienDeductionsByDate, getOwnTimeLogEntries } from "@/lib/time-log";
+import AdminTimeLogSection from "@/components/staff/AdminTimeLogSection";
 import {
   getOwnLessonOptions,
   getOwnScheduleSubmissionNote,
@@ -76,6 +77,20 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
   const { profile, payCategories, payRateRules } = detail;
   const headcountMatters = payRateRules.some((r) => r.min_headcount !== null || r.max_headcount !== null);
   const hourlyCategories = payCategories.filter((c) => c.unit_type === "hourly");
+  const initialTimeLogData = {
+    entries: Object.fromEntries(
+      await Promise.all(
+        hourlyCategories.map(async (c) => [c.id, await getOwnTimeLogEntries(c.id, periodStart, periodEnd, id)] as const),
+      ),
+    ),
+    deductions: Object.fromEntries(
+      await Promise.all(
+        hourlyCategories.map(
+          async (c) => [c.id, await getLeLienDeductionsByDate(c.id, periodStart, periodEnd, id)] as const,
+        ),
+      ),
+    ),
+  };
 
   return (
     <div className="flex max-w-2xl flex-col gap-6">
@@ -168,12 +183,12 @@ export default async function StaffAdminDetailPage({ params }: { params: Promise
             />
           )}
           {hourlyCategories.length > 0 && (
-            <Link
-              href={`/staff/mypage/attendance?staffId=${profile.id}`}
-              className="self-start rounded-lg border border-neutral-300 px-4 py-2 text-sm dark:border-neutral-700"
-            >
-              出退勤を見る/入力する →
-            </Link>
+            <AdminTimeLogSection
+              staffId={profile.id}
+              categories={hourlyCategories}
+              initialPeriodStart={periodStart}
+              initialData={initialTimeLogData}
+            />
           )}
         </section>
       )}

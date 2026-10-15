@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStaffUser, resolveActingStaffId } from "@/lib/auth";
 import { isEntryDateLocked } from "@/lib/staff-self";
-import { computeWorkedMinutes } from "@/lib/date";
+import { computeWorkedMinutes, payPeriodForDate } from "@/lib/date";
 import type { ActionResult, TimeLogEntry } from "@/lib/types";
 
 export async function getOwnTimeLogEntries(
@@ -244,7 +244,10 @@ export async function addTimeLogEntry(
   });
   if (error) return { ok: false, error: "登録に失敗しました。" };
 
-  await syncPayEntryFromTimeLog(admin, acting.id, input.payCategoryId, input.periodStart, input.periodEnd);
+  // 画面で開いている期間ではなく、入力した日付が属する期間で再集計する(前の期間の入力漏れを直す場合も、
+  // その期間の実績に正しく反映されるようにするため)。
+  const period = payPeriodForDate(input.entryDate);
+  await syncPayEntryFromTimeLog(admin, acting.id, input.payCategoryId, period.periodStart, period.periodEnd);
 
   revalidatePath("/staff/mypage");
   revalidatePath(`/staff/admin/staff/${acting.id}`);
@@ -277,14 +280,15 @@ export async function updateTimeLogEntry(
 
   const admin = createAdminClient();
 
+  const { data: existing } = await admin
+    .from("time_log_entries")
+    .select("entry_date")
+    .eq("id", id)
+    .eq("staff_id", acting.id)
+    .maybeSingle();
+  if (!existing) return { ok: false, error: "記録が見つかりません。" };
+
   if (staffUser?.role !== "admin") {
-    const { data: existing } = await admin
-      .from("time_log_entries")
-      .select("entry_date")
-      .eq("id", id)
-      .eq("staff_id", acting.id)
-      .maybeSingle();
-    if (!existing) return { ok: false, error: "記録が見つかりません。" };
     const datesToCheck = existing.entry_date !== input.entryDate ? [existing.entry_date, input.entryDate] : [existing.entry_date];
     for (const d of datesToCheck) {
       if (await isEntryDateLocked(acting.id, d)) {
@@ -307,7 +311,12 @@ export async function updateTimeLogEntry(
     .eq("staff_id", acting.id);
   if (error) return { ok: false, error: "更新に失敗しました。" };
 
-  await syncPayEntryFromTimeLog(admin, acting.id, input.payCategoryId, input.periodStart, input.periodEnd);
+  const oldPeriod = payPeriodForDate(existing.entry_date);
+  await syncPayEntryFromTimeLog(admin, acting.id, input.payCategoryId, oldPeriod.periodStart, oldPeriod.periodEnd);
+  const newPeriod = payPeriodForDate(input.entryDate);
+  if (newPeriod.periodStart !== oldPeriod.periodStart) {
+    await syncPayEntryFromTimeLog(admin, acting.id, input.payCategoryId, newPeriod.periodStart, newPeriod.periodEnd);
+  }
 
   revalidatePath("/staff/mypage");
   revalidatePath(`/staff/admin/staff/${acting.id}`);
@@ -327,14 +336,15 @@ export async function deleteTimeLogEntry(
 
   const admin = createAdminClient();
 
+  const { data: existing } = await admin
+    .from("time_log_entries")
+    .select("entry_date")
+    .eq("id", id)
+    .eq("staff_id", acting.id)
+    .maybeSingle();
+  if (!existing) return { ok: false, error: "記録が見つかりません。" };
+
   if (staffUser?.role !== "admin") {
-    const { data: existing } = await admin
-      .from("time_log_entries")
-      .select("entry_date")
-      .eq("id", id)
-      .eq("staff_id", acting.id)
-      .maybeSingle();
-    if (!existing) return { ok: false, error: "記録が見つかりません。" };
     if (await isEntryDateLocked(acting.id, existing.entry_date)) {
       return { ok: false, error: "その日はすでに「本日の勤務」を提出済みのため、削除できません。管理者に訂正を依頼してください。" };
     }
@@ -343,7 +353,8 @@ export async function deleteTimeLogEntry(
   const { error } = await admin.from("time_log_entries").delete().eq("id", id).eq("staff_id", acting.id);
   if (error) return { ok: false, error: "削除に失敗しました。" };
 
-  await syncPayEntryFromTimeLog(admin, acting.id, payCategoryId, periodStart, periodEnd);
+  const period = payPeriodForDate(existing.entry_date);
+  await syncPayEntryFromTimeLog(admin, acting.id, payCategoryId, period.periodStart, period.periodEnd);
 
   revalidatePath("/staff/mypage");
   revalidatePath(`/staff/admin/staff/${acting.id}`);

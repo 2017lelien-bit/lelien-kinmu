@@ -21,6 +21,7 @@ export default function TimeLogForm({
   periodStart,
   periodEnd,
   staffId,
+  onChanged,
 }: {
   payCategoryId: string;
   categoryName: string;
@@ -29,6 +30,8 @@ export default function TimeLogForm({
   periodStart: string;
   periodEnd: string;
   staffId?: string;
+  // 追加・変更・削除に成功したあとに呼ぶ(親が一覧を取得し直す必要がある場合に使う)。
+  onChanged?: () => void;
 }) {
   const router = useRouter();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -89,6 +92,7 @@ export default function TimeLogForm({
     }
     resetForm();
     router.refresh();
+    onChanged?.();
   }
 
   async function handleDelete(id: string) {
@@ -101,6 +105,7 @@ export default function TimeLogForm({
     }
     if (editingId === id) resetForm();
     router.refresh();
+    onChanged?.();
   }
 
   // 同じ日に同じ時刻の記録がすでにある場合は、二重登録に気づけるよう警告する。
