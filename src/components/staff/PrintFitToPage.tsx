@@ -8,7 +8,9 @@ import { useId, useLayoutEffect, useState } from "react";
 // ブラウザの「ヘッダーとフッター」表示は@pageの余白とは別に上下を消費することがあるため、
 // 少し余裕を持たせた数値を目標にする。
 const SAFETY_FACTOR = 0.92;
-const PAGE_WIDTH_PX = 1077 * SAFETY_FACTOR;
+// 用紙の印刷可能な幅(中央寄せの基準)。縮小後の幅は、この幅の中で左右対称になるよう配置する。
+const REAL_PAGE_WIDTH_PX = 1077;
+const PAGE_WIDTH_PX = REAL_PAGE_WIDTH_PX * SAFETY_FACTOR;
 const PAGE_HEIGHT_PX = 748 * SAFETY_FACTOR;
 
 export default function PrintFitToPage({ children }: { children: React.ReactNode }) {
@@ -62,7 +64,7 @@ export default function PrintFitToPage({ children }: { children: React.ReactNode
           /* marginをzoom対象の要素自身につけるとブラウザによって解釈がぶれるため、
              ズームしないwrapper側にpaddingとして持たせる。 */
           #${id}-wrapper {
-            padding-left: ${(PAGE_WIDTH_PX * (1 - scale)) / 2}px;
+            padding-left: ${Math.max(0, (REAL_PAGE_WIDTH_PX - PAGE_WIDTH_PX * scale) / 2)}px;
           }
           #${id}-inner {
             width: ${PAGE_WIDTH_PX}px;

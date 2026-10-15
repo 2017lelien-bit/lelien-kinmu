@@ -36,7 +36,7 @@ export default function FitText({
   }, [children]);
 
   return (
-    <p ref={ref} className={className} style={{ ...style, whiteSpace: "nowrap", fontSize: fontSize ?? undefined }}>
+    <p ref={ref} className={`${className ?? ""} print:whitespace-normal!`} style={{ ...style, whiteSpace: "nowrap", fontSize: fontSize ?? undefined }}>
       {children}
     </p>
   );
