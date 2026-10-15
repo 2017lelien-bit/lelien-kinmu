@@ -36,6 +36,12 @@ export default function PrintFitToPage({
       // (今の画面の横幅のまま測ると、ウィンドウ幅によって結果が変わってしまい、
       // 実際に紙へ印刷したときとズレて2ページ目に溢れることがあった。)
       const clone = inner.cloneNode(true) as HTMLElement;
+      // 画面上は1行(nowrap)でも、印刷時は「print:whitespace-normal」で折り返されて縦に伸びる。
+      // 複製にはprint:の指定が効かないため、印刷時と同じ折り返しにそろえてから高さを測らないと、
+      // 実際より低く見積もって最後の行が2ページ目にはみ出してしまう。
+      clone.querySelectorAll<HTMLElement>('[class*="print:whitespace-normal"]').forEach((el) => {
+        el.style.whiteSpace = "normal";
+      });
       const measureBox = document.createElement("div");
       measureBox.style.position = "fixed";
       measureBox.style.top = "0";
