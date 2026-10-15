@@ -1078,16 +1078,24 @@ export async function getPayRateRulesByStaff(): Promise<Record<string, PayRateRu
 }
 
 // スケジュールの受付時間から人件費を見積もれるように、スタッフごとの「Le lien」時給を返す。
+// 概算用: いま時点で適用される時給(単価改定日を過ぎていれば、改定後の単価)。
+function currentHourlyRate(row: { rate: number; next_rate: number | null; next_rate_effective_from: string | null }): number {
+  if (row.next_rate != null && row.next_rate_effective_from && row.next_rate_effective_from <= todayJstDateString()) {
+    return row.next_rate;
+  }
+  return row.rate;
+}
+
 export async function getLeLienHourlyRateByStaff(): Promise<Record<string, number>> {
   const adminCheck = await requireAdmin();
   if (adminCheck) return {};
 
   const admin = createAdminClient();
-  const { data } = await admin.from("pay_categories").select("staff_id, name, rate, unit_type").eq("unit_type", "hourly");
+  const { data } = await admin.from("pay_categories").select("staff_id, name, rate, unit_type, next_rate, next_rate_effective_from").eq("unit_type", "hourly");
 
   const map: Record<string, number> = {};
   for (const row of data ?? []) {
-    if (isLeLienCategoryName(row.name)) map[row.staff_id] = row.rate;
+    if (isLeLienCategoryName(row.name)) map[row.staff_id] = currentHourlyRate(row);
   }
   return map;
 }
@@ -1098,11 +1106,11 @@ export async function getMusuhiHourlyRateByStaff(): Promise<Record<string, numbe
   if (adminCheck) return {};
 
   const admin = createAdminClient();
-  const { data } = await admin.from("pay_categories").select("staff_id, name, rate, unit_type").eq("unit_type", "hourly");
+  const { data } = await admin.from("pay_categories").select("staff_id, name, rate, unit_type, next_rate, next_rate_effective_from").eq("unit_type", "hourly");
 
   const map: Record<string, number> = {};
   for (const row of data ?? []) {
-    if (row.name.trim().includes("むすひ")) map[row.staff_id] = row.rate;
+    if (row.name.trim().includes("むすひ")) map[row.staff_id] = currentHourlyRate(row);
   }
   return map;
 }
