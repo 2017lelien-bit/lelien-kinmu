@@ -80,13 +80,19 @@ export default async function MusuhiSchedulePrintPage({
         </h1>
         <PrintButton />
         <SaveImageButton targetId="schedule-capture" filename={`${monthStart.slice(0, 7)}-musuhi-schedule-${type}.png`} />
+        <SaveImageButton
+          targetId="schedule-capture"
+          filename={`${monthStart.slice(0, 7)}-musuhi-schedule-${type}-instagram.png`}
+          variant="instagram"
+          label="Instagram用で保存"
+        />
       </div>
 
       <PrintFitToPage>
         <div id="schedule-capture" className="flex flex-col gap-3 bg-white p-2">
           <h2 className="text-center text-xl font-bold">{formatMonthLabel(monthStart)} むすひ 営業スケジュール</h2>
 
-          <div className="grid grid-cols-7 gap-px rounded border border-neutral-400 bg-neutral-400 text-[10px]">
+          <div data-calendar-grid className="grid grid-cols-7 gap-px rounded border border-neutral-400 bg-neutral-400 text-[10px]">
             {DAY_OF_WEEK_LABEL.map((label, i) => (
               <div
                 key={label}
@@ -96,7 +102,7 @@ export default async function MusuhiSchedulePrintPage({
               </div>
             ))}
             {calendarCells.map((date, i) => {
-              if (!date) return <div key={`empty-${i}`} className="min-h-20 bg-white" />;
+              if (!date) return <div key={`empty-${i}`} className="min-h-10 bg-white" />;
 
               const day = Number(date.split("-")[2]);
               const dow = dayOfWeekForDate(date);
@@ -107,7 +113,7 @@ export default async function MusuhiSchedulePrintPage({
               return (
                 <div
                   key={date}
-                  className={`flex min-h-20 flex-col gap-0.5 p-1 ${hoursLabel === null ? "bg-neutral-100 print:bg-white" : "bg-white"}`}
+                  className={`flex min-h-10 flex-col gap-0.5 p-1 ${hoursLabel === null ? "bg-neutral-100 print:bg-white" : "bg-white"}`}
                 >
                   <span className={`font-semibold ${dow === 0 || isJapaneseHoliday(date) ? "text-red-600" : ""}`}>
                     {day}
@@ -115,7 +121,11 @@ export default async function MusuhiSchedulePrintPage({
                   {hoursLabel === null ? (
                     <p className="text-neutral-400">休業</p>
                   ) : type === "customer" ? (
-                    <p className="text-[11px] font-medium leading-tight">{hoursLabel}</p>
+                    <div className="flex flex-col text-[11px] font-medium leading-tight">
+                      {hoursLabel.split("、").map((w) => (
+                        <p key={w}>{w}</p>
+                      ))}
+                    </div>
                   ) : (
                     dayShifts.map((s) => (
                       <p key={s.id} className="leading-tight text-neutral-700">
