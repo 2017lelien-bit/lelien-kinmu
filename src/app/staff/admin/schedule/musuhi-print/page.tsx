@@ -90,7 +90,7 @@ export default async function MusuhiSchedulePrintPage({
             {DAY_OF_WEEK_LABEL.map((label, i) => (
               <div
                 key={label}
-                className={`bg-neutral-100 py-1 text-center text-xs font-semibold ${i === 0 ? "text-red-600" : ""}`}
+                className={`bg-neutral-100 py-1 text-center text-xs font-semibold print:bg-white ${i === 0 ? "text-red-600" : ""}`}
               >
                 {label}
               </div>
@@ -107,7 +107,7 @@ export default async function MusuhiSchedulePrintPage({
               return (
                 <div
                   key={date}
-                  className={`flex min-h-20 flex-col gap-0.5 p-1 ${hoursLabel === null ? "bg-neutral-100" : "bg-white"}`}
+                  className={`flex min-h-20 flex-col gap-0.5 p-1 ${hoursLabel === null ? "bg-neutral-100 print:bg-white" : "bg-white"}`}
                 >
                   <span className={`font-semibold ${dow === 0 || isJapaneseHoliday(date) ? "text-red-600" : ""}`}>
                     {day}
