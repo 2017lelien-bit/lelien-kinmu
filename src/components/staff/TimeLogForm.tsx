@@ -39,10 +39,14 @@ export default function TimeLogForm({
   const [breakEnd, setBreakEnd] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // 二重登録の警告は、入力欄を触ったあとだけ出す(登録した直後や画面を開いた直後に、初期値と同じ内容が
+  // 登録済みだと、警告が出て「重複した」と勘違いされるため)。
+  const [touched, setTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   function resetForm() {
+    setTouched(false);
     setEditingId(null);
     setEntryDate(todayJstDateString());
     setStartTime("09:00");
@@ -101,6 +105,7 @@ export default function TimeLogForm({
 
   // 同じ日に同じ時刻の記録がすでにある場合は、二重登録に気づけるよう警告する。
   const duplicateExisting =
+    touched &&
     !editingId &&
     entries.find((e) => e.entry_date === entryDate && e.start_time.slice(0, 5) === startTime && e.end_time.slice(0, 5) === endTime);
 
@@ -138,7 +143,10 @@ export default function TimeLogForm({
           <input
             type="date"
             value={entryDate}
-            onChange={(e) => setEntryDate(e.target.value)}
+            onChange={(e) => {
+              setTouched(true);
+              setEntryDate(e.target.value);
+            }}
             className="rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
           />
         </label>
@@ -147,7 +155,10 @@ export default function TimeLogForm({
           <input
             type="time"
             value={startTime}
-            onChange={(e) => setStartTime(e.target.value)}
+            onChange={(e) => {
+              setTouched(true);
+              setStartTime(e.target.value);
+            }}
             className="rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
           />
         </label>
@@ -156,7 +167,10 @@ export default function TimeLogForm({
           <input
             type="time"
             value={endTime}
-            onChange={(e) => setEndTime(e.target.value)}
+            onChange={(e) => {
+              setTouched(true);
+              setEndTime(e.target.value);
+            }}
             className="rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
           />
         </label>
@@ -165,7 +179,10 @@ export default function TimeLogForm({
           <input
             type="time"
             value={breakStart}
-            onChange={(e) => setBreakStart(e.target.value)}
+            onChange={(e) => {
+              setTouched(true);
+              setBreakStart(e.target.value);
+            }}
             className="rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
           />
         </label>
@@ -174,7 +191,10 @@ export default function TimeLogForm({
           <input
             type="time"
             value={breakEnd}
-            onChange={(e) => setBreakEnd(e.target.value)}
+            onChange={(e) => {
+              setTouched(true);
+              setBreakEnd(e.target.value);
+            }}
             className="rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
           />
         </label>

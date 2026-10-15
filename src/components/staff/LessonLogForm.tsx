@@ -29,6 +29,9 @@ export default function LessonLogForm({
   const [startTime, setStartTime] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // 二重登録の警告は、入力欄を触ったあとだけ出す(登録した直後や画面を開いた直後に、初期値と同じ内容が
+  // 登録済みだと、警告が出て「重複した」と勘違いされるため)。
+  const [touched, setTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -38,6 +41,7 @@ export default function LessonLogForm({
   // 同じ日に同じ内容(レッスン名・時間・人数)がすでに登録されている場合は、二重登録に気づけるよう警告する。
   // (前日以前の分を翌日にもう一度入力してしまう、といった間違いが実際に起きたため)
   const duplicateExisting =
+    touched &&
     !editingId &&
     entries.find(
       (e) =>
@@ -48,6 +52,7 @@ export default function LessonLogForm({
     );
 
   function resetForm() {
+    setTouched(false);
     setEditingId(null);
     setEntryDate(todayJstDateString());
     setLessonName(LESSON_NAMES[0]);
@@ -153,7 +158,10 @@ export default function LessonLogForm({
           <input
             type="date"
             value={entryDate}
-            onChange={(e) => setEntryDate(e.target.value)}
+            onChange={(e) => {
+              setTouched(true);
+              setEntryDate(e.target.value);
+            }}
             className="rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
           />
         </label>
@@ -161,7 +169,10 @@ export default function LessonLogForm({
           レッスン名
           <select
             value={lessonName}
-            onChange={(e) => setLessonName(e.target.value)}
+            onChange={(e) => {
+              setTouched(true);
+              setLessonName(e.target.value);
+            }}
             className="w-40 rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
           >
             {LESSON_NAMES.map((name) => (
@@ -178,7 +189,10 @@ export default function LessonLogForm({
             min={1}
             value={durationMinutes}
             onFocus={(e) => e.target.select()}
-            onChange={(e) => setDurationMinutes(Number(e.target.value))}
+            onChange={(e) => {
+              setTouched(true);
+              setDurationMinutes(Number(e.target.value));
+            }}
             className="w-24 rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
           />
         </label>
@@ -190,7 +204,10 @@ export default function LessonLogForm({
               min={1}
               value={headcount}
               onFocus={(e) => e.target.select()}
-              onChange={(e) => setHeadcount(Number(e.target.value))}
+              onChange={(e) => {
+              setTouched(true);
+              setHeadcount(Number(e.target.value));
+            }}
               className="w-24 rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
             />
           </label>
@@ -202,7 +219,10 @@ export default function LessonLogForm({
               min={1}
               value={quantity}
               onFocus={(e) => e.target.select()}
-              onChange={(e) => setQuantity(Number(e.target.value))}
+              onChange={(e) => {
+              setTouched(true);
+              setQuantity(Number(e.target.value));
+            }}
               className="w-24 rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
             />
           </label>
@@ -212,7 +232,10 @@ export default function LessonLogForm({
           <input
             type="time"
             value={startTime}
-            onChange={(e) => setStartTime(e.target.value)}
+            onChange={(e) => {
+              setTouched(true);
+              setStartTime(e.target.value);
+            }}
             className="rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
           />
         </label>
