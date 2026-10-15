@@ -6,6 +6,12 @@ import { deletePayslip, generatePayslip, getPayrollReviewList, type PayrollRevie
 
 const yen = (n: number) => `¥${n.toLocaleString()}`;
 
+function formatDay(date: string): string {
+  const [, m, d] = date.split("-");
+  const dow = ["日", "月", "火", "水", "木", "金", "土"][new Date(`${date}T00:00:00Z`).getUTCDay()];
+  return `${Number(m)}/${Number(d)}(${dow})`;
+}
+
 function ReviewCard({
   item,
   periodStart,
@@ -75,6 +81,24 @@ function ReviewCard({
         </Link>
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
+
+      <details open className="text-sm">
+        <summary className="cursor-pointer text-xs font-semibold">
+          出勤した日(出退勤・レッスンの記録がある日): {item.workDays.length}日
+        </summary>
+        {item.workDays.length === 0 ? (
+          <p className="mt-1 text-xs text-neutral-400">この期間の記録はありません。</p>
+        ) : (
+          <ul className="mt-1 flex flex-col gap-0.5">
+            {item.workDays.map((day) => (
+              <li key={day.date} className="flex flex-wrap gap-x-3 border-b border-neutral-100 pb-0.5 text-xs dark:border-neutral-900">
+                <span className="w-20 shrink-0 font-semibold">{formatDay(day.date)}</span>
+                <span>{day.lines.join(" / ")}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </details>
 
       {created ? (
         <div className="flex flex-col gap-1 text-sm">

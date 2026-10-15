@@ -662,6 +662,8 @@ export interface PayrollReviewItem {
   daysWorked: number;
   defaultCommute: number;
   defaultResidentTax: number;
+  // 出勤した日ごとの内容(出退勤・レッスン)。確認のために日付ごとに並べる。
+  workDays: { date: string; lines: string[] }[];
 }
 
 // スタッフごとに、期間内の実績から計算した金額を確認して、明細を作成(確定)できるようにするための一覧。
@@ -672,7 +674,15 @@ export async function getPayrollReviewList(periodStart: string): Promise<ActionR
 
   const admin = createAdminClient();
   const periodEnd = payPeriodEnd(periodStart);
-  const [{ data: staffRows }, { data: periodSlips }, { data: pastSlips }, { data: unapproved }] = await Promise.all([
+  const [
+    { data: staffRows },
+    { data: periodSlips },
+    { data: pastSlips },
+    { data: unapproved },
+    { data: periodTimeLogs },
+    { data: periodLessonLogs },
+    { data: categoryRows },
+  ] = await Promise.all([
     admin
       .from("staff_profiles")
       .select("id, name, commute_type, commute_amount")
@@ -691,7 +701,48 @@ export async function getPayrollReviewList(periodStart: string): Promise<ActionR
       .eq("approved", false)
       .gte("entry_date", periodStart)
       .lte("entry_date", periodEnd),
+    admin
+      .from("time_log_entries")
+      .select("staff_id, pay_category_id, entry_date, start_time, end_time, break_start, break_end")
+      .gte("entry_date", periodStart)
+      .lte("entry_date", periodEnd),
+    admin
+      .from("lesson_log_entries")
+      .select("staff_id, entry_date, start_time, lesson_name")
+      .gte("entry_date", periodStart)
+      .lte("entry_date", periodEnd),
+    admin.from("pay_categories").select("id, name"),
   ]);
+
+  const categoryNameById = new Map((categoryRows ?? []).map((c) => [c.id as string, c.name as string]));
+  const hm = (t: string) => t.slice(0, 5);
+  const workDaysByStaff = new Map<string, Map<string, string[]>>();
+  const pushDayLine = (staffId: string, date: string, line: string) => {
+    const byDate = workDaysByStaff.get(staffId) ?? new Map<string, string[]>();
+    const lines = byDate.get(date) ?? [];
+    lines.push(line);
+    byDate.set(date, lines);
+    workDaysByStaff.set(staffId, byDate);
+  };
+  for (const e of periodTimeLogs ?? []) {
+    const breakPart = e.break_start && e.break_end ? `(休憩${hm(e.break_start)}〜${hm(e.break_end)})` : "";
+    pushDayLine(
+      e.staff_id as string,
+      e.entry_date as string,
+      `${categoryNameById.get(e.pay_category_id as string) ?? "出退勤"} ${hm(e.start_time)}〜${hm(e.end_time)}${breakPart}`,
+    );
+  }
+  for (const e of periodLessonLogs ?? []) {
+    pushDayLine(
+      e.staff_id as string,
+      e.entry_date as string,
+      `${e.start_time ? `${hm(e.start_time)} ` : ""}${e.lesson_name}`,
+    );
+  }
+  const workDaysFor = (staffId: string) =>
+    Array.from(workDaysByStaff.get(staffId)?.entries() ?? [])
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([date, lines]) => ({ date, lines }));
 
   const lastResidentTax = new Map<string, number>();
   for (const r of pastSlips ?? []) {
@@ -713,6 +764,7 @@ export async function getPayrollReviewList(periodStart: string): Promise<ActionR
         commuteLabel,
         unapprovedLessons: unapprovedByStaff.get(staffId) ?? 0,
         defaultResidentTax: lastResidentTax.get(staffId) ?? 0,
+        workDays: workDaysFor(staffId),
       };
 
       const slips = (periodSlips ?? []).filter((x) => x.staff_id === staffId);
