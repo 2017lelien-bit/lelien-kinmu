@@ -6,6 +6,8 @@ import { useState } from "react";
 // 印刷時に隠す要素(print:hidden、色編集の操作部分など)は画像にも含めない。
 // (A4用紙にぴったり合わせる調整は、実際に紙へ印刷する「印刷する」ボタン側で行う。
 // 画像はカレンダー本来の縦横比のまま保存したほうが、余白ができず見やすい。)
+// variant="a4": 画像をA4用紙にそのまま印刷してもはみ出さないよう、カレンダーの縦横比を保ったまま
+// A4(300dpi・横長なら3508×2480px、縦長なら2480×3508px)の白い台紙の中央に収めて保存する。
 // variant="instagram": Instagram投稿に使える縦長(4:5・1080×1350px)の画像にする。保存する画像の中だけ
 // 幅・高さ・文字の大きさを調整し、画面上の表示には影響しない。
 export default function SaveImageButton({
@@ -16,7 +18,7 @@ export default function SaveImageButton({
 }: {
   targetId: string;
   filename: string;
-  variant?: "default" | "instagram";
+  variant?: "default" | "instagram" | "a4";
   label?: string;
 }) {
   const [saving, setSaving] = useState(false);
@@ -49,7 +51,26 @@ export default function SaveImageButton({
           el.ownerDocument.head.appendChild(style);
         },
       });
-      const dataUrl = canvas.toDataURL("image/png");
+      let outCanvas = canvas;
+      if (variant === "a4") {
+        const landscape = canvas.width >= canvas.height;
+        const pageW = landscape ? 3508 : 2480;
+        const pageH = landscape ? 2480 : 3508;
+        const margin = 80;
+        const fit = Math.min((pageW - margin * 2) / canvas.width, (pageH - margin * 2) / canvas.height);
+        const drawW = Math.round(canvas.width * fit);
+        const drawH = Math.round(canvas.height * fit);
+        outCanvas = document.createElement("canvas");
+        outCanvas.width = pageW;
+        outCanvas.height = pageH;
+        const ctx = outCanvas.getContext("2d");
+        if (!ctx) throw new Error("canvas unavailable");
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, pageW, pageH);
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(canvas, Math.round((pageW - drawW) / 2), Math.round((pageH - drawH) / 2), drawW, drawH);
+      }
+      const dataUrl = outCanvas.toDataURL("image/png");
       const link = document.createElement("a");
       link.href = dataUrl;
       link.download = filename;

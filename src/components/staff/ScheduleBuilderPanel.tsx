@@ -1243,6 +1243,12 @@ export default function ScheduleBuilderPanel({
         <div className="flex flex-wrap items-center gap-3">
           <p className="text-sm font-semibold text-neutral-500">プレビュー(このまま印刷した場合の見た目・確定済みの予定のみ表示)</p>
           <SaveImageButton targetId="lelien-musuhi-preview" filename={`${monthStart.slice(0, 7)}-schedule-preview.png`} />
+          <SaveImageButton
+            targetId="lelien-musuhi-preview"
+            filename={`${monthStart.slice(0, 7)}-schedule-preview-A4.png`}
+            variant="a4"
+            label="A4印刷用で保存"
+          />
           <label className="flex items-center gap-1 text-sm">
             <input
               type="checkbox"
