@@ -24,6 +24,8 @@ import LessonOptionsManager from "@/components/staff/LessonOptionsManager";
 import SubmitScheduleButton from "@/components/staff/SubmitScheduleButton";
 import MyPayslipList from "@/components/staff/MyPayslipList";
 import SubmitPeriodButton from "@/components/staff/SubmitPeriodButton";
+import MyPeriodReview from "@/components/staff/MyPeriodReview";
+import { getOwnPeriodReview } from "@/lib/period-review";
 
 export default async function StaffMyPage() {
   const profile = await getOwnStaffProfile();
@@ -48,6 +50,7 @@ export default async function StaffMyPage() {
     scheduleSubmissionNote,
     scheduleConfirmedAt,
     ownMusuhiShifts,
+    periodReview,
   ] = await Promise.all([
     getOwnPayCategories(),
     getOwnPayEntries(periodStart),
@@ -64,6 +67,7 @@ export default async function StaffMyPage() {
     getOwnScheduleSubmissionNote(scheduleMonthStart),
     getOwnScheduleConfirmation(scheduleMonthStart),
     getOwnMusuhiShifts(scheduleMonthStart, monthEnd(scheduleMonthStart)),
+    getOwnPeriodReview(periodStart, periodEnd),
   ]);
   const hasEntryInput = payCategories.length > 0 || hasPayRateRules;
   const hourlyCategories = payCategories.filter((c) => c.unit_type === "hourly");
@@ -108,6 +112,10 @@ export default async function StaffMyPage() {
       )}
 
       {hasEntryInput && <SubmitPeriodButton submittedAt={submittedAt} />}
+
+      {hasEntryInput && (
+        <MyPeriodReview review={periodReview} periodLabel={periodLabel} headcountMatters={headcountMatters} />
+      )}
 
       <MyScheduleConfirmPanel
         monthStart={scheduleMonthStart}
