@@ -165,6 +165,8 @@ export default async function SchedulePrintPage({
           const dow = dayOfWeekForDate(date);
           const noteEntry = notesByDate.get(date);
           const isClosedDay = isClosedOnDate(date, noteEntry?.is_closed_override);
+          // 「片付け」など社内向けのメモは、お客様用・HP用には出さない(スタッフ用には出す)。
+          const shownNote = type !== "staff" && noteEntry?.hide_on_customer ? undefined : noteEntry;
           const dayEntries = byDate.get(date) ?? [];
           const reception = dayEntries.filter((e) => e.kind === "reception");
           const lessons = dayEntries.filter((e) => e.kind === "lesson");
@@ -185,14 +187,14 @@ export default async function SchedulePrintPage({
                     ))}
               </div>
               {isClosedDay ? (
-                <p className="text-neutral-400" style={noteStyle(noteEntry)}>
-                  {noteEntry?.note || "休館日"}
+                <p className="text-neutral-400" style={noteStyle(shownNote)}>
+                  {shownNote?.note || "休館日"}
                 </p>
               ) : (
                 <>
-                  {noteEntry?.note && (
-                    <p className="rounded px-1 italic text-neutral-500" style={noteStyle(noteEntry)}>
-                      {noteEntry.note}
+                  {shownNote?.note && (
+                    <p className="rounded px-1 italic text-neutral-500" style={noteStyle(shownNote)}>
+                      {shownNote.note}
                     </p>
                   )}
                   {lessons.map((e) => {

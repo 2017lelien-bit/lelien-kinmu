@@ -11,6 +11,8 @@ export interface ScheduleNote {
   note: string | null;
   color: string | null;
   bg_color: string | null;
+  // 「片付け」など社内向けのメモを、お客様用・HP用の印刷に出さないようにする。
+  hide_on_customer?: boolean | null;
 }
 
 export async function getScheduleNotes(monthStart: string, monthEnd: string): Promise<ScheduleNote[]> {
@@ -32,21 +34,22 @@ export async function upsertScheduleNote(input: {
   note: string;
   color?: string | null;
   bgColor?: string | null;
+  hideOnCustomer?: boolean;
 }): Promise<ActionResult> {
   const staff = await getStaffUser();
   if (!staff || staff.role !== "admin") return { ok: false, error: "管理者としてログインしてください。" };
 
   const admin = createAdminClient();
-  const { error } = await admin.from("schedule_notes").upsert(
-    {
-      entry_date: input.entryDate,
-      is_closed_override: input.isClosedOverride,
-      note: input.note.trim() || null,
-      color: input.color ?? null,
-      bg_color: input.bgColor ?? null,
-    },
-    { onConflict: "entry_date" },
-  );
+  const row: Record<string, unknown> = {
+    entry_date: input.entryDate,
+    is_closed_override: input.isClosedOverride,
+    note: input.note.trim() || null,
+    color: input.color ?? null,
+    bg_color: input.bgColor ?? null,
+  };
+  // 列を追加する前のデータベースでも、他のメモの保存が失敗しないよう、指定されたときだけ書き込む。
+  if (input.hideOnCustomer !== undefined) row.hide_on_customer = input.hideOnCustomer;
+  const { error } = await admin.from("schedule_notes").upsert(row, { onConflict: "entry_date" });
   if (error) return { ok: false, error: "保存に失敗しました。" };
 
   revalidatePath("/staff/admin/schedule");

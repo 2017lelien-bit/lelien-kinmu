@@ -197,7 +197,13 @@ export default function ScheduleBuilderPanel({
   }
 
   // 休館日の上書き(臨時休業/臨時営業)とイベントなどのメモ・その表示色を保存する。
-  async function handleNoteSave(date: string, patch: { isClosedOverride?: boolean | null; note?: string; color?: string | null; bgColor?: string | null },
+  async function handleNoteSave(date: string, patch: {
+      isClosedOverride?: boolean | null;
+      note?: string;
+      color?: string | null;
+      bgColor?: string | null;
+      hideOnCustomer?: boolean;
+    },
   ) {
     setError(null);
     const existing = notes.find((n) => n.entry_date === date);
@@ -207,6 +213,7 @@ export default function ScheduleBuilderPanel({
       note: patch.note !== undefined ? patch.note : (existing?.note ?? null),
       color: patch.color !== undefined ? patch.color : (existing?.color ?? null),
       bg_color: patch.bgColor !== undefined ? patch.bgColor : (existing?.bg_color ?? null),
+      hide_on_customer: patch.hideOnCustomer !== undefined ? patch.hideOnCustomer : (existing?.hide_on_customer ?? false),
     };
     setNotes((prev) => [...prev.filter((n) => n.entry_date !== date), nextNote]);
     const result = await upsertScheduleNote({
@@ -215,6 +222,7 @@ export default function ScheduleBuilderPanel({
       note: nextNote.note ?? "",
       color: nextNote.color,
       bgColor: nextNote.bg_color,
+      hideOnCustomer: patch.hideOnCustomer,
     });
     if (!result.ok) {
       setError(result.error);
@@ -1074,6 +1082,16 @@ export default function ScheduleBuilderPanel({
                       </button>
                     )}
                   </div>
+                  {noteEntry?.note && (
+                    <label className="flex items-center gap-1 text-[9px] text-neutral-500">
+                      <input
+                        type="checkbox"
+                        checked={!!noteEntry.hide_on_customer}
+                        onChange={(e) => handleNoteSave(date, { hideOnCustomer: e.target.checked })}
+                      />
+                      お客様用に出さない
+                    </label>
+                  )}
                   {isClosedDay ? (
                     <p className="text-[10px] text-neutral-400">休館</p>
                   ) : (
