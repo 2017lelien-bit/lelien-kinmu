@@ -48,12 +48,13 @@ body {
   }
 }
 
+/* 印刷の余白はなるべく少なく(4mm)。PrintFitToPage.tsx の PAGE_MARGIN_MM と同じ値にそろえること。 */
 @page schedule-calendar {
   size: A4 landscape;
-  margin: 6mm;
+  margin: 4mm;
 }
 
 @page schedule-calendar-portrait {
   size: A4 portrait;
-  margin: 6mm;
+  margin: 4mm;
 }

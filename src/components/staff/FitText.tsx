@@ -36,7 +36,9 @@ export default function FitText({
   }, [children]);
 
   return (
-    <p ref={ref} className={`${className ?? ""} print:whitespace-normal!`} style={{ ...style, whiteSpace: "nowrap", fontSize: fontSize ?? undefined }}>
+    // data-fit-text: 印刷(PrintFitToPage)・画像保存(SaveImageButton)が、紙や画像の幅に合わせて
+    // 文字の大きさを計算し直す目印。印刷でも折り返さず、1行のまま文字を縮めて収める。
+    <p ref={ref} data-fit-text className={className} style={{ ...style, whiteSpace: "nowrap", fontSize: fontSize ?? undefined }}>
       {children}
     </p>
   );

@@ -1,16 +1,19 @@
 "use client";
 
 import { useId, useLayoutEffect, useState } from "react";
+import { fitSingleLine } from "@/lib/print-fit";
 
-// A4横向き・余白6mmの印刷可能エリア(96dpi換算)。カレンダーの中身がこれより
-// 縦に長くなっても2ページ目に分かれないよう、印刷用のCSSだけで自動的に縮小する。
-//
-// ブラウザの「ヘッダーとフッター」表示は@pageの余白とは別に上下を消費することがあるため、
-// 少し余裕を持たせた数値を目標にする。
-const SAFETY_FACTOR = 0.92;
-// 用紙の印刷可能な幅(中央寄せの基準)。縮小後の幅は、この幅の中で左右対称になるよう配置する。
-// A4横=1077×748px、A4縦=748×1077px(どちらも余白6mm)。
-const PAGE_SIZE = { landscape: { w: 1077, h: 748 }, portrait: { w: 748, h: 1077 } } as const;
+// カレンダーが縦に長くなっても2ページ目に分かれないよう、印刷用のCSSだけで自動的に縮小して
+// A4・1ページに収める。紙の余白は globals.css の @page(schedule-calendar系)と同じ値にそろえる。
+const PAGE_MARGIN_MM = 4;
+const MM_TO_PX = 96 / 25.4;
+const PAPER_MM = { landscape: { w: 297, h: 210 }, portrait: { w: 210, h: 297 } } as const;
+// 紙の端ぎりぎりまで使うと、プリンターごとの誤差ではみ出すことがあるため、少しだけ余裕を持たせる。
+const WIDTH_SAFETY = 0.995;
+// ブラウザの「ヘッダーとフッター」を出す設定だと上下を消費することがあるため、高さは多めに余裕を持たせる。
+const HEIGHT_SAFETY = 0.97;
+// 縮小(zoom)しても罫線が細くなりすぎて消えないよう、紙の上で最低このくらいの太さ(px)になるよう補正する。
+const LINE_VISUAL_PX = 1.2;
 
 export default function PrintFitToPage({
   children,
@@ -19,16 +22,16 @@ export default function PrintFitToPage({
   children: React.ReactNode;
   orientation?: "landscape" | "portrait";
 }) {
-  const REAL_PAGE_WIDTH_PX = PAGE_SIZE[orientation].w;
-  const REAL_PAGE_HEIGHT_PX = PAGE_SIZE[orientation].h;
+  const paper = PAPER_MM[orientation];
+  // 余白を引いた、紙の印刷可能エリア(96dpi換算)
+  const printableW = (paper.w - PAGE_MARGIN_MM * 2) * MM_TO_PX;
+  const printableH = (paper.h - PAGE_MARGIN_MM * 2) * MM_TO_PX;
   const reactId = useId();
   const id = `print-fit-${reactId.replace(/[:]/g, "")}`;
-  const [layout, setLayout] = useState<{ scale: number; pageWidth: number; contentWidth: number }>({
+  const [layout, setLayout] = useState<{ scale: number; pageWidth: number }>({
     scale: 1,
-    // 縮小前に中身を並べる幅(これで折り返しが決まる)
-    pageWidth: REAL_PAGE_WIDTH_PX * SAFETY_FACTOR,
-    // 紙の印刷可能な幅から、周りの枠の左右の余白を引いた「実際にカレンダーを置ける幅」
-    contentWidth: REAL_PAGE_WIDTH_PX,
+    // 縮小前に中身を並べる幅(これで1行に収める文字の大きさが決まる)
+    pageWidth: printableW * WIDTH_SAFETY,
   });
 
   useLayoutEffect(() => {
@@ -36,33 +39,14 @@ export default function PrintFitToPage({
       const inner = document.getElementById(`${id}-inner`);
       if (!inner) return;
 
-      // カレンダーを囲む親要素(ページ全体の枠など)の上下左右の余白・枠線は、印刷でも紙の面積を使う。
-      // これを見込まずに紙いっぱいを目標にすると、数十px足りずに最後の行が2ページ目にはみ出す。
-      // (display:noneになる印刷時の非表示要素は含めず、親要素自身の余白だけを足し合わせる。)
-      let chromeX = 0;
-      let chromeY = 0;
-      for (let el = inner.parentElement; el && el !== document.documentElement; el = el.parentElement) {
-        const cs = getComputedStyle(el);
-        chromeX += [cs.paddingLeft, cs.paddingRight, cs.marginLeft, cs.marginRight, cs.borderLeftWidth, cs.borderRightWidth]
-          .reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
-        chromeY += [cs.paddingTop, cs.paddingBottom, cs.marginTop, cs.marginBottom, cs.borderTopWidth, cs.borderBottomWidth]
-          .reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
-      }
-      const contentWidth = REAL_PAGE_WIDTH_PX - chromeX;
-      const pageWidth = Math.min(REAL_PAGE_WIDTH_PX, contentWidth) * SAFETY_FACTOR;
-      const pageHeight = (REAL_PAGE_HEIGHT_PX - chromeY) * SAFETY_FACTOR;
+      const pageWidth = printableW * WIDTH_SAFETY;
+      const pageHeight = printableH * HEIGHT_SAFETY;
 
-      // 印刷時の紙幅(pageWidth)に実際に収まる形で高さを測るため、画面上の
-      // 表示幅とは切り離した「オフスクリーンの複製」を一時的に作って測定する。
-      // (今の画面の横幅のまま測ると、ウィンドウ幅によって結果が変わってしまい、
-      // 実際に紙へ印刷したときとズレて2ページ目に溢れることがあった。)
+      // 印刷時の紙幅(pageWidth)に実際に収まる形で測るため、画面上の表示幅とは切り離した
+      // 「オフスクリーンの複製」を一時的に作って測定する。
+      // (今の画面の横幅のまま測ると、ウィンドウ幅によって結果が変わり、実際に紙へ印刷したときと
+      // ズレて2ページ目に溢れることがあった。)
       const clone = inner.cloneNode(true) as HTMLElement;
-      // 画面上は1行(nowrap)でも、印刷時は「print:whitespace-normal」で折り返されて縦に伸びる。
-      // 複製にはprint:の指定が効かないため、印刷時と同じ折り返しにそろえてから高さを測らないと、
-      // 実際より低く見積もって最後の行が2ページ目にはみ出してしまう。
-      clone.querySelectorAll<HTMLElement>('[class*="print:whitespace-normal"]').forEach((el) => {
-        el.style.whiteSpace = "normal";
-      });
       const measureBox = document.createElement("div");
       measureBox.style.position = "fixed";
       measureBox.style.top = "0";
@@ -72,12 +56,19 @@ export default function PrintFitToPage({
       measureBox.appendChild(clone);
       document.body.appendChild(measureBox);
 
+      // 紙の幅でのマスの広さに合わせて、1行に収まる文字の大きさを決める(画面の幅で決めた大きさは使わない)。
+      const fitSizes = fitSingleLine(clone, { apply: true });
       const measuredWidth = clone.scrollWidth || pageWidth;
       const measuredHeight = clone.scrollHeight;
       document.body.removeChild(measureBox);
 
+      // 印刷用のCSS(下の<style>)が使う文字の大きさを、本物の要素に渡しておく。
+      inner.querySelectorAll<HTMLElement>("[data-fit-text]").forEach((el, i) => {
+        if (fitSizes[i] !== undefined) el.style.setProperty("--print-fs", `${fitSizes[i]}px`);
+      });
+
       const scale = Math.min(pageWidth / measuredWidth, pageHeight / measuredHeight, 1);
-      setLayout({ scale, pageWidth, contentWidth });
+      setLayout({ scale, pageWidth });
     };
     recompute();
     window.addEventListener("beforeprint", recompute);
@@ -86,24 +77,43 @@ export default function PrintFitToPage({
       window.removeEventListener("beforeprint", recompute);
       window.removeEventListener("resize", recompute);
     };
-  }, [id, REAL_PAGE_WIDTH_PX, REAL_PAGE_HEIGHT_PX]);
+  }, [id, printableW, printableH]);
 
   return (
     <div id={`${id}-wrapper`}>
       <style>{`
         @media print {
+          /* カレンダーを囲むページ全体の枠(余白)は、印刷では使わず0にして紙を最大限に使う。
+             (囲んでいる全ての親要素が対象。screen用の余白は画面表示にだけ効く。) */
+          *:has(#${id}-wrapper) {
+            padding: 0 !important;
+            margin: 0 !important;
+          }
           /* transformは印刷時に反映されないブラウザがあるため、実際にレイアウトが
              縮む zoom を使う(wrapperの高さも自動でついてくるので別途調整不要)。
              zoomはflexのjustify-content:centerと組み合わせても中央に来ないことが
-             あったため、縮んだ分の余白を左マージンとして直接計算して中央寄せする。 */
-          /* marginをzoom対象の要素自身につけるとブラウザによって解釈がぶれるため、
-             ズームしないwrapper側にpaddingとして持たせる。 */
+             あったため、縮んだ分の余白を左のpaddingとして直接計算して中央寄せする。 */
           #${id}-wrapper {
-            padding-left: ${Math.max(0, (layout.contentWidth - layout.pageWidth * layout.scale) / 2)}px;
+            padding-left: ${Math.max(0, (printableW - layout.pageWidth * layout.scale) / 2)}px;
           }
           #${id}-inner {
             width: ${layout.pageWidth}px;
             zoom: ${layout.scale};
+            --print-line: ${LINE_VISUAL_PX / layout.scale}px;
+          }
+          /* 文字は折り返さず1行のまま、紙の幅に合わせて縮めた大きさで印刷する。 */
+          #${id}-inner [data-fit-text] {
+            font-size: var(--print-fs, 1em) !important;
+            white-space: nowrap !important;
+          }
+          /* 罫線は、縮小しても紙の上で細すぎて消えない太さにそろえる。 */
+          #${id}-inner .print-cal-grid {
+            border-left-width: var(--print-line);
+            border-top-width: var(--print-line);
+          }
+          #${id}-inner .print-cal-cell {
+            border-right-width: var(--print-line);
+            border-bottom-width: var(--print-line);
           }
         }
       `}</style>

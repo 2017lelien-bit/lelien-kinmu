@@ -136,7 +136,14 @@ export default async function SchedulePrintPage({
             </Link>
           ))}
         </span>
-        <SaveImageButton targetId="schedule-capture" filename={`${monthStart.slice(0, 7)}-schedule-${type}.png`} />
+        {/* 印刷と同じ収まり(1行・同じ罫線)で、A4用紙にそのまま印刷してもはみ出さない画像として保存する。 */}
+        <SaveImageButton
+          targetId="schedule-capture"
+          filename={`${monthStart.slice(0, 7)}-schedule-${type}.png`}
+          variant="a4"
+          layoutWidth={orientation === "portrait" ? 760 : 1090}
+          label="画像として保存(A4)"
+        />
       </div>
 
       <PrintFitToPage orientation={orientation}>
@@ -162,17 +169,19 @@ export default async function SchedulePrintPage({
         </div>
       )}
 
-      <div className="grid grid-cols-[repeat(7,minmax(0,1fr))] gap-px rounded border border-neutral-400 bg-neutral-400 text-[10px]">
+      {/* 罫線は「マス同士の隙間(gap)に背景色を見せる」方式だと、縮小印刷で1px未満になり消えることがあるため、
+          各マスに枠線(右・下)を持たせ、外枠は左・上で受ける方式にしている。印刷時の太さは PrintFitToPage が補正する。 */}
+      <div className="print-cal-grid grid grid-cols-[repeat(7,minmax(0,1fr))] border-l border-t border-neutral-500 text-[10px]">
         {DAY_OF_WEEK_LABEL.map((label, i) => (
           <div
             key={label}
-            className={`bg-neutral-100 py-1 text-center text-xs font-semibold print:bg-white ${i === 0 ? "text-red-600" : ""}`}
+            className={`print-cal-cell border-b border-r border-neutral-500 bg-neutral-100 py-1 text-center text-xs font-semibold print:bg-white ${i === 0 ? "text-red-600" : ""}`}
           >
             {label}
           </div>
         ))}
         {calendarCells.map((date, i) => {
-          if (!date) return <div key={`empty-${i}`} className="min-h-28 bg-white" />;
+          if (!date) return <div key={`empty-${i}`} className="print-cal-cell min-h-28 border-b border-r border-neutral-500 bg-white" />;
 
           const day = Number(date.split("-")[2]);
           const dow = dayOfWeekForDate(date);
@@ -185,7 +194,7 @@ export default async function SchedulePrintPage({
           const lessons = dayEntries.filter((e) => e.kind === "lesson");
 
           return (
-            <div key={date} className={`flex min-h-28 flex-col gap-0.5 p-1 ${isClosedDay ? "bg-neutral-100 print:bg-white" : "bg-white"}`}>
+            <div key={date} className={`print-cal-cell flex min-h-28 flex-col gap-0.5 border-b border-r border-neutral-500 p-1 ${isClosedDay ? "bg-neutral-100 print:bg-white" : "bg-white"}`}>
               <div className="flex flex-wrap items-baseline gap-x-1.5">
                 <span className={`font-semibold ${dow === 0 || isJapaneseHoliday(date) ? "text-red-600" : ""}`}>{day}</span>
                 {!isClosedDay &&

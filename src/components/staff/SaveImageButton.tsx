@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { fitSingleLine } from "@/lib/print-fit";
 
 // 印刷用ではなく、そのまま画像(PNG)として保存したい場合のボタン。
 // 印刷時に隠す要素(print:hidden、色編集の操作部分など)は画像にも含めない。
@@ -10,16 +11,20 @@ import { useState } from "react";
 // A4(300dpi・横長なら3508×2480px、縦長なら2480×3508px)の白い台紙の中央に収めて保存する。
 // variant="instagram": Instagram投稿に使える縦長(4:5・1080×1350px)の画像にする。保存する画像の中だけ
 // 幅・高さ・文字の大きさを調整し、画面上の表示には影響しない。
+// layoutWidth(px)を指定すると、保存する画像の中だけ、その幅でカレンダーを並べ直し、1行に収める文字を
+// その幅に合わせて縮め直す(紙に印刷したときと同じ見た目・収まり方になる)。画面上の表示には影響しない。
 export default function SaveImageButton({
   targetId,
   filename,
   variant = "default",
   label,
+  layoutWidth,
 }: {
   targetId: string;
   filename: string;
   variant?: "default" | "instagram" | "a4";
   label?: string;
+  layoutWidth?: number;
 }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,8 +42,14 @@ export default function SaveImageButton({
         backgroundColor: "#ffffff",
         scale: isInstagram ? 1 : 2,
         ...(isInstagram ? { windowWidth: 1200, width: 1080, height: 1350 } : {}),
+        ...(layoutWidth ? { windowWidth: layoutWidth + 64 } : {}),
         ignoreElements: (el) => el.classList.contains("print:hidden"),
         onclone: (doc, el) => {
+          if (layoutWidth) {
+            el.style.width = `${layoutWidth}px`;
+            el.style.maxWidth = "none";
+            fitSingleLine(el, { apply: true });
+          }
           if (!isInstagram) return;
           const style = doc.createElement("style");
           style.textContent = `
