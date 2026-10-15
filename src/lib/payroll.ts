@@ -646,6 +646,131 @@ function colLetter(n: number): string {
 // 送る想定)。これまで手作業でExcelに1人ずつ「見出し行・金額行・時間(回数)行」のブロックを
 // 積み重ねていた形式(表記ゆれのある単価ルール名ではなく、人数区分だけで揃えたもの)を、
 // そのまま自動生成する。
+export interface PayrollReviewItem {
+  staffId: string;
+  staffName: string;
+  status: "created" | "pending";
+  commuteLabel: string;
+  // 承認されていないレッスン実績の数(給与計算の前に承認しておくのが望ましい)。
+  unapprovedLessons: number;
+  // 作成済みの場合
+  payslips: { id: string; kind: "hourly" | "contract"; gross: number; totalGross: number; net: number }[];
+  // 未作成の場合の計算結果
+  hourlyLines: { name: string; quantity: number; rate: number; subtotal: number }[];
+  lessonGroups: { label: string; rate: number; count: number; amount: number }[];
+  grossAmount: number;
+  daysWorked: number;
+  defaultCommute: number;
+  defaultResidentTax: number;
+}
+
+// スタッフごとに、期間内の実績から計算した金額を確認して、明細を作成(確定)できるようにするための一覧。
+// すでに明細がある人は作成済みとして、まだの人は今の実績から計算した内容を返す(書き込みはしない)。
+export async function getPayrollReviewList(periodStart: string): Promise<ActionResult<PayrollReviewItem[]>> {
+  const adminCheck = await requireAdmin();
+  if (adminCheck) return adminCheck;
+
+  const admin = createAdminClient();
+  const periodEnd = payPeriodEnd(periodStart);
+  const [{ data: staffRows }, { data: periodSlips }, { data: pastSlips }, { data: unapproved }] = await Promise.all([
+    admin
+      .from("staff_profiles")
+      .select("id, name, commute_type, commute_amount")
+      .eq("is_active", true)
+      .order("name"),
+    admin.from("staff_payslips").select("id, staff_id, employment_type, gross_amount, total_gross, net_amount").eq("period_start", periodStart),
+    admin
+      .from("staff_payslips")
+      .select("staff_id, resident_tax, period_start")
+      .lt("period_start", periodStart)
+      .gt("resident_tax", 0)
+      .order("period_start", { ascending: false }),
+    admin
+      .from("lesson_log_entries")
+      .select("staff_id")
+      .eq("approved", false)
+      .gte("entry_date", periodStart)
+      .lte("entry_date", periodEnd),
+  ]);
+
+  const lastResidentTax = new Map<string, number>();
+  for (const r of pastSlips ?? []) {
+    if (!lastResidentTax.has(r.staff_id as string)) lastResidentTax.set(r.staff_id as string, r.resident_tax as number);
+  }
+  const unapprovedByStaff = new Map<string, number>();
+  for (const r of unapproved ?? []) {
+    unapprovedByStaff.set(r.staff_id as string, (unapprovedByStaff.get(r.staff_id as string) ?? 0) + 1);
+  }
+
+  const items = await Promise.all(
+    (staffRows ?? []).map(async (st): Promise<PayrollReviewItem | null> => {
+      const staffId = st.id as string;
+      const commuteLabel =
+        st.commute_type === "per_day" ? `@${(st.commute_amount ?? 0).toLocaleString()}/日` : `固定${(st.commute_amount ?? 0).toLocaleString()}`;
+      const base = {
+        staffId,
+        staffName: st.name as string,
+        commuteLabel,
+        unapprovedLessons: unapprovedByStaff.get(staffId) ?? 0,
+        defaultResidentTax: lastResidentTax.get(staffId) ?? 0,
+      };
+
+      const slips = (periodSlips ?? []).filter((x) => x.staff_id === staffId);
+      if (slips.length > 0) {
+        return {
+          ...base,
+          status: "created",
+          payslips: slips.map((x) => ({
+            id: x.id as string,
+            kind: x.employment_type === "contract" ? "contract" : "hourly",
+            gross: x.gross_amount as number,
+            totalGross: x.total_gross as number,
+            net: x.net_amount as number,
+          })),
+          hourlyLines: [],
+          lessonGroups: [],
+          grossAmount: 0,
+          daysWorked: 0,
+          defaultCommute: 0,
+        };
+      }
+
+      const calc = await calculatePayroll(staffId, periodStart);
+      if (!calc.ok) return null;
+      const { breakdown, grossAmount, daysWorked } = calc.data;
+      const hasActivity =
+        breakdown.lessonLines.length > 0 || breakdown.lines.some((l) => l.quantity > 0) || daysWorked > 0;
+      if (!hasActivity) return null;
+
+      const groups = new Map<string, { label: string; rate: number; count: number; amount: number }>();
+      for (const l of breakdown.lessonLines) {
+        const label = l.matchedRuleLabel ?? "該当ルールなし";
+        const key = `${label}|${l.rate}`;
+        const cur = groups.get(key) ?? { label, rate: l.rate, count: 0, amount: 0 };
+        cur.count += 1;
+        cur.amount += l.rate;
+        groups.set(key, cur);
+      }
+      const defaultCommute =
+        st.commute_type === "per_day" ? (st.commute_amount ?? 0) * daysWorked : (st.commute_amount ?? 0);
+      return {
+        ...base,
+        status: "pending",
+        payslips: [],
+        hourlyLines: breakdown.lines
+          .filter((l) => l.quantity > 0)
+          .map((l) => ({ name: l.name, quantity: l.quantity, rate: l.rate, subtotal: l.subtotal })),
+        lessonGroups: Array.from(groups.values()),
+        grossAmount,
+        daysWorked,
+        defaultCommute,
+      };
+    }),
+  );
+
+  return { ok: true, data: items.filter((x): x is PayrollReviewItem => x !== null) };
+}
+
 export interface PayrollPreviewTotals {
   gross: number;
   commute: number;

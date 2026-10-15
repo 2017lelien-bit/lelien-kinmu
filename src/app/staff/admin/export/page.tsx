@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getStaffUser } from "@/lib/auth";
-import PayrollExportPanel from "@/components/staff/PayrollExportPanel";
+import PayrollWorkspace from "@/components/staff/PayrollWorkspace";
 
 export default async function PayrollExportPage() {
   const staff = await getStaffUser();
@@ -12,7 +12,7 @@ export default async function PayrollExportPage() {
       <p className="text-sm text-neutral-500">
         対象月の全スタッフ分の給与明細を、この画面で確認してから、Excelファイルでダウンロードできます。税理士さんへの共有はダウンロードしたファイルをいつも通りメールやLINEで送ってください。
       </p>
-      <PayrollExportPanel />
+      <PayrollWorkspace />
     </div>
   );
 }

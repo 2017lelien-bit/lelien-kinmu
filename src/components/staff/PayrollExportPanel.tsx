@@ -9,10 +9,8 @@ import {
   type PayrollPreviewTotals,
   type PayslipTextSummary,
 } from "@/lib/payroll";
-import { currentPayPeriod } from "@/lib/date";
 
-export default function PayrollExportPanel() {
-  const [periodStart, setPeriodStart] = useState(currentPayPeriod().periodStart);
+export default function PayrollExportPanel({ periodStart }: { periodStart: string }) {
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [loadingSummaries, setLoadingSummaries] = useState(false);
@@ -77,17 +75,9 @@ export default function PayrollExportPanel() {
 
   return (
     <div className="flex flex-col gap-4 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
+      <h2 className="text-sm font-semibold">② 全員分の確認とExcel出力</h2>
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <label className="flex flex-col gap-1 text-sm">
-        対象期間の開始日(16日で締め)
-        <input
-          type="date"
-          value={periodStart}
-          onChange={(e) => setPeriodStart(e.target.value)}
-          className="rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
-        />
-      </label>
 
       <div className="flex flex-wrap gap-2">
         <button
