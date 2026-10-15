@@ -13,9 +13,9 @@ const WIDTH_SAFETY = 0.995;
 // ブラウザの「ヘッダーとフッター」を出す設定だと上下を消費することがあるため、高さは多めに余裕を持たせる。
 const HEIGHT_SAFETY = 0.97;
 // 縮小(zoom)しても罫線が細くなりすぎて消えないよう、紙の上でこのくらいの太さ(px)になるよう補正する。
-// (ブラウザは罫線の太さを整数pxに切り捨てるため、2px確保する。印刷プレビューや画像は縮小表示されるので、
-// 1px前後の細い線は途中で消えやすい。)
-const LINE_VISUAL_PX = 2.1;
+// (印刷プレビューや画像は縮小表示されるので、1px未満の細い線は途中で消えやすい。罫線は影で描くので、
+// 指定した太さのまま、画面の表示倍率に関係なく同じ太さで出る。)
+const LINE_VISUAL_PX = 1.5;
 
 export default function PrintFitToPage({
   children,
@@ -121,14 +121,32 @@ export default function PrintFitToPage({
             font-size: var(--print-fs, 1em) !important;
             white-space: nowrap !important;
           }
-          /* 罫線は、縮小しても紙の上で細すぎて消えない太さにそろえる。 */
-          #${id}-inner .print-cal-grid {
-            border-left-width: var(--print-line);
-            border-top-width: var(--print-line);
+          /* 罫線は、枠線(border)ではなく「内側の影(box-shadow)」で描く。
+             枠線は位置と幅がピクセルごとに別々に丸められるため、画面の表示倍率が100%以外
+             (125%・150%など)だと、同じ線が2〜4pxとバラバラの太さになり、太く不揃いに見えた。
+             影は幅がそのまま保たれるので、どの倍率でも同じ太さの線になる。
+             (各マスの右・下に線を引き、一番左の列は左、一番上の行は上にも引く。) */
+          #${id}-inner .print-cal-grid,
+          #${id}-inner .print-cal-cell {
+            border-width: 0 !important;
+          }
+          #${id}-inner {
+            --print-line-color: #404040;
+            --print-line-br: inset calc(var(--print-line) * -1) calc(var(--print-line) * -1) 0 0 var(--print-line-color);
+            --print-line-l: inset var(--print-line) 0 0 0 var(--print-line-color);
+            --print-line-t: inset 0 var(--print-line) 0 0 var(--print-line-color);
           }
           #${id}-inner .print-cal-cell {
-            border-right-width: var(--print-line);
-            border-bottom-width: var(--print-line);
+            box-shadow: var(--print-line-br);
+          }
+          #${id}-inner .print-cal-cell:nth-child(7n + 1) {
+            box-shadow: var(--print-line-br), var(--print-line-l);
+          }
+          #${id}-inner .print-cal-cell:nth-child(-n + 7) {
+            box-shadow: var(--print-line-br), var(--print-line-t);
+          }
+          #${id}-inner .print-cal-cell:nth-child(1) {
+            box-shadow: var(--print-line-br), var(--print-line-l), var(--print-line-t);
           }
           /* 高さに余りがあるときは、日付マスを縦に広げてページいっぱいに使う(7rem=画面上の最低の高さ)。 */
           #${id}-inner .print-cal-day {
