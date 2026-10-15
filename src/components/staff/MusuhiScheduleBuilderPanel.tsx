@@ -258,6 +258,7 @@ export default function MusuhiScheduleBuilderPanel({
   );
   const leadingBlanks = Array(dayOfWeekForDate(dates[0])).fill(null);
   const calendarCells: (string | null)[] = [...leadingBlanks, ...dates];
+  while (calendarCells.length % 7 !== 0) calendarCells.push(null);
 
   const shiftsByDate = new Map<string, ShiftWithName[]>();
   for (const s of shifts) {

@@ -799,6 +799,7 @@ export default function ScheduleBuilderPanel({
   // カレンダーの見た目に合わせて、月初の曜日分だけ空マスを差し込む。
   const leadingBlanks = Array(dayOfWeekForDate(dates[0])).fill(null);
   const calendarCells: (string | null)[] = [...leadingBlanks, ...dates];
+  while (calendarCells.length % 7 !== 0) calendarCells.push(null);
 
   // 確定済みの予定だけを、印刷ページと同じ配色・同じ文字サイズで表示するプレビュー
   // (文字を小さくしすぎると名前が読めなくなるため、幅は縮めず下に表示する)。
