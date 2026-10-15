@@ -20,18 +20,39 @@ export default function PrintFitToPage({
   orientation?: "landscape" | "portrait";
 }) {
   const REAL_PAGE_WIDTH_PX = PAGE_SIZE[orientation].w;
-  const PAGE_WIDTH_PX = REAL_PAGE_WIDTH_PX * SAFETY_FACTOR;
-  const PAGE_HEIGHT_PX = PAGE_SIZE[orientation].h * SAFETY_FACTOR;
+  const REAL_PAGE_HEIGHT_PX = PAGE_SIZE[orientation].h;
   const reactId = useId();
   const id = `print-fit-${reactId.replace(/[:]/g, "")}`;
-  const [scale, setScale] = useState(1);
+  const [layout, setLayout] = useState<{ scale: number; pageWidth: number; contentWidth: number }>({
+    scale: 1,
+    // 縮小前に中身を並べる幅(これで折り返しが決まる)
+    pageWidth: REAL_PAGE_WIDTH_PX * SAFETY_FACTOR,
+    // 紙の印刷可能な幅から、周りの枠の左右の余白を引いた「実際にカレンダーを置ける幅」
+    contentWidth: REAL_PAGE_WIDTH_PX,
+  });
 
   useLayoutEffect(() => {
     const recompute = () => {
       const inner = document.getElementById(`${id}-inner`);
       if (!inner) return;
 
-      // 印刷時の紙幅(PAGE_WIDTH_PX)に実際に収まる形で高さを測るため、画面上の
+      // カレンダーを囲む親要素(ページ全体の枠など)の上下左右の余白・枠線は、印刷でも紙の面積を使う。
+      // これを見込まずに紙いっぱいを目標にすると、数十px足りずに最後の行が2ページ目にはみ出す。
+      // (display:noneになる印刷時の非表示要素は含めず、親要素自身の余白だけを足し合わせる。)
+      let chromeX = 0;
+      let chromeY = 0;
+      for (let el = inner.parentElement; el && el !== document.documentElement; el = el.parentElement) {
+        const cs = getComputedStyle(el);
+        chromeX += [cs.paddingLeft, cs.paddingRight, cs.marginLeft, cs.marginRight, cs.borderLeftWidth, cs.borderRightWidth]
+          .reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
+        chromeY += [cs.paddingTop, cs.paddingBottom, cs.marginTop, cs.marginBottom, cs.borderTopWidth, cs.borderBottomWidth]
+          .reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
+      }
+      const contentWidth = REAL_PAGE_WIDTH_PX - chromeX;
+      const pageWidth = Math.min(REAL_PAGE_WIDTH_PX, contentWidth) * SAFETY_FACTOR;
+      const pageHeight = (REAL_PAGE_HEIGHT_PX - chromeY) * SAFETY_FACTOR;
+
+      // 印刷時の紙幅(pageWidth)に実際に収まる形で高さを測るため、画面上の
       // 表示幅とは切り離した「オフスクリーンの複製」を一時的に作って測定する。
       // (今の画面の横幅のまま測ると、ウィンドウ幅によって結果が変わってしまい、
       // 実際に紙へ印刷したときとズレて2ページ目に溢れることがあった。)
@@ -46,17 +67,17 @@ export default function PrintFitToPage({
       measureBox.style.position = "fixed";
       measureBox.style.top = "0";
       measureBox.style.left = "-99999px";
-      measureBox.style.width = `${PAGE_WIDTH_PX}px`;
+      measureBox.style.width = `${pageWidth}px`;
       measureBox.style.visibility = "hidden";
       measureBox.appendChild(clone);
       document.body.appendChild(measureBox);
 
-      const measuredWidth = clone.scrollWidth || PAGE_WIDTH_PX;
+      const measuredWidth = clone.scrollWidth || pageWidth;
       const measuredHeight = clone.scrollHeight;
       document.body.removeChild(measureBox);
 
-      const nextScale = Math.min(PAGE_WIDTH_PX / measuredWidth, PAGE_HEIGHT_PX / measuredHeight, 1);
-      setScale(nextScale);
+      const scale = Math.min(pageWidth / measuredWidth, pageHeight / measuredHeight, 1);
+      setLayout({ scale, pageWidth, contentWidth });
     };
     recompute();
     window.addEventListener("beforeprint", recompute);
@@ -65,7 +86,7 @@ export default function PrintFitToPage({
       window.removeEventListener("beforeprint", recompute);
       window.removeEventListener("resize", recompute);
     };
-  }, [id, PAGE_WIDTH_PX, PAGE_HEIGHT_PX]);
+  }, [id, REAL_PAGE_WIDTH_PX, REAL_PAGE_HEIGHT_PX]);
 
   return (
     <div id={`${id}-wrapper`}>
@@ -78,11 +99,11 @@ export default function PrintFitToPage({
           /* marginをzoom対象の要素自身につけるとブラウザによって解釈がぶれるため、
              ズームしないwrapper側にpaddingとして持たせる。 */
           #${id}-wrapper {
-            padding-left: ${Math.max(0, (REAL_PAGE_WIDTH_PX - PAGE_WIDTH_PX * scale) / 2)}px;
+            padding-left: ${Math.max(0, (layout.contentWidth - layout.pageWidth * layout.scale) / 2)}px;
           }
           #${id}-inner {
-            width: ${PAGE_WIDTH_PX}px;
-            zoom: ${scale};
+            width: ${layout.pageWidth}px;
+            zoom: ${layout.scale};
           }
         }
       `}</style>
