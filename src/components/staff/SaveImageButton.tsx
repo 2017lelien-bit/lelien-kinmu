@@ -40,7 +40,7 @@ export default function SaveImageButton({
           if (!isInstagram) return;
           const style = doc.createElement("style");
           style.textContent = `
-            #${targetId} { width: 1080px !important; height: 1350px !important; box-sizing: border-box; padding: 36px 32px !important; display: flex; flex-direction: column; gap: 20px !important; background: #fff; }
+            #${targetId} { width: 1080px !important; max-width: none !important; margin: 0 !important; height: 1350px !important; box-sizing: border-box; padding: 36px 32px !important; display: flex; flex-direction: column; gap: 20px !important; background: #fff; }
             #${targetId} h2 { font-size: 40px !important; line-height: 1.2; }
             #${targetId} [data-calendar-grid] { flex: 1; grid-template-rows: auto; grid-auto-rows: 1fr; font-size: 19px !important; }
             #${targetId} [data-calendar-grid] * { font-size: 19px !important; line-height: 1.25 !important; }
