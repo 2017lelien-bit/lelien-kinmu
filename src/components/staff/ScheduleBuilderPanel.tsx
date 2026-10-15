@@ -250,9 +250,10 @@ export default function ScheduleBuilderPanel({
     setEditMessage(null);
   }
 
-  function openAdd(date: string) {
+  function openAdd(date: string, kind?: "reception" | "lesson" | "musuhi") {
     setEditError(null);
     setEditMessage(null);
+    if (kind) setDraftKind(kind);
     setEditTarget({ type: "add", date });
   }
 
@@ -851,9 +852,18 @@ export default function ScheduleBuilderPanel({
                   <p className="rounded bg-neutral-100 px-1 text-[9px] text-neutral-400 dark:bg-neutral-900">むすひ: 休業</p>
                 )
               ) : (
-                musuhiDay.length > 0 && (
+                (musuhiDay.length > 0 || editMode) && (
                   <div className="rounded bg-emerald-50 px-1 text-[9px] text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">
                     <span className="font-semibold">むすひ:</span>
+                    {editMode && (
+                      <button
+                        type="button"
+                        onClick={() => openAdd(date, "musuhi")}
+                        className="ml-1 rounded border border-dashed border-emerald-600 px-1 text-emerald-700 print:hidden"
+                      >
+                        ＋枠を追加
+                      </button>
+                    )}
                     {musuhiDay.map((s) => (
                       <p
                         key={s.id}
