@@ -9,11 +9,19 @@ import { useId, useLayoutEffect, useState } from "react";
 // 少し余裕を持たせた数値を目標にする。
 const SAFETY_FACTOR = 0.92;
 // 用紙の印刷可能な幅(中央寄せの基準)。縮小後の幅は、この幅の中で左右対称になるよう配置する。
-const REAL_PAGE_WIDTH_PX = 1077;
-const PAGE_WIDTH_PX = REAL_PAGE_WIDTH_PX * SAFETY_FACTOR;
-const PAGE_HEIGHT_PX = 748 * SAFETY_FACTOR;
+// A4横=1077×748px、A4縦=748×1077px(どちらも余白6mm)。
+const PAGE_SIZE = { landscape: { w: 1077, h: 748 }, portrait: { w: 748, h: 1077 } } as const;
 
-export default function PrintFitToPage({ children }: { children: React.ReactNode }) {
+export default function PrintFitToPage({
+  children,
+  orientation = "landscape",
+}: {
+  children: React.ReactNode;
+  orientation?: "landscape" | "portrait";
+}) {
+  const REAL_PAGE_WIDTH_PX = PAGE_SIZE[orientation].w;
+  const PAGE_WIDTH_PX = REAL_PAGE_WIDTH_PX * SAFETY_FACTOR;
+  const PAGE_HEIGHT_PX = PAGE_SIZE[orientation].h * SAFETY_FACTOR;
   const reactId = useId();
   const id = `print-fit-${reactId.replace(/[:]/g, "")}`;
   const [scale, setScale] = useState(1);
@@ -51,7 +59,7 @@ export default function PrintFitToPage({ children }: { children: React.ReactNode
       window.removeEventListener("beforeprint", recompute);
       window.removeEventListener("resize", recompute);
     };
-  }, [id]);
+  }, [id, PAGE_WIDTH_PX, PAGE_HEIGHT_PX]);
 
   return (
     <div id={`${id}-wrapper`}>

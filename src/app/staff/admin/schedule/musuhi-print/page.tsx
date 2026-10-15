@@ -32,12 +32,13 @@ function formatTimeCompact(t: string): string {
 export default async function MusuhiSchedulePrintPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string; type?: string }>;
+  searchParams: Promise<{ month?: string; type?: string; orient?: string }>;
 }) {
   const staff = await getStaffUser();
   if (!staff || staff.role !== "admin") notFound();
 
   const params = await searchParams;
+  const orientation: "landscape" | "portrait" = params.orient === "portrait" ? "portrait" : "landscape";
   const monthStart = params.month ? `${params.month}-01` : nextMonthStart();
   const type: PrintType = PRINT_TYPES.includes(params.type as PrintType) ? (params.type as PrintType) : "staff";
 
@@ -70,7 +71,7 @@ export default async function MusuhiSchedulePrintPage({
   while (calendarCells.length % 7 !== 0) calendarCells.push(null);
 
   return (
-    <div className="print-calendar flex flex-col gap-3">
+    <div className={`${orientation === "portrait" ? "print-calendar-portrait" : "print-calendar"} flex flex-col gap-3`}>
       <Link href="/staff/admin/schedule" className="text-sm underline print:hidden">
         ← スケジュール管理に戻る
       </Link>
@@ -79,6 +80,18 @@ export default async function MusuhiSchedulePrintPage({
           {formatMonthLabel(monthStart)}むすひスケジュール({TYPE_LABEL[type]})
         </h1>
         <PrintButton />
+        <span className="flex items-center gap-1 text-sm">
+          用紙の向き:
+          {(["landscape", "portrait"] as const).map((o) => (
+            <Link
+              key={o}
+              href={`/staff/admin/schedule/musuhi-print?month=${monthStart.slice(0, 7)}&type=${type}&orient=${o}`}
+              className={`rounded border px-2 py-1 ${orientation === o ? "border-neutral-900 bg-neutral-900 text-white dark:border-white dark:bg-white dark:text-black" : "border-neutral-300 dark:border-neutral-700"}`}
+            >
+              {o === "landscape" ? "横" : "縦"}
+            </Link>
+          ))}
+        </span>
         <SaveImageButton targetId="schedule-capture" filename={`${monthStart.slice(0, 7)}-musuhi-schedule-${type}.png`} />
         {type === "customer" ? (
           <SaveImageButton
@@ -98,7 +111,7 @@ export default async function MusuhiSchedulePrintPage({
         )}
       </div>
 
-      <PrintFitToPage>
+      <PrintFitToPage orientation={orientation}>
         <div id="schedule-capture" className="mx-auto flex w-full max-w-[720px] flex-col gap-3 bg-white p-2">
           <h2 className="text-center text-xl font-bold">{formatMonthLabel(monthStart)} むすひ 営業スケジュール</h2>
 

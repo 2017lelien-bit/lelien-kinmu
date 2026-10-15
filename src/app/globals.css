@@ -42,9 +42,18 @@ body {
   .print-calendar {
     page: schedule-calendar;
   }
+  /* 行数が多い月は、縦向きのほうが大きく印刷できる */
+  .print-calendar-portrait {
+    page: schedule-calendar-portrait;
+  }
 }
 
 @page schedule-calendar {
   size: A4 landscape;
+  margin: 6mm;
+}
+
+@page schedule-calendar-portrait {
+  size: A4 portrait;
   margin: 6mm;
 }
