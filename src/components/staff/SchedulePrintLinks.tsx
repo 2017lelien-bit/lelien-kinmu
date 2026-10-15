@@ -44,6 +44,13 @@ export default function SchedulePrintLinks({ initialMonthStart }: { initialMonth
           {label}を開く
         </Link>
       ))}
+      <span className="text-xs text-neutral-400 self-center">両方に通っている方用:</span>
+      <Link
+        href={`/staff/admin/schedule/combined-print?month=${month}`}
+        className="rounded-lg border border-neutral-300 px-4 py-2 text-sm dark:border-neutral-700"
+      >
+        Le lien＋むすひ(お客様用)を開く
+      </Link>
     </div>
   );
 }

@@ -2,8 +2,9 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getStaffUser } from "@/lib/auth";
 import { getAllScheduleSubmissions } from "@/lib/schedule-submissions";
-import { getLessonColors, type LessonColor } from "@/lib/lesson-colors";
+import { getLessonColors } from "@/lib/lesson-colors";
 import { buildLessonColorMap, lessonColorKey } from "@/lib/lesson-color-key";
+import { DEFAULT_COLOR, lessonStyle } from "@/lib/lesson-style";
 import { getScheduleNotes } from "@/lib/schedule-notes";
 import { noteStyle } from "@/lib/color";
 import { nextMonthStart, monthEnd, dayOfWeekForDate } from "@/lib/date";
@@ -38,27 +39,6 @@ function formatTimeCompact(t: string | null): string {
   if (!t) return "";
   const [h, min] = t.slice(0, 5).split(":");
   return min === "00" ? String(Number(h)) : `${Number(h)}:${min}`;
-}
-
-// レッスン名ごとの色は、管理画面(このページの凡例)から自由に設定できる。まだ設定されていない
-// 名前は、目立つように黄色の帯を既定色として使う。
-const DEFAULT_COLOR = "#FFFF00";
-
-// 背景色の明るさから、読みやすい文字色(白 or 黒)を自動で選ぶ。
-function readableTextColor(hex: string): string {
-  const r = parseInt(hex.slice(1, 3), 16) || 0;
-  const g = parseInt(hex.slice(3, 5), 16) || 0;
-  const b = parseInt(hex.slice(5, 7), 16) || 0;
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance > 0.6 ? "#000000" : "#ffffff";
-}
-
-function lessonStyle(name: string, colorMap: Map<string, LessonColor>): { backgroundColor?: string; color?: string } {
-  const config = colorMap.get(lessonColorKey(name));
-  if (config?.style === "none") return {};
-  if (config?.style === "text") return { color: config.color };
-  const bg = config?.color ?? DEFAULT_COLOR;
-  return { backgroundColor: bg, color: readableTextColor(bg) };
 }
 
 export default async function SchedulePrintPage({
