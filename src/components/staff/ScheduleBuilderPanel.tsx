@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   addScheduleEntry,
   assignScheduleEntryLessonName,
+  deleteScheduleEntry,
   getAllScheduleSubmissions,
   setScheduleEntryConfirmed,
   updateScheduleEntryStaff,
@@ -12,7 +13,15 @@ import {
 import { getScheduleNotes, setScheduleClosures, upsertScheduleNote, type ScheduleNote } from "@/lib/schedule-notes";
 import { noteStyle } from "@/lib/color";
 import DebouncedColorInput from "@/components/staff/DebouncedColorInput";
-import { getMusuhiNotes, getMusuhiShifts, type MusuhiNote, type MusuhiShift } from "@/lib/musuhi-schedule";
+import {
+  addMusuhiShift,
+  deleteMusuhiShift,
+  getMusuhiNotes,
+  getMusuhiShifts,
+  updateMusuhiShift,
+  type MusuhiNote,
+  type MusuhiShift,
+} from "@/lib/musuhi-schedule";
 import type { LessonColor } from "@/lib/lesson-colors";
 import { buildLessonColorMap, lessonColorKey } from "@/lib/lesson-color-key";
 import { dayOfWeekForDate, monthEnd } from "@/lib/date";
@@ -29,6 +38,7 @@ import SaveImageButton from "@/components/staff/SaveImageButton";
 
 type EntryWithName = ScheduleSubmission & { staffName: string };
 type MusuhiShiftWithName = MusuhiShift & { staffName: string };
+type EditTarget = { type: "add"; date: string } | { type: "entry"; id: string } | { type: "musuhi"; id: string };
 
 function formatMonthLabel(monthStart: string): string {
   const [y, m] = monthStart.split("-");
@@ -151,6 +161,18 @@ export default function ScheduleBuilderPanel({
   const [manualStaffId, setManualStaffId] = useState(staffList[0]?.id ?? "");
   const [manualSubmitting, setManualSubmitting] = useState(false);
   const [manualError, setManualError] = useState<string | null>(null);
+  // プレビューのカレンダー上で、日付や予定をクリックして直接追加・編集するための状態。
+  const [editMode, setEditMode] = useState(false);
+  const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
+  const [editBusy, setEditBusy] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editMessage, setEditMessage] = useState<string | null>(null);
+  const [draftKind, setDraftKind] = useState<"reception" | "lesson" | "musuhi">("reception");
+  const [draftStaffId, setDraftStaffId] = useState(staffList[0]?.id ?? "");
+  const [draftStart, setDraftStart] = useState("09:00");
+  const [draftEnd, setDraftEnd] = useState("13:00");
+  const [draftLesson, setDraftLesson] = useState("");
+  const [draftBreak, setDraftBreak] = useState(0);
   const [closureStart, setClosureStart] = useState(monthStart);
   const [closureEnd, setClosureEnd] = useState(monthStart);
   const [closureNote, setClosureNote] = useState("");
@@ -220,6 +242,174 @@ export default function ScheduleBuilderPanel({
       closed ? `${result.data.days}日分を休業にしました。` : `${result.data.days}日分の臨時休業を取り消しました。`,
     );
     if (closed) setClosureNote("");
+  }
+
+  function closeEditor() {
+    setEditTarget(null);
+    setEditError(null);
+    setEditMessage(null);
+  }
+
+  function openAdd(date: string) {
+    setEditError(null);
+    setEditMessage(null);
+    setEditTarget({ type: "add", date });
+  }
+
+  function openEntry(entry: EntryWithName) {
+    setEditError(null);
+    setEditMessage(null);
+    setDraftStaffId(entry.staff_id);
+    setDraftStart(entry.start_time?.slice(0, 5) ?? "");
+    setDraftEnd(entry.end_time?.slice(0, 5) ?? "");
+    setDraftLesson(entry.lesson_name ?? "");
+    setDraftBreak(entry.break_minutes ?? 0);
+    setEditTarget({ type: "entry", id: entry.id });
+  }
+
+  function openMusuhi(shift: MusuhiShiftWithName) {
+    setEditError(null);
+    setEditMessage(null);
+    setDraftStaffId(shift.staff_id);
+    setDraftStart(shift.start_time.slice(0, 5));
+    setDraftEnd(shift.end_time.slice(0, 5));
+    setEditTarget({ type: "musuhi", id: shift.id });
+  }
+
+  async function handleInlineAdd(date: string) {
+    setEditError(null);
+    setEditMessage(null);
+    if (!draftStaffId) {
+      setEditError("担当スタッフを選んでください。");
+      return;
+    }
+    const staffName = staffList.find((st) => st.id === draftStaffId)?.name ?? "";
+    setEditBusy(true);
+    if (draftKind === "musuhi") {
+      const result = await addMusuhiShift({
+        staffId: draftStaffId,
+        entryDate: date,
+        startTime: draftStart,
+        endTime: draftEnd,
+      });
+      setEditBusy(false);
+      if (!result.ok) {
+        setEditError(result.error);
+        return;
+      }
+      setMusuhiShifts((prev) => [...prev, { ...result.data, staffName } as MusuhiShiftWithName]);
+      setEditMessage("むすひの受付を追加しました。");
+      return;
+    }
+    if (draftKind === "lesson" && !draftLesson.trim()) {
+      setEditBusy(false);
+      setEditError("レッスン名を入力してください。");
+      return;
+    }
+    const result = await addScheduleEntry(
+      {
+        entryDate: date,
+        kind: draftKind,
+        startTime: draftStart,
+        endTime: draftKind === "reception" ? draftEnd : undefined,
+        lessonName: draftKind === "lesson" ? draftLesson.trim() : undefined,
+      },
+      draftStaffId,
+    );
+    if (!result.ok) {
+      setEditBusy(false);
+      setEditError(result.error);
+      return;
+    }
+    const confirmResult = await setScheduleEntryConfirmed(result.data.id, true);
+    setEditBusy(false);
+    if (!confirmResult.ok) {
+      setEditError(confirmResult.error);
+      return;
+    }
+    setEntries((prev) => [...prev, { ...result.data, confirmed: true, staffName }]);
+    setEditMessage(draftKind === "lesson" ? "レッスンを追加しました。" : "受付を追加しました。");
+    if (draftKind === "lesson") setDraftLesson("");
+  }
+
+  async function handleInlineSaveEntry(entry: EntryWithName) {
+    setEditError(null);
+    setEditMessage(null);
+    setEditBusy(true);
+    if (draftStaffId !== entry.staff_id) await handleStaffChange(entry, draftStaffId);
+    const startChanged = draftStart !== (entry.start_time?.slice(0, 5) ?? "");
+    const endChanged = draftEnd !== (entry.end_time?.slice(0, 5) ?? "");
+    if (startChanged || endChanged) await handleTimeEdit({ ...entry, staff_id: draftStaffId }, draftStart, draftEnd);
+    if (entry.kind === "reception" && draftBreak !== (entry.break_minutes ?? 0)) {
+      await handleBreakEdit({ ...entry, start_time: draftStart, end_time: draftEnd }, draftBreak);
+    }
+    if (entry.kind === "lesson" && draftLesson.trim() !== (entry.lesson_name ?? "")) {
+      await handleAssignLesson(entry, draftLesson.trim());
+    }
+    setEditBusy(false);
+    setEditMessage("保存しました。");
+  }
+
+  async function handleInlineUnconfirm(entry: EntryWithName) {
+    setEditBusy(true);
+    setEditError(null);
+    const result = await setScheduleEntryConfirmed(entry.id, false);
+    setEditBusy(false);
+    if (!result.ok) {
+      setEditError(result.error);
+      return;
+    }
+    setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, confirmed: false } : e)));
+    closeEditor();
+  }
+
+  async function handleInlineDelete(entry: EntryWithName) {
+    if (!window.confirm("この予定を完全に削除します(提出された候補ごと消えます)。よろしいですか?")) return;
+    setEditBusy(true);
+    setEditError(null);
+    const result = await deleteScheduleEntry(entry.id, entry.staff_id);
+    setEditBusy(false);
+    if (!result.ok) {
+      setEditError(result.error);
+      return;
+    }
+    setEntries((prev) => prev.filter((e) => e.id !== entry.id));
+    closeEditor();
+  }
+
+  async function handleInlineSaveMusuhi(shift: MusuhiShiftWithName) {
+    setEditError(null);
+    setEditMessage(null);
+    setEditBusy(true);
+    const result = await updateMusuhiShift(shift.id, { staffId: draftStaffId, startTime: draftStart, endTime: draftEnd });
+    setEditBusy(false);
+    if (!result.ok) {
+      setEditError(result.error);
+      return;
+    }
+    const staffName = staffList.find((st) => st.id === draftStaffId)?.name ?? shift.staffName;
+    setMusuhiShifts((prev) =>
+      prev.map((x) =>
+        x.id === shift.id
+          ? ({ ...x, staff_id: draftStaffId, staffName, start_time: draftStart, end_time: draftEnd } as MusuhiShiftWithName)
+          : x,
+      ),
+    );
+    setEditMessage("保存しました。");
+  }
+
+  async function handleInlineDeleteMusuhi(shift: MusuhiShiftWithName) {
+    if (!window.confirm("このむすひの受付を削除します。よろしいですか?")) return;
+    setEditBusy(true);
+    setEditError(null);
+    const result = await deleteMusuhiShift(shift.id);
+    setEditBusy(false);
+    if (!result.ok) {
+      setEditError(result.error);
+      return;
+    }
+    setMusuhiShifts((prev) => prev.filter((x) => x.id !== shift.id));
+    closeEditor();
   }
 
   async function handleSelect(key: string, prevId: string, nextId: string) {
@@ -646,7 +836,11 @@ export default function ScheduleBuilderPanel({
                   [...reception]
                     .sort((x, y) => (x.start_time ?? "").localeCompare(y.start_time ?? ""))
                     .map((e) => (
-                      <span key={e.id} className="whitespace-nowrap text-neutral-600">
+                      <span
+                        key={e.id}
+                        onClick={editMode ? () => openEntry(e) : undefined}
+                        className={`whitespace-nowrap text-neutral-600 ${editMode ? "cursor-pointer rounded hover:bg-blue-100" : ""}`}
+                      >
                         {e.staffName} {formatTimeCompact(e.start_time)}-{formatTimeCompact(e.end_time)}
                         {e.break_minutes ? ` (休憩${formatBreakMinutes(e.break_minutes)})` : ""}
                       </span>
@@ -661,7 +855,11 @@ export default function ScheduleBuilderPanel({
                   <div className="rounded bg-emerald-50 px-1 text-[9px] text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">
                     <span className="font-semibold">むすひ:</span>
                     {musuhiDay.map((s) => (
-                      <p key={s.id}>
+                      <p
+                        key={s.id}
+                        onClick={editMode ? () => openMusuhi(s) : undefined}
+                        className={editMode ? "cursor-pointer rounded hover:bg-emerald-200" : undefined}
+                      >
                         {s.staffName} {formatTimeCompact(s.start_time)}-{formatTimeCompact(s.end_time)}
                       </p>
                     ))}
@@ -682,12 +880,26 @@ export default function ScheduleBuilderPanel({
                   {lessons.map((e) => {
                     const name = e.lesson_name ?? "(レッスン名未定)";
                     return (
-                      <p key={e.id} className="rounded px-1 py-0.5 leading-tight" style={lessonStyle(name, colorMap)}>
+                      <p
+                        key={e.id}
+                        onClick={editMode ? () => openEntry(e) : undefined}
+                        className={`rounded px-1 py-0.5 leading-tight ${editMode ? "cursor-pointer ring-blue-400 hover:ring-2" : ""}`}
+                        style={lessonStyle(name, colorMap)}
+                      >
                         {formatTime(e.start_time)} {name}({e.staffName})
                       </p>
                     );
                   })}
                 </>
+              )}
+              {editMode && (
+                <button
+                  type="button"
+                  onClick={() => openAdd(date)}
+                  className="mt-auto self-start rounded border border-dashed border-blue-400 px-1 text-[10px] text-blue-600 print:hidden"
+                >
+                  ＋追加
+                </button>
               )}
             </div>
           );
@@ -1020,13 +1232,230 @@ export default function ScheduleBuilderPanel({
         <div className="flex flex-wrap items-center gap-3">
           <p className="text-sm font-semibold text-neutral-500">プレビュー(このまま印刷した場合の見た目・確定済みの予定のみ表示)</p>
           <SaveImageButton targetId="lelien-musuhi-preview" filename={`${monthStart.slice(0, 7)}-schedule-preview.png`} />
+          <label className="flex items-center gap-1 text-sm">
+            <input
+              type="checkbox"
+              checked={editMode}
+              onChange={(e) => {
+                setEditMode(e.target.checked);
+                if (!e.target.checked) closeEditor();
+              }}
+            />
+            このカレンダーで直接編集する
+          </label>
         </div>
+        {editMode && (
+          <p className="text-xs text-neutral-400">
+            各日の「＋追加」で予定を追加、受付・レッスン・むすひの文字をクリックで変更・削除できます(画像保存には「＋追加」は含まれません)。
+          </p>
+        )}
+
+        {editMode && editTarget && (() => {
+          const staffSelect = (
+            <label className="flex flex-col gap-1 text-xs">
+              担当
+              <select
+                value={draftStaffId}
+                onChange={(e) => setDraftStaffId(e.target.value)}
+                className="rounded border border-neutral-300 px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+              >
+                {staffList.map((st) => (
+                  <option key={st.id} value={st.id}>
+                    {st.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          );
+          const timeInputs = (showEnd: boolean) => (
+            <>
+              <label className="flex flex-col gap-1 text-xs">
+                {showEnd ? "開始" : "開始時刻"}
+                <input
+                  type="time"
+                  value={draftStart}
+                  onChange={(e) => setDraftStart(e.target.value)}
+                  className="rounded border border-neutral-300 px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+                />
+              </label>
+              {showEnd && (
+                <label className="flex flex-col gap-1 text-xs">
+                  終了
+                  <input
+                    type="time"
+                    value={draftEnd}
+                    onChange={(e) => setDraftEnd(e.target.value)}
+                    className="rounded border border-neutral-300 px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+                  />
+                </label>
+              )}
+            </>
+          );
+          const lessonInput = (
+            <label className="flex flex-col gap-1 text-xs">
+              レッスン名
+              <input
+                list="inline-lesson-options"
+                value={draftLesson}
+                onChange={(e) => setDraftLesson(e.target.value)}
+                className="w-44 rounded border border-neutral-300 px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+              />
+              <datalist id="inline-lesson-options">
+                {(lessonOptionsByStaff[draftStaffId] ?? []).map((o) => (
+                  <option key={o.id} value={o.name} />
+                ))}
+              </datalist>
+            </label>
+          );
+          const header = (title: string) => (
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold">{title}</p>
+              <button type="button" onClick={closeEditor} className="text-sm text-neutral-500 underline">
+                閉じる
+              </button>
+            </div>
+          );
+          const feedback = (
+            <>
+              {editError && <p className="text-xs text-red-600">{editError}</p>}
+              {editMessage && <p className="text-xs text-green-700">{editMessage}</p>}
+            </>
+          );
+          const shellClass =
+            "fixed inset-x-0 bottom-0 z-50 flex flex-col gap-2 border-t border-neutral-300 bg-white p-3 shadow-[0_-4px_12px_rgba(0,0,0,0.15)] print:hidden dark:border-neutral-700 dark:bg-neutral-950";
+
+          if (editTarget.type === "add") {
+            const [, mm, dd] = editTarget.date.split("-");
+            return (
+              <div className={shellClass}>
+                {header(`${Number(mm)}/${Number(dd)} に追加`)}
+                <div className="flex flex-wrap items-end gap-3">
+                  <label className="flex flex-col gap-1 text-xs">
+                    種類
+                    <select
+                      value={draftKind}
+                      onChange={(e) => setDraftKind(e.target.value as "reception" | "lesson" | "musuhi")}
+                      className="rounded border border-neutral-300 px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+                    >
+                      <option value="reception">Le lien受付</option>
+                      <option value="lesson">レッスン</option>
+                      <option value="musuhi">むすひ受付</option>
+                    </select>
+                  </label>
+                  {staffSelect}
+                  {timeInputs(draftKind !== "lesson")}
+                  {draftKind === "lesson" && lessonInput}
+                  <button
+                    type="button"
+                    onClick={() => handleInlineAdd(editTarget.date)}
+                    disabled={editBusy}
+                    className="rounded-lg bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-40 dark:bg-white dark:text-black"
+                  >
+                    {editBusy ? "追加中..." : "追加する"}
+                  </button>
+                </div>
+                {feedback}
+              </div>
+            );
+          }
+
+          if (editTarget.type === "entry") {
+            const entry = entries.find((x) => x.id === editTarget.id);
+            if (!entry) return null;
+            const isReception = entry.kind === "reception";
+            return (
+              <div className={shellClass}>
+                {header(`${entry.entry_date.slice(5).replace("-", "/")} ${isReception ? "Le lien受付" : "レッスン"}を編集`)}
+                <div className="flex flex-wrap items-end gap-3">
+                  {staffSelect}
+                  {timeInputs(isReception)}
+                  {!isReception && lessonInput}
+                  {isReception && (
+                    <label className="flex flex-col gap-1 text-xs">
+                      休憩
+                      <select
+                        value={draftBreak}
+                        onChange={(e) => setDraftBreak(Number(e.target.value))}
+                        className="rounded border border-neutral-300 px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+                      >
+                        <option value={0}>なし</option>
+                        {BREAK_MINUTE_OPTIONS.map((m) => (
+                          <option key={m} value={m}>
+                            {formatBreakMinutes(m)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleInlineSaveEntry(entry)}
+                    disabled={editBusy}
+                    className="rounded-lg bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-40 dark:bg-white dark:text-black"
+                  >
+                    {editBusy ? "保存中..." : "保存する"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleInlineUnconfirm(entry)}
+                    disabled={editBusy}
+                    className="rounded-lg border border-neutral-300 px-3 py-2 text-sm disabled:opacity-40 dark:border-neutral-700"
+                  >
+                    予定から外す
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleInlineDelete(entry)}
+                    disabled={editBusy}
+                    className="rounded-lg border border-red-300 px-3 py-2 text-sm text-red-600 disabled:opacity-40"
+                  >
+                    完全に削除
+                  </button>
+                </div>
+                {feedback}
+              </div>
+            );
+          }
+
+          const shift = musuhiShifts.find((x) => x.id === editTarget.id) as MusuhiShiftWithName | undefined;
+          if (!shift) return null;
+          return (
+            <div className={shellClass}>
+              {header(`${shift.entry_date.slice(5).replace("-", "/")} むすひ受付を編集`)}
+              <div className="flex flex-wrap items-end gap-3">
+                {staffSelect}
+                {timeInputs(true)}
+                <button
+                  type="button"
+                  onClick={() => handleInlineSaveMusuhi(shift)}
+                  disabled={editBusy}
+                  className="rounded-lg bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-40 dark:bg-white dark:text-black"
+                >
+                  {editBusy ? "保存中..." : "保存する"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleInlineDeleteMusuhi(shift)}
+                  disabled={editBusy}
+                  className="rounded-lg border border-red-300 px-3 py-2 text-sm text-red-600 disabled:opacity-40"
+                >
+                  削除
+                </button>
+              </div>
+              <p className="text-xs text-neutral-400">
+                むすひの予約サイトへの反映は、むすひスケジュールの「反映内容を確認」から行います。
+              </p>
+              {feedback}
+            </div>
+          );
+        })()}
         <div className="overflow-x-auto">
           <div id="lelien-musuhi-preview" className="flex min-w-[700px] flex-col gap-2 bg-white p-2">
             <p className="text-center text-lg font-bold text-black">{formatMonthLabel(monthStart)}スケジュール</p>
             {renderPreview()}
           </div>
         </div>
+        {editMode && editTarget && <div className="h-56" />}
       </div>
     </div>
   );
