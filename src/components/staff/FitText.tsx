@@ -20,7 +20,12 @@ export default function FitText({
     const el = ref.current;
     if (!el) return;
     el.style.fontSize = "";
-    const parentWidth = el.parentElement?.clientWidth ?? 0;
+    const parent = el.parentElement;
+    // セルの余白(padding)を除いた、実際に文字を置ける幅で判定する。
+    const parentStyle = parent ? getComputedStyle(parent) : null;
+    const parentWidth = parent
+      ? parent.clientWidth - parseFloat(parentStyle?.paddingLeft ?? "0") - parseFloat(parentStyle?.paddingRight ?? "0")
+      : 0;
     const naturalWidth = el.scrollWidth;
     if (parentWidth > 0 && naturalWidth > parentWidth) {
       const baseFontSize = parseFloat(getComputedStyle(el).fontSize);

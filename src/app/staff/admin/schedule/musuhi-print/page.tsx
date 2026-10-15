@@ -102,7 +102,7 @@ export default async function MusuhiSchedulePrintPage({
         <div id="schedule-capture" className="mx-auto flex w-full max-w-[720px] flex-col gap-3 bg-white p-2">
           <h2 className="text-center text-xl font-bold">{formatMonthLabel(monthStart)} むすひ 営業スケジュール</h2>
 
-          <div data-calendar-grid className="grid grid-cols-7 gap-px rounded border border-neutral-400 bg-neutral-400 text-[10px]">
+          <div data-calendar-grid className="grid grid-cols-[repeat(7,minmax(0,1fr))] gap-px rounded border border-neutral-400 bg-neutral-400 text-[10px]">
             {DAY_OF_WEEK_LABEL.map((label, i) => (
               <div
                 key={label}
