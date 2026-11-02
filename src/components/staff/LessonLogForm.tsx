@@ -24,9 +24,9 @@ export default function LessonLogForm({
   const [entryDate, setEntryDate] = useState(todayJstDateString());
   const [lessonName, setLessonName] = useState<string>(LESSON_NAMES[0]);
   const [durationMinutes, setDurationMinutes] = useState(60);
-  // 単価が人数で変わらないスタッフも、クラスごとの採算を見るために参加人数を入力してもらう
-  // (金額には影響しない)。0は「まだ入力していない」。
-  const [headcount, setHeadcount] = useState(headcountMatters ? 1 : 0);
+  // 単価が人数で変わらないスタッフには、参加人数の入力欄を出さない(金額に影響せず、入力を求めると
+  // 未入力のまま登録できず「レッスンが反映されない」原因になっていたため)。画面に出さない間は1人として保存する。
+  const [headcount, setHeadcount] = useState(1);
   const [quantity, setQuantity] = useState(1);
   const [startTime, setStartTime] = useState("");
   const [note, setNote] = useState("");
@@ -59,7 +59,7 @@ export default function LessonLogForm({
     setEntryDate(todayJstDateString());
     setLessonName(LESSON_NAMES[0]);
     setDurationMinutes(60);
-    setHeadcount(headcountMatters ? 1 : 0);
+    setHeadcount(1);
     setQuantity(1);
     setStartTime("");
     setNote("");
@@ -77,8 +77,8 @@ export default function LessonLogForm({
   }
 
   async function handleSubmit() {
-    if (headcount < 1) {
-      setError("参加人数を入力してください(分かる範囲で構いません)。");
+    if (headcountMatters && headcount < 1) {
+      setError("参加人数を入力してください。");
       return;
     }
     setSubmitting(true);
@@ -202,21 +202,23 @@ export default function LessonLogForm({
             className="w-24 rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
           />
         </label>
-        <label className="flex flex-col gap-1 text-sm">
-          参加人数
-          <input
-            type="number"
-            min={1}
-            placeholder="人数"
-            value={headcount > 0 ? headcount : ""}
-            onFocus={(e) => e.target.select()}
-            onChange={(e) => {
-              setTouched(true);
-              setHeadcount(e.target.value === "" ? 0 : Number(e.target.value));
-            }}
-            className="w-24 rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
-          />
-        </label>
+        {headcountMatters && (
+          <label className="flex flex-col gap-1 text-sm">
+            参加人数
+            <input
+              type="number"
+              min={1}
+              placeholder="人数"
+              value={headcount > 0 ? headcount : ""}
+              onFocus={(e) => e.target.select()}
+              onChange={(e) => {
+                setTouched(true);
+                setHeadcount(e.target.value === "" ? 0 : Number(e.target.value));
+              }}
+              className="w-24 rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
+            />
+          </label>
+        )}
         {!headcountMatters && !editingId && (
           <label className="flex flex-col gap-1 text-sm">
             本数
@@ -248,7 +250,7 @@ export default function LessonLogForm({
       </div>
       {!headcountMatters && (
         <p className="text-xs text-neutral-400">
-          参加人数は、金額には影響しません。どのクラスに何人来ているかを、経営の判断に使うために入力してください。2本以上を同じ人数でまとめて登録するときは、本数を2以上にしてください。
+          同じレッスンを2本以上まとめて登録するときは、本数を2以上にしてください。
         </p>
       )}
       <p className="text-xs text-neutral-400">
@@ -266,7 +268,7 @@ export default function LessonLogForm({
 
       {duplicateExisting && (
         <p className="rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
-          ⚠️ {entryDate}に同じ内容({lessonName}・{durationMinutes}分・${headcount}人)の実績が、すでに登録されています。二重登録ではないか確認してから登録してください。
+          ⚠️ {entryDate}に同じ内容({lessonName}・{durationMinutes}分{headcountMatters ? `・${headcount}人` : ""})の実績が、すでに登録されています。二重登録ではないか確認してから登録してください。
         </p>
       )}
 

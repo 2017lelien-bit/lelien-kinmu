@@ -10,7 +10,7 @@ function hasRateChangeSplit(lines: PayrollBreakdownLine[]): boolean {
   return false;
 }
 
-export default function MyPayslipList({ payslips }: { payslips: StaffPayslip[] }) {
+export default function MyPayslipList({ payslips, headcountMatters = true }: { payslips: StaffPayslip[]; headcountMatters?: boolean }) {
   if (payslips.length === 0) {
     return <p className="text-sm text-neutral-400">まだ給与明細は作成されていません。</p>;
   }
@@ -42,7 +42,7 @@ export default function MyPayslipList({ payslips }: { payslips: StaffPayslip[] }
             <ul className="mt-2 flex flex-col gap-0.5 text-neutral-600 dark:text-neutral-400">
               {p.breakdown.lessonLines.map((line) => (
                 <li key={line.entryId}>
-                  {line.date} {line.lessonName}({line.durationMinutes}分・{line.headcount}人) = ¥
+                  {line.date} {line.lessonName}({line.durationMinutes}分{headcountMatters ? `・${line.headcount}人` : ""}) = ¥
                   {line.rate.toLocaleString()}
                 </li>
               ))}

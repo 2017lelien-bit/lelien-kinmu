@@ -145,7 +145,7 @@ export default async function StaffMyPage() {
 
       <section className="flex flex-col gap-2">
         <h2 className="text-lg font-semibold">給与明細</h2>
-        <MyPayslipList payslips={payslips} />
+        <MyPayslipList payslips={payslips} headcountMatters={headcountMatters} />
       </section>
     </div>
   );
