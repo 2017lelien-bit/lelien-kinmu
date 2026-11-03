@@ -28,6 +28,9 @@ export default function SaveImageButton({
 }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // スマホでは、画像のリンクを自動で押すだけのダウンロードが動かないブラウザ(iPhoneのSafariなど)が多いため、
+  // 保存する画像をそのまま画面に出して、「共有・保存」ボタンか長押しで保存してもらう。
+  const [preview, setPreview] = useState<{ url: string; file: File } | null>(null);
 
   async function handleSave() {
     setSaving(true);
@@ -81,16 +84,47 @@ export default function SaveImageButton({
         ctx.imageSmoothingQuality = "high";
         ctx.drawImage(canvas, Math.round((pageW - drawW) / 2), Math.round((pageH - drawH) / 2), drawW, drawH);
       }
-      const dataUrl = outCanvas.toDataURL("image/png");
-      const link = document.createElement("a");
-      link.href = dataUrl;
-      link.download = filename;
-      link.click();
+      const blob = await new Promise<Blob | null>((resolve) => outCanvas.toBlob(resolve, "image/png"));
+      if (!blob) throw new Error("toBlob failed");
+      const file = new File([blob], filename, { type: "image/png" });
+      const url = URL.createObjectURL(blob);
+      const isMobile =
+        /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/i.test(navigator.platform));
+      if (isMobile) {
+        setPreview({ url, file });
+      } else {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+      }
     } catch (e) {
       console.error("[SaveImageButton] failed", e);
       setError("画像の保存に失敗しました。");
     }
     setSaving(false);
+  }
+
+  function closePreview() {
+    if (preview) URL.revokeObjectURL(preview.url);
+    setPreview(null);
+  }
+
+  async function sharePreview() {
+    if (!preview) return;
+    try {
+      if (navigator.canShare?.({ files: [preview.file] })) {
+        await navigator.share({ files: [preview.file] });
+        return;
+      }
+    } catch (e) {
+      // 共有をやめた場合(AbortError)は何もしない。それ以外は、下の長押し保存を案内する。
+      if (e instanceof DOMException && e.name === "AbortError") return;
+    }
+    setError("共有を開けませんでした。画像を長押しして保存してください。");
   }
 
   return (
@@ -103,6 +137,23 @@ export default function SaveImageButton({
         {saving ? "保存中..." : (label ?? "画像として保存")}
       </button>
       {error && <span className="text-xs text-red-600">{error}</span>}
+      {preview && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center gap-3 overflow-auto bg-neutral-900 p-4">
+          <p className="text-center text-sm text-white">
+            「共有・保存」を押して「画像を保存」を選ぶか、画像を長押しして保存してください。
+          </p>
+          <div className="flex gap-2">
+            <button onClick={sharePreview} className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black">
+              共有・保存
+            </button>
+            <button onClick={closePreview} className="rounded-lg border border-white px-4 py-2 text-sm text-white">
+              閉じる
+            </button>
+          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={preview.url} alt="保存する画像" className="max-w-full bg-white" />
+        </div>
+      )}
     </span>
   );
 }
