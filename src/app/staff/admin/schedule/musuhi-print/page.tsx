@@ -92,7 +92,12 @@ export default async function MusuhiSchedulePrintPage({
             </Link>
           ))}
         </span>
-        <SaveImageButton targetId="schedule-capture" filename={`${monthStart.slice(0, 7)}-musuhi-schedule-${type}.png`} />
+        {/* スマホでは画面の幅が狭く、画像の中も窄まって時間の表示がずれるため、PCと同じ幅(720px)で並べて保存する。 */}
+        <SaveImageButton
+          targetId="schedule-capture"
+          filename={`${monthStart.slice(0, 7)}-musuhi-schedule-${type}.png`}
+          layoutWidth={720}
+        />
         {type === "customer" ? (
           <SaveImageButton
             targetId="schedule-capture"
