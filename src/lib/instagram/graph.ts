@@ -35,6 +35,12 @@ function base(cfg: GraphConfig): string {
   return `https://${cfg.host ?? process.env.INSTAGRAM_GRAPH_HOST ?? DEFAULT_HOST}/${cfg.version ?? process.env.INSTAGRAM_GRAPH_API_VERSION ?? DEFAULT_VERSION}`;
 }
 
+// 接続先が graph.facebook.com のとき(Metaの新しいアプリの「統合ログイン」方式。システムユーザーのトークンで、期限がない)。
+// 既定の graph.instagram.com(Instagramログイン方式。トークンは60日で、自動更新が要る)とは、確認と更新のやり方が違う。
+export function usesFacebookHost(host?: string): boolean {
+  return (host ?? process.env.INSTAGRAM_GRAPH_HOST ?? DEFAULT_HOST).toLowerCase().includes("facebook");
+}
+
 // エラーを「トークン問題(再試行しても直らない・スタッフに通知)」「一時的(待てば直る可能性)」「恒久的(画像や内容の問題)」に分類する。
 function classify(httpStatus: number, code: number | null, subcode: number | null, type: string | null): GraphErrorKind {
   if (code === 190 || httpStatus === 401 || type === "OAuthException") {
@@ -124,6 +130,14 @@ export async function publishContainer(cfg: GraphConfig, containerId: string): P
 
 // トークンが有効かの確認(読み取りのみ)。
 export async function verifyToken(cfg: GraphConfig): Promise<{ username: string | null; userId: string | null }> {
+  if (usesFacebookHost(cfg.host)) {
+    // システムユーザーのトークンでは me がシステムユーザー自身になるため、Instagramアカウント(userId)を直接引く。
+    const ig = await request(cfg, "GET", cfg.userId, { fields: "id,username" });
+    return {
+      username: typeof ig.username === "string" ? ig.username : null,
+      userId: ig.id !== undefined && ig.id !== null ? String(ig.id) : null,
+    };
+  }
   const json = await request(cfg, "GET", "me", { fields: "user_id,username" });
   return {
     username: typeof json.username === "string" ? json.username : null,

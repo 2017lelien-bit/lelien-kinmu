@@ -3,6 +3,7 @@ import { getStaffUser } from "@/lib/auth";
 import { DAILY_LIMIT, STORY_FOLDER } from "@/lib/instagram/autopost";
 import { getInstagramSettings, listInstagramLibraryImages, listInstagramTemplates, listRecentInstagramPosts } from "@/lib/instagram/store";
 import { resolveCredentials } from "@/lib/instagram/token";
+import { usesFacebookHost } from "@/lib/instagram/graph";
 import { orderEligibleTemplates } from "@/lib/instagram/template-pick";
 import { InstagramLibrary, InstagramSwitch, InstagramTemplates } from "@/components/staff/InstagramAdmin";
 
@@ -56,9 +57,11 @@ export default async function InstagramAdminPage() {
           <dd>{creds ? "トークン設定済み" : "未設定(トークンまたはユーザーIDがありません)"}</dd>
           <dt className="text-neutral-500">トークンの期限</dt>
           <dd>
-            {settings.tokenExpiresAt
-              ? `${formatJst(settings.tokenExpiresAt)} まで(あと約${daysLeft}日・期限が近づくと自動で更新されます)`
-              : "未確認(最初の自動更新で記録されます)"}
+            {usesFacebookHost()
+              ? "期限なし(毎日、使えるかどうかを自動で確認します)"
+              : settings.tokenExpiresAt
+                ? `${formatJst(settings.tokenExpiresAt)} まで(あと約${daysLeft}日・期限が近づくと自動で更新されます)`
+                : "未確認(最初の自動更新で記録されます)"}
           </dd>
           <dt className="text-neutral-500">残りの文</dt>
           <dd className={remaining <= 4 ? "font-semibold text-red-600" : ""}>承認済みで、まだ出していないもの: {remaining}本{remaining <= 4 ? "(少なくなっています。新しい文を準備して承認してください)" : ""}</dd>

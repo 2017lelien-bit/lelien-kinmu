@@ -1,6 +1,6 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { refreshLongLivedToken, verifyToken } from "@/lib/instagram/graph";
+import { refreshLongLivedToken, usesFacebookHost, verifyToken } from "@/lib/instagram/graph";
 import { sendInstagramAlertEmail } from "@/lib/instagram/alerts";
 import { getInstagramSettings, type InstagramSettings } from "@/lib/instagram/store";
 
@@ -56,13 +56,15 @@ export async function alertTokenProblem(settings: InstagramSettings, subject: st
 
 export type TokenMaintenanceResult =
   | { status: "no_credentials"; alerted: boolean }
+  | { status: "non_expiring" }
+  | { status: "check_failed"; error: string; alerted: boolean }
   | { status: "ok"; daysLeft: number }
   | { status: "would_refresh"; daysLeft: number | null }
   | { status: "refreshed"; expiresAt: string }
   | { status: "refresh_failed"; error: string; daysLeft: number | null; alerted: boolean };
 
 const RENEW_GUIDE =
-  "Meta for Developersでアクセストークンを取得し直し、Vercelの環境変数 INSTAGRAM_ACCESS_TOKEN を新しい値に更新して再デプロイしてください。";
+  "Metaでアクセストークンを取得し直し、Vercelの環境変数 INSTAGRAM_ACCESS_TOKEN を新しい値に更新して再デプロイしてください。";
 
 export async function maintainToken(opts: { dryRun: boolean }): Promise<TokenMaintenanceResult> {
   const settings = await getInstagramSettings();
@@ -84,6 +86,25 @@ export async function maintainToken(opts: { dryRun: boolean }): Promise<TokenMai
               ],
         );
     return { status: "no_credentials", alerted };
+  }
+
+  // 統合ログイン方式(graph.facebook.com)のシステムユーザートークンは期限がなく、更新も要らない。
+  // 代わりに、トークンがまだ使えるかだけを毎日確かめ、使えなくなっていたらスタッフに知らせる。
+  if (usesFacebookHost()) {
+    try {
+      await verifyToken({ userId: creds.userId, token: creds.token });
+      return { status: "non_expiring" };
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      const alerted = opts.dryRun
+        ? false
+        : await alertTokenProblem(settings, "Instagramの接続を確認できませんでした", [
+            "Instagram自動投稿のアクセストークンが使えなくなっている可能性があります。",
+            `エラー: ${message}`,
+            RENEW_GUIDE,
+          ]);
+      return { status: "check_failed", error: message, alerted };
+    }
   }
 
   const expiresAtMs = creds.expiresAt ? new Date(creds.expiresAt).getTime() : null;

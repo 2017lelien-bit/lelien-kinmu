@@ -5,7 +5,9 @@ import { maintainToken, resolveCredentials } from "@/lib/instagram/token";
 
 export const dynamic = "force-dynamic";
 
-// Vercel Cronから毎日1回呼び出され、Instagramのアクセストークン(有効60日)の期限を確認する。
+// Vercel Cronから毎日1回呼び出され、Instagramのアクセストークンを確認する。
+//  - INSTAGRAM_GRAPH_HOST=graph.facebook.com(統合ログイン・期限なし)のときは、更新せず、使えるかどうかだけを確認する。
+//  - 既定(graph.instagram.com)のトークンは有効60日で、次のとおり更新する。
 //  - 期限の14日前から自動で更新する。更新できない・失効している場合はスタッフ(STAFF_NOTIFICATION_EMAILS)にメールで知らせる。
 //  - INSTAGRAM_AUTOPOST_ENABLED=true にするまで何もしない。?dryRun=1 なら状態を返すだけで更新も通知もしない。
 export async function GET(request: NextRequest) {
