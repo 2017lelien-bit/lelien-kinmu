@@ -41,9 +41,9 @@ function normalize(text: string): string {
 
 // 渡部さんの判断(2026-11-09)で、次のフレーズだけは、禁止語を含んでいても使える。
 //  - 「姿勢改善」: 運動の一般的な説明として(「〜に役立つ」の形で使う)
-//  - 「自律神経を整えるヨガ」: Le lienの実際のクラス名として、そのままの形だけ
-// これ以外の「改善」「自律神経」の使い方は、これまでどおり止まる。
-const ALLOWED_PHRASES = ["姿勢改善", "自律神経を整えるヨガ"];
+//  - 「自律神経を整えるヨガ」「Fデトックス」「セルフマッサージ」: Le lienの実際のクラス名として、そのままの形だけ(2026-11-09)
+// これ以外の「改善」「自律神経」「デトックス」「マッサージ」の使い方は、これまでどおり止まる。
+const ALLOWED_PHRASES = ["姿勢改善", "自律神経を整えるヨガ", "Fデトックス", "セルフマッサージ"];
 
 export function findForbiddenTerms(text: string): ForbiddenHit[] {
   let normalized = normalize(text);
