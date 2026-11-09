@@ -39,8 +39,15 @@ function normalize(text: string): string {
   return text.normalize("NFKC").replace(/\s+/g, "").toLowerCase();
 }
 
+// 渡部さんの判断(2026-11-09)で、次のフレーズだけは、禁止語を含んでいても使える。
+//  - 「姿勢改善」: 運動の一般的な説明として(「〜に役立つ」の形で使う)
+//  - 「自律神経を整えるヨガ」: Le lienの実際のクラス名として、そのままの形だけ
+// これ以外の「改善」「自律神経」の使い方は、これまでどおり止まる。
+const ALLOWED_PHRASES = ["姿勢改善", "自律神経を整えるヨガ"];
+
 export function findForbiddenTerms(text: string): ForbiddenHit[] {
-  const normalized = normalize(text);
+  let normalized = normalize(text);
+  for (const phrase of ALLOWED_PHRASES) normalized = normalized.split(normalize(phrase)).join("");
   const hits: ForbiddenHit[] = [];
   const seen = new Set<string>();
   for (const [category, terms] of Object.entries(FORBIDDEN_TERMS) as [ForbiddenHit["category"], string[]][]) {
