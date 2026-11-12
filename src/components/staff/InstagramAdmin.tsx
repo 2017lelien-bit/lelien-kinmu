@@ -22,6 +22,51 @@ import type { InstagramLibraryImage, InstagramTemplate } from "@/lib/instagram/s
 const INPUT = "rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800";
 const BTN_DARK = "rounded-lg bg-neutral-900 px-3 py-1.5 text-white disabled:opacity-40 dark:bg-white dark:text-black";
 
+// 画面の中で確認する小さなボタン(ブラウザの確認ダイアログは、環境によって出ない・反応しないことがあるため使わない)。
+// 1回目を押すと「本当によいですか?」と出て、「はい」を押したときだけ実行する。
+function ConfirmButton({
+  label,
+  question,
+  yesLabel = "はい",
+  onConfirm,
+  disabled,
+  className,
+}: {
+  label: string;
+  question: string;
+  yesLabel?: string;
+  onConfirm: () => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  const [asking, setAsking] = useState(false);
+  if (!asking) {
+    return (
+      <button disabled={disabled} onClick={() => setAsking(true)} className={className}>
+        {label}
+      </button>
+    );
+  }
+  return (
+    <span className="flex flex-wrap items-center gap-2">
+      <span className="text-red-600">{question}</span>
+      <button
+        disabled={disabled}
+        onClick={() => {
+          setAsking(false);
+          onConfirm();
+        }}
+        className="rounded bg-red-600 px-2 py-0.5 text-white disabled:opacity-40"
+      >
+        {yesLabel}
+      </button>
+      <button onClick={() => setAsking(false)} className="text-neutral-500 underline">
+        やめる
+      </button>
+    </span>
+  );
+}
+
 // 自動投稿のスイッチ。環境変数 INSTAGRAM_AUTOPOST_ENABLED=true と両方ONのときだけ、実際に投稿される。
 export function InstagramSwitch({ enabled }: { enabled: boolean }) {
   const router = useRouter();
@@ -29,7 +74,6 @@ export function InstagramSwitch({ enabled }: { enabled: boolean }) {
   const [error, setError] = useState<string | null>(null);
 
   async function toggle() {
-    if (!enabled && !window.confirm("自動投稿のスイッチをONにします。承認した文が、毎日自動でストーリーズに出るようになります。よろしいですか?")) return;
     setBusy(true);
     setError(null);
     const res = await setInstagramStoryEnabled(!enabled);
@@ -43,9 +87,20 @@ export function InstagramSwitch({ enabled }: { enabled: boolean }) {
       <span className={enabled ? "font-semibold text-green-700" : "font-semibold text-amber-700"}>
         スイッチ: {enabled ? "ON" : "OFF"}
       </span>
-      <button onClick={toggle} disabled={busy} className={BTN_DARK}>
-        {enabled ? "OFFにする" : "ONにする"}
-      </button>
+      {enabled ? (
+        <button onClick={toggle} disabled={busy} className={BTN_DARK}>
+          OFFにする
+        </button>
+      ) : (
+        <ConfirmButton
+          label="ONにする"
+          question="ONにします。承認した文が、毎日自動でストーリーズに出るようになります。よろしいですか?"
+          yesLabel="はい、ONにする"
+          onConfirm={toggle}
+          disabled={busy}
+          className={BTN_DARK}
+        />
+      )}
       {error && <span className="text-red-600">{error}</span>}
     </div>
   );
@@ -268,15 +323,14 @@ function TemplateRow({ t }: { t: InstagramTemplate }) {
             {t.isActive ? "使わない" : "使う"}
           </button>
         )}
-        <button
+        <ConfirmButton
+          label="削除"
+          question={`「${t.title}」を削除します。元に戻せません。`}
+          yesLabel="削除する"
           disabled={busy}
-          onClick={() => {
-            if (window.confirm(`「${t.title}」を削除します。元に戻せません。よろしいですか?`)) run(() => deleteInstagramTemplate(t.id));
-          }}
+          onConfirm={() => run(() => deleteInstagramTemplate(t.id))}
           className="text-red-600 underline"
-        >
-          削除
-        </button>
+        />
       </div>
     </li>
   );
@@ -346,6 +400,53 @@ async function toJpegBlob(file: File): Promise<Blob> {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob"))), "image/jpeg", 0.88));
+}
+
+// 写真の移動先のフォルダを、画面の中で選ぶ(ブラウザの入力ダイアログは使わない)。
+function MoveControl({
+  current,
+  folders,
+  disabled,
+  onMove,
+}: {
+  current: string;
+  folders: string[];
+  disabled: boolean;
+  onMove: (to: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [to, setTo] = useState(current);
+  if (!open) {
+    return (
+      <button disabled={disabled} onClick={() => setOpen(true)} className="text-neutral-500 underline">
+        移動
+      </button>
+    );
+  }
+  return (
+    <span className="flex flex-wrap items-center gap-1">
+      <select value={to} onChange={(e) => setTo(e.target.value)} className="rounded border border-neutral-300 px-1 py-0.5 dark:border-neutral-700 dark:bg-transparent">
+        {folders.map((f) => (
+          <option key={f} value={f}>
+            {f}
+          </option>
+        ))}
+      </select>
+      <button
+        disabled={disabled || to === current}
+        onClick={() => {
+          setOpen(false);
+          onMove(to);
+        }}
+        className="rounded bg-neutral-900 px-2 py-0.5 text-white disabled:opacity-40 dark:bg-white dark:text-black"
+      >
+        移す
+      </button>
+      <button onClick={() => setOpen(false)} className="text-neutral-500 underline">
+        やめる
+      </button>
+    </span>
+  );
 }
 
 // 写真ライブラリ: フォルダ「ストーリー背景」に写真を入れておくと、ストーリーズのたびに最近使っていないものが自動で選ばれる。
@@ -453,25 +554,20 @@ export function InstagramLibrary({ images, defaultFolder }: { images: InstagramL
                         <button disabled={busy} onClick={() => run(() => setInstagramLibraryImageActive(img.id, !img.isActive))} className="text-neutral-500 underline">
                           {img.isActive ? "使わない" : "使う"}
                         </button>
-                        <button
+                        <MoveControl
+                          current={img.folder}
+                          folders={folders}
                           disabled={busy}
-                          onClick={() => {
-                            const to = window.prompt("移動先のフォルダ名", img.folder);
-                            if (to && to.trim() && to.trim() !== img.folder) run(() => moveInstagramLibraryImage(img.id, to));
-                          }}
-                          className="text-neutral-500 underline"
-                        >
-                          移動
-                        </button>
-                        <button
+                          onMove={(to) => run(() => moveInstagramLibraryImage(img.id, to))}
+                        />
+                        <ConfirmButton
+                          label="削除"
+                          question="この写真を削除します。"
+                          yesLabel="削除する"
                           disabled={busy}
-                          onClick={() => {
-                            if (window.confirm("この写真を削除します。よろしいですか?")) run(() => deleteInstagramLibraryImage(img.id));
-                          }}
+                          onConfirm={() => run(() => deleteInstagramLibraryImage(img.id))}
                           className="text-red-600 underline"
-                        >
-                          削除
-                        </button>
+                        />
                       </div>
                     </li>
                   ))}
