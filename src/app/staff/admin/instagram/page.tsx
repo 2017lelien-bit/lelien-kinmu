@@ -5,7 +5,7 @@ import { getInstagramSettings, listInstagramLibraryImages, listInstagramTemplate
 import { resolveCredentials } from "@/lib/instagram/token";
 import { usesFacebookHost } from "@/lib/instagram/graph";
 import { orderEligibleTemplates } from "@/lib/instagram/template-pick";
-import { InstagramConnectionCheck, InstagramLibrary, InstagramSwitch, InstagramTemplates } from "@/components/staff/InstagramAdmin";
+import { InstagramConnectionCheck, InstagramLibrary, InstagramSwitch, InstagramTemplates, InstagramTokenForm } from "@/components/staff/InstagramAdmin";
 
 const STATUS_LABEL: Record<string, string> = {
   claimed: "投稿処理中",
@@ -67,6 +67,7 @@ export default async function InstagramAdminPage() {
           <dd className={remaining <= 4 ? "font-semibold text-red-600" : ""}>承認済みで、まだ出していないもの: {remaining}本{remaining <= 4 ? "(少なくなっています。新しい文を準備して承認してください)" : ""}</dd>
         </dl>
         <InstagramConnectionCheck />
+        <InstagramTokenForm />
         <InstagramSwitch enabled={settings.storyEnabled} />
         <p className="text-xs text-neutral-400">「動いています」になるのは、Vercelの許可とこの画面のスイッチが、両方ONのときだけです。</p>
       </section>

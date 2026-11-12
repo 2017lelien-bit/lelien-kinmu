@@ -9,6 +9,7 @@ import {
   deleteInstagramLibraryImage,
   deleteInstagramTemplate,
   moveInstagramLibraryImage,
+  saveInstagramToken,
   setInstagramLibraryImageActive,
   setInstagramStoryEnabled,
   setInstagramTemplateActive,
@@ -72,6 +73,48 @@ export function InstagramConnectionCheck() {
       <button onClick={check} disabled={busy} className={BTN_DARK}>
         {busy ? "確認中…" : "接続を確認する"}
       </button>
+      {result && <span className={result.ok ? "font-semibold text-green-700" : "text-red-600"}>{result.text}</span>}
+    </div>
+  );
+}
+
+// アクセストークンの貼り付け・保存(管理者のみ)。保存前に、Instagramのアカウントが読めるか確かめる。値は画面に出さない。
+export function InstagramTokenForm() {
+  const router = useRouter();
+  const [token, setToken] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function save() {
+    setBusy(true);
+    setResult(null);
+    const res = await saveInstagramToken({ token });
+    setBusy(false);
+    if (res.ok) {
+      setToken("");
+      setResult({ ok: true, text: `保存しました(アカウント: ${res.data.username ?? "不明"})。` });
+      router.refresh();
+    } else {
+      setResult({ ok: false, text: res.error });
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2 text-sm">
+      <span className="text-neutral-500">トークンを貼り付けて保存(貼り付けた文字は、画面に出ません)</span>
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          type="password"
+          autoComplete="off"
+          value={token}
+          onChange={(e) => setToken(e.target.value)}
+          placeholder="ここに貼り付け"
+          className={`${INPUT} min-w-[16rem] flex-1`}
+        />
+        <button onClick={save} disabled={busy || !token.trim()} className={BTN_DARK}>
+          {busy ? "確認して保存中…" : "確認して保存する"}
+        </button>
+      </div>
       {result && <span className={result.ok ? "font-semibold text-green-700" : "text-red-600"}>{result.text}</span>}
     </div>
   );

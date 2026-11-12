@@ -63,6 +63,37 @@ export async function checkInstagramConnection(): Promise<ActionResult<{ usernam
   }
 }
 
+// アクセストークンの保存(管理画面から貼り付け)。保存前に、そのトークンで INSTAGRAM_USER_ID のアカウントが読めることを確かめる。
+// 保存したトークンは、環境変数 INSTAGRAM_ACCESS_TOKEN より優先して使われる(期限なし扱い・自動更新はしない)。
+// トークンの値は、画面にも返事にも出さない。
+export async function saveInstagramToken(input: { token: string }): Promise<ActionResult<{ username: string | null }>> {
+  if (!(await requireAdmin())) return NOT_ADMIN;
+  const token = input.token.trim();
+  if (token.length < 50 || /\s/.test(token)) {
+    return { ok: false, error: "トークンの形が正しくありません。コピーした文字を、そのまま貼り付けてください。" };
+  }
+  const userId = process.env.INSTAGRAM_USER_ID?.trim();
+  if (!userId) return { ok: false, error: "INSTAGRAM_USER_ID が設定されていません。" };
+  let username: string | null;
+  try {
+    const me = await verifyToken({ userId, token });
+    if (me.userId !== null && me.userId !== userId) {
+      return { ok: false, error: "このトークンでは、INSTAGRAM_USER_ID のアカウントを読めませんでした。" };
+    }
+    username = me.username;
+  } catch (e) {
+    return { ok: false, error: `このトークンは使えませんでした: ${(e as Error).message}` };
+  }
+  const admin = createAdminClient();
+  const now = new Date().toISOString();
+  const { error } = await admin
+    .from("instagram_settings")
+    .upsert({ id: 1, access_token: token, token_expires_at: null, token_refreshed_at: now, updated_at: now });
+  if (error) return { ok: false, error: "保存に失敗しました。" };
+  revalidatePath(PAGE);
+  return { ok: true, data: { username } };
+}
+
 export async function createInstagramTemplate(input: { title: string; body: string }): Promise<ActionResult> {
   if (!(await requireAdmin())) return NOT_ADMIN;
   const title = input.title.trim();
