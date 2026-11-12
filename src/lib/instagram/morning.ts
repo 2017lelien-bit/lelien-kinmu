@@ -1,5 +1,5 @@
 import { dayOfWeekForDate } from "@/lib/date";
-import { CLOSED_DAY_LINES, MORNING_MESSAGES, MORNING_SCHEDULE } from "@/lib/instagram/morning-data";
+import { CLOSED_DAY_LINES, CLOSED_DAY_LINES_TOMORROW_OPEN, MORNING_MESSAGES, MORNING_SCHEDULE } from "@/lib/instagram/morning-data";
 
 // 朝のストーリーズ(あいさつ + 今日のレッスン + 前向きな一言)の、画像に載せる行を作る。
 // 文章は、渡部さんが確認した一言(morning-data.ts)と、スケジュールの項目をそのまま並べるだけ。AIが文章を作ることはしない。
@@ -19,11 +19,22 @@ export function pickMorningMessage(date: string): string[] {
   return MORNING_MESSAGES[dayNumber % MORNING_MESSAGES.length];
 }
 
+function nextDate(date: string): string {
+  const [y, m, d] = date.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+}
+
+// 休館日の文。次の日が営業日だとデータでわかるときだけ「明日から」と書く。
+function closedDayLines(date: string): string[] {
+  const next = MORNING_SCHEDULE[nextDate(date)];
+  return next && !next.closed ? CLOSED_DAY_LINES_TOMORROW_OPEN : CLOSED_DAY_LINES;
+}
+
 // その日の行。スケジュールのデータがない日は null(出さない)。
 export function buildMorningLines(date: string): string[] | null {
   const day = MORNING_SCHEDULE[date];
   if (!day) return null;
-  const head = ["おはようございます", "", ...(day.closed ? [formatMorningDate(date), ...CLOSED_DAY_LINES] : [`${formatMorningDate(date)} 今日のクラス`, ...day.items])];
+  const head = ["おはようございます", "", ...(day.closed ? [formatMorningDate(date), ...closedDayLines(date)] : [`${formatMorningDate(date)} 今日のクラス`, ...day.items])];
   if (day.closed) return head;
   return [...head, "", ...pickMorningMessage(date)];
 }

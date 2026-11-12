@@ -72,4 +72,7 @@ export const MORNING_MESSAGES: string[][] = [
 ];
 
 // 休館日の一言。
-export const CLOSED_DAY_LINES: string[] = ["本日は、休館日です。", "ゆっくり休んで、", "また、お会いしましょう。"];
+// 休館日の文(渡部さんの指示 2026-11-12: 「また、お会いしましょう」ではなく、明日につながる言葉に)。
+// 次の日が営業日だとデータでわかるときだけ「明日から」と書く。次の日のデータがない・その日も休館のときは、明日と言わない言い方にする。
+export const CLOSED_DAY_LINES_TOMORROW_OPEN: string[] = ["本日は、休館日です。", "ゆっくり休んで、", "明日からまた、一緒に動きましょう。"];
+export const CLOSED_DAY_LINES: string[] = ["本日は、休館日です。", "ゆっくり休んで、", "元気に、また動き出しましょう。"];
