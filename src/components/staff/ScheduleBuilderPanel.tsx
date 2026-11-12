@@ -252,6 +252,17 @@ export default function ScheduleBuilderPanel({
     if (closed) setClosureNote("");
   }
 
+  // 通信エラーなどで処理が途中で止まっても、「保存中...」のまま画面が固まらないようにする。
+  async function safely(fn: () => Promise<void>) {
+    try {
+      await fn();
+    } catch (e) {
+      console.error("[inline edit] failed", e);
+      setEditBusy(false);
+      setEditError("通信に失敗しました。もう一度お試しください(画面の再読み込みで直ることもあります)。");
+    }
+  }
+
   function closeEditor() {
     setEditTarget(null);
     setEditError(null);
@@ -1390,7 +1401,7 @@ export default function ScheduleBuilderPanel({
                   {draftKind === "lesson" && lessonInput}
                   <button
                     type="button"
-                    onClick={() => handleInlineAdd(editTarget.date)}
+                    onClick={() => safely(() => handleInlineAdd(editTarget.date))}
                     disabled={editBusy}
                     className="rounded-lg bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-40 dark:bg-white dark:text-black"
                   >
@@ -1432,7 +1443,7 @@ export default function ScheduleBuilderPanel({
                   )}
                   <button
                     type="button"
-                    onClick={() => handleInlineSaveEntry(entry)}
+                    onClick={() => safely(() => handleInlineSaveEntry(entry))}
                     disabled={editBusy}
                     className="rounded-lg bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-40 dark:bg-white dark:text-black"
                   >
@@ -1440,7 +1451,7 @@ export default function ScheduleBuilderPanel({
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleInlineUnconfirm(entry)}
+                    onClick={() => safely(() => handleInlineUnconfirm(entry))}
                     disabled={editBusy}
                     className="rounded-lg border border-neutral-300 px-3 py-2 text-sm disabled:opacity-40 dark:border-neutral-700"
                   >
@@ -1448,7 +1459,7 @@ export default function ScheduleBuilderPanel({
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleInlineDelete(entry)}
+                    onClick={() => safely(() => handleInlineDelete(entry))}
                     disabled={editBusy}
                     className="rounded-lg border border-red-300 px-3 py-2 text-sm text-red-600 disabled:opacity-40"
                   >
@@ -1470,7 +1481,7 @@ export default function ScheduleBuilderPanel({
                 {timeInputs(true)}
                 <button
                   type="button"
-                  onClick={() => handleInlineSaveMusuhi(shift)}
+                  onClick={() => safely(() => handleInlineSaveMusuhi(shift))}
                   disabled={editBusy}
                   className="rounded-lg bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-40 dark:bg-white dark:text-black"
                 >
@@ -1478,7 +1489,7 @@ export default function ScheduleBuilderPanel({
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleInlineDeleteMusuhi(shift)}
+                  onClick={() => safely(() => handleInlineDeleteMusuhi(shift))}
                   disabled={editBusy}
                   className="rounded-lg border border-red-300 px-3 py-2 text-sm text-red-600 disabled:opacity-40"
                 >

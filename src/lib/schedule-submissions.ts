@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStaffUser, resolveActingStaffId } from "@/lib/auth";
-import { addDaysToDateString, dayOfWeekForDate } from "@/lib/date";
+import { addDaysToDateString, dayOfWeekForDate, monthEnd } from "@/lib/date";
 import { CLOSED_DAY_OF_WEEK, normalizeLessonName } from "@/lib/types";
 import { invalidateScheduleConfirmation } from "@/lib/schedule-confirmations";
 import type { ActionResult, LessonOption, ScheduleSubmission, ScheduleTemplate } from "@/lib/types";
@@ -491,10 +491,65 @@ export async function submitSchedule(monthStart: string, note?: string, staffId?
     );
   if (error) return { ok: false, error: "提出に失敗しました。" };
 
+  // 提出した時点の内容を残す(後から管理者が直しても、最初に出された内容を見られるようにする)。
+  // 記録に失敗しても、提出そのものは成功させる。
+  const { data: current } = await admin
+    .from("schedule_submissions")
+    .select("entry_date, kind, start_time, end_time, lesson_name, break_minutes, note")
+    .eq("staff_id", acting.id)
+    .gte("entry_date", monthStart)
+    .lte("entry_date", monthEnd(monthStart))
+    .order("entry_date", { ascending: true })
+    .order("start_time", { ascending: true });
+  const { error: snapshotError } = await admin.from("schedule_submission_snapshots").insert({
+    staff_id: acting.id,
+    month_start: monthStart,
+    note: note?.trim() || null,
+    entries: current ?? [],
+  });
+  if (snapshotError) console.error("[submitSchedule] snapshot failed", snapshotError.message);
+
   revalidatePath("/staff/mypage");
   revalidatePath(`/staff/admin/staff/${acting.id}`);
   revalidatePath("/staff/admin/schedule");
   return { ok: true, data: undefined };
+}
+
+export interface SubmissionSnapshot {
+  id: string;
+  staffId: string;
+  submittedAt: string;
+  note: string | null;
+  entries: {
+    entry_date: string;
+    kind: "reception" | "lesson" | "unavailable";
+    start_time: string | null;
+    end_time: string | null;
+    lesson_name: string | null;
+    break_minutes: number | null;
+    note: string | null;
+  }[];
+}
+
+// 各スタッフが提出した時点の内容(古い順)。提出のたびに1件ずつ残る。
+export async function getSubmissionSnapshots(monthStart: string): Promise<SubmissionSnapshot[]> {
+  const adminCheck = await requireAdmin();
+  if (adminCheck) return [];
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("schedule_submission_snapshots")
+    .select("id, staff_id, submitted_at, note, entries")
+    .eq("month_start", monthStart)
+    .order("submitted_at", { ascending: true });
+  if (error) return [];
+  return (data ?? []).map((r) => ({
+    id: r.id as string,
+    staffId: r.staff_id as string,
+    submittedAt: r.submitted_at as string,
+    note: (r.note as string | null) ?? null,
+    entries: r.entries as SubmissionSnapshot["entries"],
+  }));
 }
 
 // 管理者が、対象月の全スタッフ分の提出状況を一覧で確認できるようにする。

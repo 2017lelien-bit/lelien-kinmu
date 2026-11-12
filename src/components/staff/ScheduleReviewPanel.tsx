@@ -4,7 +4,9 @@ import { useState } from "react";
 import {
   getAllScheduleSubmissions,
   getScheduleSubmissionStatusList,
+  getSubmissionSnapshots,
   setScheduleEntryConfirmed,
+  type SubmissionSnapshot,
 } from "@/lib/schedule-submissions";
 import { formatDateTimeJst, monthEnd } from "@/lib/date";
 import { SCHEDULE_KIND_LABEL } from "@/lib/types";
@@ -22,14 +24,17 @@ export default function ScheduleReviewPanel({
   initialMonthStart,
   initialEntries,
   initialStatusList,
+  initialSnapshots,
 }: {
   initialMonthStart: string;
   initialEntries: EntryWithName[];
   initialStatusList: StatusRow[];
+  initialSnapshots: SubmissionSnapshot[];
 }) {
   const [monthStart, setMonthStart] = useState(initialMonthStart);
   const [entries, setEntries] = useState(initialEntries);
   const [statusList, setStatusList] = useState(initialStatusList);
+  const [snapshots, setSnapshots] = useState(initialSnapshots);
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -37,13 +42,15 @@ export default function ScheduleReviewPanel({
   async function handleShowMonth() {
     setLoading(true);
     setError(null);
-    const [data, status] = await Promise.all([
+    const [data, status, snaps] = await Promise.all([
       getAllScheduleSubmissions(monthStart, monthEnd(monthStart)),
       getScheduleSubmissionStatusList(monthStart),
+      getSubmissionSnapshots(monthStart),
     ]);
     setLoading(false);
     setEntries(data);
     setStatusList(status);
+    setSnapshots(snaps);
   }
 
   async function handleToggleConfirmed(entry: EntryWithName) {
@@ -166,6 +173,46 @@ export default function ScheduleReviewPanel({
                     <span className="text-xs text-red-600">未提出</span>
                   )}
                 </div>
+                {(() => {
+                  const mine = snapshots.filter((x) => x.staffId === staffId);
+                  if (mine.length === 0) {
+                    return (
+                      <p className="mb-2 text-xs text-neutral-400">
+                        提出時の内容の記録はありません(この機能を入れる前に提出された分は、残っていません)。
+                      </p>
+                    );
+                  }
+                  return (
+                    <details className="mb-2 rounded border border-neutral-200 p-2 text-xs dark:border-neutral-800">
+                      <summary className="cursor-pointer font-semibold">
+                        提出時の内容を見る(提出{mine.length}回: 最初は{formatDateTimeJst(mine[0].submittedAt)})
+                      </summary>
+                      <div className="mt-2 flex flex-col gap-3">
+                        {mine.map((snap, i) => (
+                          <div key={snap.id}>
+                            <p className="font-semibold">
+                              {i === 0 ? "最初の提出" : `${i + 1}回目の提出`}({formatDateTimeJst(snap.submittedAt)}・{snap.entries.length}件)
+                              {snap.note ? `  📝 ${snap.note}` : ""}
+                            </p>
+                            <ul className="mt-1 flex flex-col gap-0.5">
+                              {snap.entries.map((e, j) => (
+                                <li key={j} className="flex flex-wrap gap-x-3">
+                                  <span className="text-neutral-400">{e.entry_date}</span>
+                                  <span>
+                                    {e.start_time ? e.start_time.slice(0, 5) : "終日"}
+                                    {e.end_time ? `〜${e.end_time.slice(0, 5)}` : ""}
+                                  </span>
+                                  <span>{e.kind === "lesson" ? (e.lesson_name ?? "レッスン希望(内容は未定)") : SCHEDULE_KIND_LABEL[e.kind]}</span>
+                                  {e.note && <span>📝 {e.note}</span>}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  );
+                })()}
                 <ul className="flex flex-col gap-2 text-sm">
                   {group.entries.map((e) => (
                     <li key={e.id} className="flex flex-wrap items-center gap-3">

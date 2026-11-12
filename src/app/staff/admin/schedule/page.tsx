@@ -4,6 +4,7 @@ import {
   getAllScheduleSubmissions,
   getLessonOptionsByStaff,
   getScheduleSubmissionStatusList,
+  getSubmissionSnapshots,
 } from "@/lib/schedule-submissions";
 import { getScheduleNotes } from "@/lib/schedule-notes";
 import { getScheduleConfirmationStatusList } from "@/lib/schedule-confirmations";
@@ -37,6 +38,7 @@ export default async function AdminSchedulePage() {
     confirmationStatusList,
     musuhiNotes,
     lastMusuhiPublish,
+    submissionSnapshots,
   ] = await Promise.all([
     getAllScheduleSubmissions(initialMonthStart, monthEnd(initialMonthStart)),
     getScheduleSubmissionStatusList(initialMonthStart),
@@ -51,6 +53,7 @@ export default async function AdminSchedulePage() {
     getScheduleConfirmationStatusList(initialMonthStart),
     getMusuhiNotes(initialMonthStart, monthEnd(initialMonthStart)),
     getLastMusuhiPublish(),
+    getSubmissionSnapshots(initialMonthStart),
   ]);
   const staffList = allStaff
     .filter((s) => s.is_active)
@@ -65,7 +68,12 @@ export default async function AdminSchedulePage() {
         <p className="text-sm text-neutral-500">
           スタッフが提出した来月のスケジュール(受付・レッスン)を1人ずつ確認し、内容が確定したものにチェックを入れてください。
         </p>
-        <ScheduleReviewPanel initialMonthStart={initialMonthStart} initialEntries={entries} initialStatusList={statusList} />
+        <ScheduleReviewPanel
+          initialMonthStart={initialMonthStart}
+          initialEntries={entries}
+          initialStatusList={statusList}
+          initialSnapshots={submissionSnapshots}
+        />
       </div>
 
       <div className="flex flex-col gap-4 border-t border-neutral-200 pt-8 dark:border-neutral-800">
