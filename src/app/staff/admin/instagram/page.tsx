@@ -4,7 +4,7 @@ import { DAILY_LIMIT, STORY_FOLDER } from "@/lib/instagram/autopost";
 import { getInstagramSettings, listInstagramLibraryImages, listInstagramTemplates, listRecentInstagramPosts } from "@/lib/instagram/store";
 import { resolveCredentials } from "@/lib/instagram/token";
 import { usesFacebookHost } from "@/lib/instagram/graph";
-import { orderEligibleTemplates } from "@/lib/instagram/template-pick";
+import { CLASS_BACKGROUND_FOLDERS, orderEligibleTemplates } from "@/lib/instagram/template-pick";
 import { todayJstDateString } from "@/lib/date";
 import { MORNING_SCHEDULE } from "@/lib/instagram/morning-data";
 import { InstagramConnectionCheck, InstagramLibrary, InstagramMorningPreview, InstagramSwitch, InstagramTemplates, InstagramTokenForm } from "@/components/staff/InstagramAdmin";
@@ -94,7 +94,7 @@ export default async function InstagramAdminPage() {
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">背景の写真</h2>
-        <InstagramLibrary images={libraryImages} defaultFolder={STORY_FOLDER} />
+        <InstagramLibrary images={libraryImages} defaultFolder={STORY_FOLDER} classFolders={CLASS_BACKGROUND_FOLDERS.map((c) => c.folder)} />
       </section>
 
       <section className="flex flex-col gap-3">

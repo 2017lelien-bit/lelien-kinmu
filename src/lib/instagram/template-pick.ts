@@ -73,6 +73,7 @@ export const CLASS_BACKGROUND_FOLDERS: { pattern: RegExp; folder: string }[] = [
   { pattern: /4D/i, folder: "背景_4Dpro" },
   { pattern: /ハンモック/, folder: "背景_ハンモック" },
   { pattern: /ティシュー|ティッシュ/, folder: "背景_ティシュー" },
+  { pattern: /フロア/, folder: "背景_フロアクラス" },
 ];
 
 export function classBackgroundFolder(title: string): string | null {

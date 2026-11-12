@@ -450,9 +450,18 @@ function MoveControl({
 }
 
 // 写真ライブラリ: フォルダ「ストーリー背景」に写真を入れておくと、ストーリーズのたびに最近使っていないものが自動で選ばれる。
-export function InstagramLibrary({ images, defaultFolder }: { images: InstagramLibraryImage[]; defaultFolder: string }) {
+export function InstagramLibrary({
+  images,
+  defaultFolder,
+  classFolders = [],
+}: {
+  images: InstagramLibraryImage[];
+  defaultFolder: string;
+  classFolders?: string[];
+}) {
   const router = useRouter();
-  const folders = Array.from(new Set([defaultFolder, ...images.map((i) => i.folder)]));
+  // 写真がまだ入っていなくても、クラス別のフォルダは、選べるようにしておく。
+  const folders = Array.from(new Set([defaultFolder, ...classFolders, ...images.map((i) => i.folder)]));
   const [folder, setFolder] = useState(defaultFolder);
   const [progress, setProgress] = useState<string | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
@@ -515,7 +524,7 @@ export function InstagramLibrary({ images, defaultFolder }: { images: InstagramL
         {progress && <span className="text-neutral-500">{progress}</span>}
       </div>
       <p className="text-xs text-neutral-400">
-        ストーリーズの背景に使うのは、フォルダ「{defaultFolder}」の写真だけです。縦長の写真がきれいです(横長の写真は、中央が切り出されます)。
+        ストーリーズの背景に使うのは、フォルダ「{defaultFolder}」と、クラス別のフォルダ({classFolders.join("・")})の写真です。クラス別のフォルダは、文の名前にそのクラス名が入っているときと、朝のストーリーズで使われます。縦長の写真がきれいです(横長の写真は、中央が切り出されます)。
         文字が読みやすいよう、自動で暗くします。お客様の顔が写っている写真は、ご本人の許可があるものだけにしてください。
         写真がないときは、シンプルな背景に「Le lien」の文字が入った版で出ます。
       </p>
