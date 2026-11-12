@@ -262,6 +262,11 @@ export default function ScheduleBuilderPanel({
     setEditError(null);
     setEditMessage(null);
     if (kind) setDraftKind(kind);
+    setDraftStaffId(staffList[0]?.id ?? "");
+    setDraftStart("09:00");
+    setDraftEnd("13:00");
+    setDraftLesson("");
+    setDraftBreak(0);
     setEditTarget({ type: "add", date });
   }
 
@@ -732,12 +737,15 @@ export default function ScheduleBuilderPanel({
                 (() => {
                   const lessonOptions = lessonOptionsByStaff[selected.staff_id] ?? [];
                   const currentName = selected.lesson_name ?? "";
-                  const inOptions = lessonOptions.some((o) => o.name === currentName);
+                  // 保存時に全角/半角が揃えられる(例: 「～」→「~」)ため、正規化して比較する。
+                  const sameName = (a: string, b: string) => a.normalize("NFKC").trim() === b.normalize("NFKC").trim();
+                  const matchedOption = lessonOptions.find((o) => sameName(o.name, currentName));
+                  const inOptions = !!matchedOption;
                   const showCustomInput = customLessonNameIds.has(selected.id) || (currentName !== "" && !inOptions);
                   return (
                     <div className="flex flex-col gap-0.5">
                       <select
-                        value={showCustomInput ? "__custom__" : currentName}
+                        value={showCustomInput ? "__custom__" : (matchedOption?.name ?? currentName)}
                         onChange={(e) => {
                           if (e.target.value === "__custom__") {
                             setCustomLessonNameIds((prev) => new Set(prev).add(selected.id));
