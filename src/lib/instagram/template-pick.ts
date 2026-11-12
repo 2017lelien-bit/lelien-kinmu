@@ -87,7 +87,12 @@ export function pickBackgroundForTitle<T extends LibraryImageLike>(images: T[], 
 }
 
 export function pickLibraryImage<T extends LibraryImageLike>(images: T[], folder: string): T | null {
-  const candidates = images.filter((i) => i.isActive && i.folder === folder);
+  return pickLibraryImageFromFolders(images, [folder]);
+}
+
+// 複数のフォルダをまとめて、最近使っていない写真を選ぶ(朝のストーリーズは、クラス別の写真をまんべんなく使う)。
+export function pickLibraryImageFromFolders<T extends LibraryImageLike>(images: T[], folders: string[]): T | null {
+  const candidates = images.filter((i) => i.isActive && folders.includes(i.folder));
   candidates.sort((a, b) => {
     const at = a.lastUsedAt ? new Date(a.lastUsedAt).getTime() : -Infinity;
     const bt = b.lastUsedAt ? new Date(b.lastUsedAt).getTime() : -Infinity;

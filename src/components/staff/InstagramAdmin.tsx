@@ -78,6 +78,32 @@ export function InstagramConnectionCheck() {
   );
 }
 
+// 朝のストーリーズ(あいさつ + 今日のレッスン + 前向きな一言)の見え方を、日付を選んで確認する。投稿はされない。
+export function InstagramMorningPreview({ defaultDate, dates }: { defaultDate: string; dates: string[] }) {
+  const [date, setDate] = useState(defaultDate);
+  const [shown, setShown] = useState<string | null>(null);
+  const hasData = dates.includes(date);
+
+  return (
+    <div className="flex flex-col gap-3 text-sm">
+      <div className="flex flex-wrap items-center gap-3">
+        <input type="date" value={date} onChange={(e) => { setDate(e.target.value); setShown(null); }} className={INPUT} />
+        <button onClick={() => setShown(date)} disabled={!date || !hasData} className={BTN_DARK}>
+          見え方を見る
+        </button>
+        {!hasData && date && <span className="text-amber-700">この日のスケジュールは、まだ登録されていません。</span>}
+      </div>
+      <p className="text-xs text-neutral-400">
+        登録済みのスケジュール: {dates.length > 0 ? `${dates[0]} 〜 ${dates[dates.length - 1]}(${dates.length}日分)` : "なし"}
+      </p>
+      {shown && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={`/staff/admin/instagram/morning-preview?date=${encodeURIComponent(shown)}`} alt="朝のストーリーズの見え方" className="w-64 rounded-xl border border-neutral-200" />
+      )}
+    </div>
+  );
+}
+
 // アクセストークンの貼り付け・保存(管理者のみ)。保存前に、Instagramのアカウントが読めるか確かめる。値は画面に出さない。
 export function InstagramTokenForm() {
   const router = useRouter();

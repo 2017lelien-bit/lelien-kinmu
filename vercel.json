@@ -13,6 +13,10 @@
       "schedule": "0 7 * * *"
     },
     {
+      "path": "/api/cron/instagram-morning",
+      "schedule": "0 22 * * *"
+    },
+    {
       "path": "/api/cron/instagram-token",
       "schedule": "30 0 * * *"
     }

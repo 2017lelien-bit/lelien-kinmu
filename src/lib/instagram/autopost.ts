@@ -70,7 +70,7 @@ export interface AutopostResponse {
   errors?: string[];
 }
 
-async function uploadJpeg(path: string, jpeg: Buffer): Promise<string> {
+export async function uploadJpeg(path: string, jpeg: Buffer): Promise<string> {
   const admin = createAdminClient();
   const { error } = await admin.storage.from(BUCKET).upload(path, jpeg, { contentType: "image/jpeg", upsert: false });
   if (error) throw new GraphError(`storage upload failed: ${error.message}`, "transient", null, null);
@@ -156,6 +156,7 @@ async function countedToday(today: string): Promise<number> {
     .from("instagram_posts")
     .select("id", { count: "exact", head: true })
     .eq("post_date", today)
+    .like("dedupe_key", "story-text:%") // 朝のストーリーズ(story-morning:)は、文字ストーリーズの1日の上限には数えない
     .in("status", ["claimed", "published", "failed"]);
   return count ?? 0;
 }
@@ -188,7 +189,7 @@ function toGraphConfig(c: Credentials): GraphConfig {
 }
 
 // 確保済みの行を実際にInstagramへ投稿し、結果を行に記録する。
-async function publishClaimedRow(
+export async function publishClaimedRow(
   row: InstagramPostRow,
   creds: Credentials,
   settings: InstagramSettings,
@@ -289,7 +290,7 @@ async function publishClaimedRow(
 }
 
 // 確保済みの失敗行/止まった行を引き継ぐ。更新できた(=自分が引き継げた)ときだけ行を返す。
-async function takeOverForRetry(row: InstagramPostRow): Promise<InstagramPostRow | null> {
+export async function takeOverForRetry(row: InstagramPostRow): Promise<InstagramPostRow | null> {
   const admin = createAdminClient();
   const { data } = await admin
     .from("instagram_posts")
@@ -346,6 +347,7 @@ export async function runInstagramAutopost(opts: { dryRun: boolean }): Promise<A
     .in("status", ["failed", "claimed"])
     .lt("attempts", MAX_ATTEMPTS + 1);
   const retryRows = ((retryable ?? []) as InstagramPostRow[]).filter((r) => {
+    if (r.dedupe_key.startsWith("story-morning:")) return false; // 朝のストーリーズは、朝の実行の中だけで再試行する(昼過ぎに「おはよう」は出さない)
     if (r.status === "failed") return !r.next_retry_at || new Date(r.next_retry_at).getTime() <= now.getTime();
     return now.getTime() - new Date(r.claimed_at).getTime() > STALE_CLAIM_MIN * 60_000; // 止まった確保
   });
@@ -450,6 +452,7 @@ export async function runInstagramAutopost(opts: { dryRun: boolean }): Promise<A
     .from("instagram_posts")
     .select("id, created_at")
     .eq("post_date", today)
+    .like("dedupe_key", "story-text:%")
     .in("status", ["claimed", "published", "failed"]);
   const ordered = ((todayRows ?? []) as { id: string; created_at: string }[]).sort((x, y) =>
     x.created_at === y.created_at ? x.id.localeCompare(y.id) : x.created_at < y.created_at ? -1 : 1,

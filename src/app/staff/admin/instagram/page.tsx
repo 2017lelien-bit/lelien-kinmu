@@ -5,7 +5,9 @@ import { getInstagramSettings, listInstagramLibraryImages, listInstagramTemplate
 import { resolveCredentials } from "@/lib/instagram/token";
 import { usesFacebookHost } from "@/lib/instagram/graph";
 import { orderEligibleTemplates } from "@/lib/instagram/template-pick";
-import { InstagramConnectionCheck, InstagramLibrary, InstagramSwitch, InstagramTemplates, InstagramTokenForm } from "@/components/staff/InstagramAdmin";
+import { todayJstDateString } from "@/lib/date";
+import { MORNING_SCHEDULE } from "@/lib/instagram/morning-data";
+import { InstagramConnectionCheck, InstagramLibrary, InstagramMorningPreview, InstagramSwitch, InstagramTemplates, InstagramTokenForm } from "@/components/staff/InstagramAdmin";
 
 const STATUS_LABEL: Record<string, string> = {
   claimed: "投稿処理中",
@@ -82,6 +84,15 @@ export default async function InstagramAdminPage() {
       </section>
 
       <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-semibold">朝のストーリーズ(毎朝7時台・スケジュール付き)</h2>
+        <p className="text-sm text-neutral-500">
+          「おはようございます」「今日のクラス」「前向きな一言」を、毎朝1本、自動で出します(休館日は、お休みのお知らせ)。
+          自動投稿のスイッチがONのときだけ出ます。スケジュールは月ごとに登録します(先生の名前は載せません)。
+        </p>
+        <InstagramMorningPreview defaultDate={todayJstDateString()} dates={Object.keys(MORNING_SCHEDULE).sort()} />
+      </section>
+
+      <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">背景の写真</h2>
         <InstagramLibrary images={libraryImages} defaultFolder={STORY_FOLDER} />
       </section>
@@ -95,7 +106,7 @@ export default async function InstagramAdminPage() {
             {posts.map((p) => (
               <li key={p.id} className="flex flex-col gap-0.5 border-b border-neutral-100 py-2 dark:border-neutral-900">
                 <div className="flex flex-wrap justify-between gap-2">
-                  <span className="font-medium">ストーリーズ({p.post_date})</span>
+                  <span className="font-medium">{p.dedupe_key.startsWith("story-morning:") ? "朝のストーリーズ" : "ストーリーズ"}({p.post_date})</span>
                   <span className={p.status === "published" ? "text-green-700" : p.status === "claimed" ? "text-neutral-500" : "text-red-600"}>
                     {STATUS_LABEL[p.status] ?? p.status}
                     {p.published_at ? `・${formatJst(p.published_at)}` : ""}
