@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   approveInstagramTemplate,
+  checkInstagramConnection,
   createInstagramTemplate,
   deleteInstagramLibraryImage,
   deleteInstagramTemplate,
@@ -45,6 +46,33 @@ export function InstagramSwitch({ enabled }: { enabled: boolean }) {
         {enabled ? "OFFにする" : "ONにする"}
       </button>
       {error && <span className="text-red-600">{error}</span>}
+    </div>
+  );
+}
+
+// Instagramとの接続の確認ボタン(読み取りだけ。投稿はされない)。
+export function InstagramConnectionCheck() {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function check() {
+    setBusy(true);
+    setResult(null);
+    const res = await checkInstagramConnection();
+    setBusy(false);
+    setResult(
+      res.ok
+        ? { ok: true, text: `つながりました(アカウント: ${res.data.username ?? "不明"})。投稿はしていません。` }
+        : { ok: false, text: res.error },
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 text-sm">
+      <button onClick={check} disabled={busy} className={BTN_DARK}>
+        {busy ? "確認中…" : "接続を確認する"}
+      </button>
+      {result && <span className={result.ok ? "font-semibold text-green-700" : "text-red-600"}>{result.text}</span>}
     </div>
   );
 }

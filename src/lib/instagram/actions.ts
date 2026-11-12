@@ -7,6 +7,9 @@ import { getStaffUser } from "@/lib/auth";
 import type { ActionResult } from "@/lib/types";
 import { validateCaption } from "@/lib/instagram/copy-rules";
 import { storyLinesFromBody } from "@/lib/instagram/story-text";
+import { verifyToken } from "@/lib/instagram/graph";
+import { getInstagramSettings } from "@/lib/instagram/store";
+import { resolveCredentials } from "@/lib/instagram/token";
 
 // Instagram自動投稿の管理画面用Server Action。すべて管理者(admin)のみ。
 // このファイルから公開してよいのは「認可チェック付きの操作」だけ(Server Actionは外部から直接呼べるため)。
@@ -41,6 +44,23 @@ export async function setInstagramStoryEnabled(enabled: boolean): Promise<Action
   if (error) return { ok: false, error: "保存に失敗しました。" };
   revalidatePath(PAGE);
   return { ok: true, data: undefined };
+}
+
+// 接続の確認(読み取りのみ)。トークンが使えるか、INSTAGRAM_USER_ID のアカウントが見えるかを確かめる。
+// 投稿・トークンの更新・DBへの書き込みは一切しない。トークンの値は返さない。
+export async function checkInstagramConnection(): Promise<ActionResult<{ username: string | null }>> {
+  if (!(await requireAdmin())) return NOT_ADMIN;
+  const creds = resolveCredentials(await getInstagramSettings());
+  if (!creds) return { ok: false, error: "トークンまたはユーザーIDが設定されていません。" };
+  try {
+    const me = await verifyToken({ userId: creds.userId, token: creds.token });
+    if (me.userId !== null && me.userId !== creds.userId) {
+      return { ok: false, error: "つながりましたが、INSTAGRAM_USER_ID のアカウントと一致しません。" };
+    }
+    return { ok: true, data: { username: me.username } };
+  } catch (e) {
+    return { ok: false, error: `つながりませんでした: ${(e as Error).message}` };
+  }
 }
 
 export async function createInstagramTemplate(input: { title: string; body: string }): Promise<ActionResult> {
