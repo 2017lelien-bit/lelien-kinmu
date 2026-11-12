@@ -66,6 +66,26 @@ export interface LibraryImageLike {
 
 // 写真ライブラリから、指定フォルダの「最近使っていない」写真を選ぶ(一度も使っていないものが最優先)。
 // 同じ写真が続けて出ないための順番であり、写真の内容をAIが判断することはない。
+// 文の名前(title)に入っているクラス名から、背景の写真を入れるフォルダを決める(AIの判断ではなく、言葉の一致だけ)。
+// 1つのクラス名だけが入っているときだけ、そのクラス専用のフォルダを使う。複数入っている・どれも入っていないときは null(共通のフォルダを使う)。
+export const CLASS_BACKGROUND_FOLDERS: { pattern: RegExp; folder: string }[] = [
+  { pattern: /バンジー/, folder: "背景_バンジー" },
+  { pattern: /4D/i, folder: "背景_4Dpro" },
+  { pattern: /ハンモック/, folder: "背景_ハンモック" },
+  { pattern: /ティシュー|ティッシュ/, folder: "背景_ティシュー" },
+];
+
+export function classBackgroundFolder(title: string): string | null {
+  const hits = CLASS_BACKGROUND_FOLDERS.filter((c) => c.pattern.test(title));
+  return hits.length === 1 ? hits[0].folder : null;
+}
+
+// 文に合う背景を選ぶ。クラス専用フォルダに使える写真があればそこから、なければ共通のフォルダから。
+export function pickBackgroundForTitle<T extends LibraryImageLike>(images: T[], title: string, commonFolder: string): T | null {
+  const classFolder = classBackgroundFolder(title);
+  return (classFolder ? pickLibraryImage(images, classFolder) : null) ?? pickLibraryImage(images, commonFolder);
+}
+
 export function pickLibraryImage<T extends LibraryImageLike>(images: T[], folder: string): T | null {
   const candidates = images.filter((i) => i.isActive && i.folder === folder);
   candidates.sort((a, b) => {

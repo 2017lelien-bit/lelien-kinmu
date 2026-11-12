@@ -13,7 +13,7 @@ import {
   type InstagramPostRow,
   type InstagramSettings,
 } from "@/lib/instagram/store";
-import { orderEligibleTemplates, pickLibraryImage } from "@/lib/instagram/template-pick";
+import { orderEligibleTemplates, pickBackgroundForTitle } from "@/lib/instagram/template-pick";
 import { alertTokenProblem, resolveCredentials, type Credentials } from "@/lib/instagram/token";
 
 // Instagram自動投稿の本体(/api/cron/instagram-post から呼ばれる)。Le lienは「文字だけのストーリーズ」だけを出す。
@@ -98,9 +98,9 @@ async function planStoryText(dedupeKey: string): Promise<PlanResult> {
       notes.push(`「${t.title}」:文が長すぎて、ストーリーズの画像にできません`);
       continue;
     }
-    const photo = pickLibraryImage(await listInstagramLibraryImages(), STORY_FOLDER);
+    const photo = pickBackgroundForTitle(await listInstagramLibraryImages(), t.title, STORY_FOLDER);
     const imageNote = photo
-      ? `背景: フォルダ「${STORY_FOLDER}」から、最近使っていない写真を選びました`
+      ? `背景: フォルダ「${photo.folder}」から、最近使っていない写真を選びました`
       : `背景: 写真なし(シンプルな版)。フォルダ「${STORY_FOLDER}」に写真を入れると、写真つきになります`;
     return {
       ok: true,
@@ -131,10 +131,10 @@ export async function previewNextStoryJpeg(): Promise<Buffer | null> {
 }
 
 // 管理画面用: 指定した文(未承認でも)の見た目を作る(Storageには保存しない)。
-export async function previewBodyJpeg(body: string): Promise<Buffer | null> {
+export async function previewBodyJpeg(body: string, title: string): Promise<Buffer | null> {
   const lines = storyLinesFromBody(body);
   if (!lines) return null;
-  const photo = pickLibraryImage(await listInstagramLibraryImages(), STORY_FOLDER);
+  const photo = pickBackgroundForTitle(await listInstagramLibraryImages(), title, STORY_FOLDER);
   return renderStoryTextJpeg({ lines, photoUrl: photo?.imageUrl ?? null });
 }
 
