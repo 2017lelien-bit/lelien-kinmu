@@ -665,7 +665,13 @@ export default function ScheduleBuilderPanel({
     const confirmedIds = candidates.filter((c) => c.confirmed).map((c) => c.id);
     // レッスンは1日最大5本程度なので、最初から5枠分表示しておく(受付は1〜2人程度なので1枠から)。
     const defaultSlots = kind === "lesson" ? 5 : 1;
-    const slotCount = Math.min(candidates.length, Math.max(confirmedIds.length, defaultSlots, extraSlots[key] ?? 0));
+    // 確定済みが多くても、まだ選ばれていない候補が残っている間は、必ず「未選択」の枠を1つ残す。
+    // (空き枠が無いと、候補を選ぶたびに既存の確定が入れ替わって「消えた」ように見えるため)
+    const unconfirmedCount = candidates.length - confirmedIds.length;
+    const slotCount = Math.min(
+      candidates.length,
+      Math.max(confirmedIds.length + (unconfirmedCount > 0 ? 1 : 0), defaultSlots, extraSlots[key] ?? 0),
+    );
     const slots = Array.from({ length: slotCount }, (_, i) => confirmedIds[i] ?? "");
 
     return (
