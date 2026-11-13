@@ -35,6 +35,10 @@ export interface MusuhiShift {
 export interface MusuhiNote {
   entry_date: string;
   is_closed_override: boolean | null;
+  note?: string | null;
+  color?: string | null;
+  bg_color?: string | null;
+  hide_on_customer?: boolean;
 }
 
 async function requireAdmin(): Promise<{ ok: false; error: string } | null> {
@@ -57,14 +61,29 @@ export async function getMusuhiNotes(monthStart: string, monthEnd: string): Prom
   return (data ?? []) as MusuhiNote[];
 }
 
-export async function upsertMusuhiNote(input: { entryDate: string; isClosedOverride: boolean | null }): Promise<ActionResult> {
+// 指定した項目だけを更新する(メモを書き換えても、臨時休業などの設定は消えない)。
+export async function upsertMusuhiNote(input: {
+  entryDate: string;
+  isClosedOverride?: boolean | null;
+  note?: string;
+  color?: string | null;
+  bgColor?: string | null;
+  hideOnCustomer?: boolean;
+}): Promise<ActionResult> {
   const adminCheck = await requireAdmin();
   if (adminCheck) return adminCheck;
+
+  const payload: Record<string, unknown> = { entry_date: input.entryDate };
+  if (input.isClosedOverride !== undefined) payload.is_closed_override = input.isClosedOverride;
+  if (input.note !== undefined) payload.note = input.note.trim() || null;
+  if (input.color !== undefined) payload.color = input.color;
+  if (input.bgColor !== undefined) payload.bg_color = input.bgColor;
+  if (input.hideOnCustomer !== undefined) payload.hide_on_customer = input.hideOnCustomer;
 
   const admin = createAdminClient();
   const { error } = await admin
     .from("musuhi_notes")
-    .upsert({ entry_date: input.entryDate, is_closed_override: input.isClosedOverride }, { onConflict: "entry_date" });
+    .upsert(payload, { onConflict: "entry_date" });
   if (error) return { ok: false, error: "保存に失敗しました。" };
 
   revalidatePath("/staff/admin/schedule");

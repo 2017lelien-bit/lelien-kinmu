@@ -79,7 +79,9 @@ export default async function CombinedSchedulePrintPage({
     const lienNote = lienNotesByDate.get(date);
     // 「片付け」など社内向けのメモは、お客様用には出さない。
     const shownLienNote = lienNote?.hide_on_customer ? undefined : lienNote;
-    const isMusuhiClosed = isClosedOnDate(date, musuhiNotesByDate.get(date)?.is_closed_override);
+    const musuhiNote = musuhiNotesByDate.get(date);
+    const shownMusuhiNote = musuhiNote?.hide_on_customer ? undefined : musuhiNote;
+    const isMusuhiClosed = isClosedOnDate(date, musuhiNote?.is_closed_override);
     return {
       date,
       day,
@@ -90,6 +92,7 @@ export default async function CombinedSchedulePrintPage({
         const name = e.lesson_name ?? "(レッスン名未定)";
         return { id: e.id, text: `${formatTime(e.start_time)} ${name}(${e.staffName})`, style: lessonStyle(name, colorMap) };
       }),
+      musuhiNote: shownMusuhiNote?.note ? { text: shownMusuhiNote.note, style: noteStyle(shownMusuhiNote) } : null,
       musuhiHours: musuhiBusinessHoursLabel(musuhiShiftsByDate.get(date) ?? [], isMusuhiClosed),
     };
   });

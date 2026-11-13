@@ -18,6 +18,8 @@ export interface CombinedDay {
   lessons: { id: string; text: string; style: CSSProperties }[];
   // むすひの営業時間(例: "10:00～20:00")。nullは休業(営業時間が決まっていない日も含む)。
   musuhiHours: string | null;
+  // むすひのその日のメモ(イベントなど)。
+  musuhiNote?: { text: string; style: CSSProperties } | null;
 }
 
 export default function CombinedScheduleCalendar({ leadingBlanks, days }: { leadingBlanks: number; days: CombinedDay[] }) {
@@ -53,6 +55,11 @@ export default function CombinedScheduleCalendar({ leadingBlanks, days }: { lead
               </FitText>
             ) : (
               <p className="text-neutral-400">むすひ休業</p>
+            )}
+            {d.musuhiNote?.text && (
+              <p className="rounded px-1 italic text-neutral-500" style={d.musuhiNote.style}>
+                むすひ: {d.musuhiNote.text}
+              </p>
             )}
             {d.lienClosed ? (
               <p className="text-neutral-400" style={d.lienNote?.style}>

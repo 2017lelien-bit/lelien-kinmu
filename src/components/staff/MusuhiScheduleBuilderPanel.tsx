@@ -22,6 +22,8 @@ import { dayOfWeekForDate, monthEnd } from "@/lib/date";
 import { isJapaneseHoliday } from "@/lib/holidays";
 import { CLOSED_DAY_OF_WEEK, DAY_OF_WEEK_LABEL, isClosedOnDate } from "@/lib/types";
 import SaveImageButton from "@/components/staff/SaveImageButton";
+import DebouncedColorInput from "@/components/staff/DebouncedColorInput";
+import { noteStyle } from "@/lib/color";
 
 type ShiftWithName = MusuhiShift & { staffName: string };
 
@@ -85,11 +87,29 @@ export default function MusuhiScheduleBuilderPanel({
   }
 
   // 定休日(月曜)以外にも、臨時休業・臨時営業を個別に指定できるようにする。
-  async function handleNoteSave(date: string, isClosedOverride: boolean | null) {
+  // あわせて、イベントなどのメモ・文字色・帯色・「お客様用に出さない」も保存できる(指定した項目だけを更新する)。
+  async function handleNoteSave(
+    date: string,
+    patch: {
+      isClosedOverride?: boolean | null;
+      note?: string;
+      color?: string | null;
+      bgColor?: string | null;
+      hideOnCustomer?: boolean;
+    },
+  ) {
     setError(null);
     const existing = notes.find((n) => n.entry_date === date);
-    setNotes((prev) => [...prev.filter((n) => n.entry_date !== date), { entry_date: date, is_closed_override: isClosedOverride }]);
-    const result = await upsertMusuhiNote({ entryDate: date, isClosedOverride });
+    const next: MusuhiNote = {
+      entry_date: date,
+      is_closed_override: patch.isClosedOverride !== undefined ? patch.isClosedOverride : (existing?.is_closed_override ?? null),
+      note: patch.note !== undefined ? patch.note.trim() || null : (existing?.note ?? null),
+      color: patch.color !== undefined ? patch.color : (existing?.color ?? null),
+      bg_color: patch.bgColor !== undefined ? patch.bgColor : (existing?.bg_color ?? null),
+      hide_on_customer: patch.hideOnCustomer !== undefined ? patch.hideOnCustomer : (existing?.hide_on_customer ?? false),
+    };
+    setNotes((prev) => [...prev.filter((n) => n.entry_date !== date), next]);
+    const result = await upsertMusuhiNote({ entryDate: date, ...patch });
     if (!result.ok) {
       setError(result.error);
       setNotes((prev) => (existing ? [...prev.filter((n) => n.entry_date !== date), existing] : prev.filter((n) => n.entry_date !== date)));
@@ -445,7 +465,7 @@ export default function MusuhiScheduleBuilderPanel({
                   }
                   onChange={(e) => {
                     const v = e.target.value;
-                    handleNoteSave(date, v === "closed" ? true : v === "open" ? false : null);
+                    handleNoteSave(date, { isClosedOverride: v === "closed" ? true : v === "open" ? false : null });
                   }}
                   className="w-full rounded border border-neutral-200 text-[9px] dark:border-neutral-800"
                 >
@@ -453,6 +473,49 @@ export default function MusuhiScheduleBuilderPanel({
                   <option value="closed">臨時休業</option>
                   <option value="open">臨時営業</option>
                 </select>
+                <div className="flex items-center gap-0.5">
+                  <input
+                    type="text"
+                    defaultValue={noteEntry?.note ?? ""}
+                    placeholder="イベント等メモ"
+                    onBlur={(e) => {
+                      if (e.target.value.trim() !== (noteEntry?.note ?? "")) handleNoteSave(date, { note: e.target.value });
+                    }}
+                    className="w-full min-w-0 rounded border border-neutral-200 px-0.5 text-[9px] dark:border-neutral-800"
+                  />
+                  <DebouncedColorInput
+                    title="メモの文字色"
+                    value={noteEntry?.color ?? "#737373"}
+                    onCommit={(c) => handleNoteSave(date, { color: c })}
+                    className="h-4 w-4 shrink-0 rounded border border-neutral-200 p-0 dark:border-neutral-800"
+                  />
+                  <DebouncedColorInput
+                    title="メモの帯色(背景色)"
+                    value={noteEntry?.bg_color ?? "#ffff00"}
+                    onCommit={(c) => handleNoteSave(date, { bgColor: c })}
+                    className="h-4 w-4 shrink-0 rounded border border-neutral-200 p-0 dark:border-neutral-800"
+                  />
+                  {noteEntry?.bg_color && (
+                    <button
+                      type="button"
+                      title="帯色を外す"
+                      onClick={() => handleNoteSave(date, { bgColor: null })}
+                      className="shrink-0 text-[9px] leading-none text-neutral-400"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+                {noteEntry?.note && (
+                  <label className="flex items-center gap-1 text-[9px] text-neutral-500">
+                    <input
+                      type="checkbox"
+                      checked={!!noteEntry.hide_on_customer}
+                      onChange={(e) => handleNoteSave(date, { hideOnCustomer: e.target.checked })}
+                    />
+                    お客様用に出さない
+                  </label>
+                )}
                 {isClosedDay ? (
                   <p className="text-[10px] text-neutral-400">休館</p>
                 ) : (
@@ -531,6 +594,11 @@ export default function MusuhiScheduleBuilderPanel({
                 return (
                   <div key={date} className={`flex min-h-20 flex-col gap-0.5 p-1 ${isClosedDay ? "bg-neutral-100" : "bg-white"}`}>
                     <p className={`font-semibold ${dow === 0 || isJapaneseHoliday(date) ? "text-red-600" : ""}`}>{day}</p>
+                    {noteEntry?.note && (
+                      <p className="rounded px-1 italic text-neutral-500" style={noteStyle(noteEntry)}>
+                        {noteEntry.note}
+                      </p>
+                    )}
                     {isClosedDay ? (
                       <p className="text-neutral-400">休業</p>
                     ) : (

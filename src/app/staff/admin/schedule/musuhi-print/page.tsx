@@ -9,6 +9,7 @@ import { DAY_OF_WEEK_LABEL, isClosedOnDate } from "@/lib/types";
 import PrintButton from "@/components/staff/PrintButton";
 import PrintFitToPage from "@/components/staff/PrintFitToPage";
 import SaveImageButton from "@/components/staff/SaveImageButton";
+import { noteStyle } from "@/lib/color";
 
 const PRINT_TYPES = ["staff", "customer"] as const;
 type PrintType = (typeof PRINT_TYPES)[number];
@@ -137,6 +138,9 @@ export default async function MusuhiSchedulePrintPage({
               const dayShifts = shiftsByDate.get(date) ?? [];
               const isClosedDay = isClosedOnDate(date, notesByDate.get(date)?.is_closed_override);
               const hoursLabel = musuhiBusinessHoursLabel(dayShifts, isClosedDay);
+              // 「片付け」など社内向けのメモは、お客様用には出さない。
+              const rawNote = notesByDate.get(date);
+              const shownNote = type !== "staff" && rawNote?.hide_on_customer ? undefined : rawNote;
 
               return (
                 <div
@@ -146,6 +150,11 @@ export default async function MusuhiSchedulePrintPage({
                   <span className={`font-semibold ${dow === 0 || isJapaneseHoliday(date) ? "text-red-600" : ""}`}>
                     {day}
                   </span>
+                  {shownNote?.note && (
+                    <p className="rounded px-1 italic text-neutral-500" style={noteStyle(shownNote)}>
+                      {shownNote.note}
+                    </p>
+                  )}
                   {hoursLabel === null ? (
                     <p className="text-neutral-400">休業</p>
                   ) : type === "customer" ? (

@@ -898,6 +898,11 @@ export default function ScheduleBuilderPanel({
                         ＋枠を追加
                       </button>
                     )}
+                    {musuhiNoteEntry?.note && (
+                      <p className="rounded px-1 italic" style={noteStyle(musuhiNoteEntry)}>
+                        {musuhiNoteEntry.note}
+                      </p>
+                    )}
                     {musuhiDay.map((s) => (
                       <p
                         key={s.id}

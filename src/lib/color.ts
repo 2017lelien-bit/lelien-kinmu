@@ -8,7 +8,7 @@ export function readableTextColor(hex: string): string {
 }
 
 // 日付メモの表示スタイル。帯色があれば背景に敷き、文字色が未指定なら読みやすい色を自動で選ぶ。
-export function noteStyle(note: { color: string | null; bg_color: string | null } | undefined): {
+export function noteStyle(note: { color?: string | null; bg_color?: string | null } | undefined): {
   color?: string;
   backgroundColor?: string;
 } {
