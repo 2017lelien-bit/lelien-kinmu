@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { calculatePayroll, deletePayslip, generatePayslip, getPayslipText, sendPayslipEmail, type PayrollResult } from "@/lib/payroll";
-import { currentPayPeriod } from "@/lib/date";
+import { currentPayPeriod, payPeriodForDate } from "@/lib/date";
 import type { CommuteType, PayrollBreakdownLine, StaffPayslip } from "@/lib/types";
 
 // 同じ支払区分が2行に分かれていれば、期の途中で単価が変わった区分がある、ということ。
@@ -32,6 +32,9 @@ export default function PayrollPanel({
 }) {
   const router = useRouter();
   const [periodStart, setPeriodStart] = useState(currentPayPeriod().periodStart);
+  // どの日付を選んでも、その日を含む16日締めの期間(16日〜翌月15日)として扱う(15日を選んでも前の期間になる)。
+  const period = periodStart ? payPeriodForDate(periodStart) : null;
+  const effectiveStart = period?.periodStart ?? periodStart;
   const [preview, setPreview] = useState<PayrollResult | null>(null);
   const [commuteAllowance, setCommuteAllowance] = useState(0);
   const [residentTax, setResidentTax] = useState(0);
@@ -48,7 +51,7 @@ export default function PayrollPanel({
     setCalculating(true);
     setError(null);
     setPreview(null);
-    const result = await calculatePayroll(staffId, periodStart);
+    const result = await calculatePayroll(staffId, effectiveStart);
     setCalculating(false);
     if (!result.ok) {
       setError(result.error);
@@ -71,7 +74,7 @@ export default function PayrollPanel({
   async function handleCreate() {
     setCreating(true);
     setError(null);
-    const result = await generatePayslip(staffId, periodStart, { commuteAllowance, residentTax, daysWorked });
+    const result = await generatePayslip(staffId, effectiveStart, { commuteAllowance, residentTax, daysWorked });
     setCreating(false);
     if (!result.ok) {
       setError(result.error);
@@ -159,6 +162,11 @@ export default function PayrollPanel({
             className="rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-800"
           />
         </label>
+        {period && (
+          <span className="text-xs text-neutral-500">
+            対象期間: {period.periodStart}〜{period.periodEnd}
+          </span>
+        )}
         <button
           onClick={handleCalculate}
           disabled={calculating}

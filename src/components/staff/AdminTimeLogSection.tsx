@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { getLeLienDeductionsByDate, getOwnTimeLogEntries } from "@/lib/time-log";
-import { payPeriodEnd } from "@/lib/date";
+import { payPeriodEnd, payPeriodForDate } from "@/lib/date";
 import type { PayCategory, TimeLogEntry } from "@/lib/types";
 import TimeLogForm from "@/components/staff/TimeLogForm";
 
@@ -24,7 +24,9 @@ export default function AdminTimeLogSection({
   initialPeriodStart: string;
   initialData: PeriodData;
 }) {
-  const [periodStart, setPeriodStart] = useState(initialPeriodStart);
+  const [selectedDate, setSelectedDate] = useState(initialPeriodStart);
+  // どの日付を選んでも、その日を含む16日締めの期間(16日〜翌月15日)として扱う(15日を選んでも前の期間になる)。
+  const periodStart = selectedDate ? payPeriodForDate(selectedDate).periodStart : initialPeriodStart;
   const [data, setData] = useState<PeriodData>(initialData);
   const [loading, setLoading] = useState(false);
   const periodEnd = payPeriodEnd(periodStart);
@@ -52,10 +54,10 @@ export default function AdminTimeLogSection({
           対象期間の開始日(16日締め)
           <input
             type="date"
-            value={periodStart}
+            value={selectedDate}
             onChange={(e) => {
-              setPeriodStart(e.target.value);
-              if (e.target.value) load(e.target.value);
+              setSelectedDate(e.target.value);
+              if (e.target.value) load(payPeriodForDate(e.target.value).periodStart);
             }}
             className="rounded-lg border border-neutral-200 px-2 py-1 dark:border-neutral-800"
           />
