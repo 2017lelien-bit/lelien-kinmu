@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStaffUser } from "@/lib/auth";
+import { payPeriodEnd } from "@/lib/date";
 import type { ActionResult, CommuteType, PayCategory, PayRateRule, StaffProfile } from "@/lib/types";
 
 function siteUrl(): string {
@@ -131,6 +132,26 @@ export async function setLessonLogEntryApproval(id: string, approved: boolean): 
 
   revalidatePath(`/staff/admin/staff/${data.staff_id}`);
   return { ok: true, data: undefined };
+}
+
+// 指定した期間(16日〜翌月15日)の、そのスタッフの未承認レッスンを、まとめて承認する。
+export async function approveLessonLogsInPeriod(staffId: string, periodStart: string): Promise<ActionResult<{ approved: number }>> {
+  const staff = await getStaffUser();
+  if (!staff || staff.role !== "admin") return { ok: false, error: "管理者としてログインしてください。" };
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("lesson_log_entries")
+    .update({ approved: true })
+    .eq("staff_id", staffId)
+    .eq("approved", false)
+    .gte("entry_date", periodStart)
+    .lte("entry_date", payPeriodEnd(periodStart))
+    .select("id");
+  if (error) return { ok: false, error: "承認に失敗しました。" };
+
+  revalidatePath(`/staff/admin/staff/${staffId}`);
+  return { ok: true, data: { approved: data?.length ?? 0 } };
 }
 
 export async function updateCommuteSettings(

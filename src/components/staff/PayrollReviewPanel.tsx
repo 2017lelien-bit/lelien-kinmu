@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { approveLessonLogsInPeriod } from "@/lib/staff-admin";
 import { deletePayslip, generatePayslip, getPayrollReviewList, type PayrollReviewItem } from "@/lib/payroll";
 
 const yen = (n: number) => `¥${n.toLocaleString()}`;
@@ -51,6 +52,18 @@ function ReviewCard({
     onChanged();
   }
 
+  async function handleApprove() {
+    setBusy(true);
+    setError(null);
+    const result = await approveLessonLogsInPeriod(item.staffId, periodStart);
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    onChanged();
+  }
+
   async function handleUndo() {
     if (!window.confirm(`${item.staffName}さんの確定済みの明細を取り消します(削除します)。よろしいですか?`)) return;
     setBusy(true);
@@ -80,8 +93,15 @@ function ReviewCard({
           {created ? "確定済み" : "未確定"}
         </span>
         {item.unapprovedLessons > 0 && (
-          <span className="text-xs text-amber-700 dark:text-amber-400">
+          <span className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400">
             未承認のレッスンが{item.unapprovedLessons}本あります
+            <button
+              onClick={handleApprove}
+              disabled={busy}
+              className="rounded border border-amber-600 px-2 py-0.5 text-amber-800 disabled:opacity-40 dark:text-amber-300"
+            >
+              この期間の分を、すべて承認する
+            </button>
           </span>
         )}
         <Link href={`/staff/admin/staff/${item.staffId}`} className="ml-auto text-xs underline">
@@ -222,6 +242,7 @@ export default function PayrollReviewPanel({ periodStart }: { periodStart: strin
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
+  const [bulkApprove, setBulkApprove] = useState(true);
   const pendingItems = items?.filter((i) => i.status === "pending") ?? [];
   const valuesFor = (item: PayrollReviewItem) =>
     entered[item.staffId] ?? { commute: item.defaultCommute, residentTax: item.defaultResidentTax, days: item.daysWorked };
@@ -232,6 +253,7 @@ export default function PayrollReviewPanel({ periodStart }: { periodStart: strin
     const failed: string[] = [];
     let done = 0;
     for (const item of pendingItems) {
+      if (bulkApprove && item.unapprovedLessons > 0) await approveLessonLogsInPeriod(item.staffId, periodStart);
       const v = valuesFor(item);
       const result = await generatePayslip(item.staffId, periodStart, {
         commuteAllowance: v.commute,
@@ -308,6 +330,12 @@ export default function PayrollReviewPanel({ periodStart }: { periodStart: strin
                   );
                 })}
               </ul>
+              {pendingItems.some((i) => i.unapprovedLessons > 0) && (
+                <label className="flex items-center gap-2 text-xs">
+                  <input type="checkbox" checked={bulkApprove} onChange={(e) => setBulkApprove(e.target.checked)} />
+                  未承認のレッスンも、まとめて承認する(承認は目印のみで、金額の計算には影響しません)
+                </label>
+              )}
               <div className="flex gap-2">
                 <button
                   onClick={handleBulkConfirm}
