@@ -317,7 +317,7 @@ export default function TodaySummaryPanel({
 
       <div className="flex flex-wrap items-end gap-2 border-b border-neutral-100 pb-3 text-sm dark:border-neutral-900">
         <label className="flex flex-col gap-1">
-          期間を選んで確認(その日を含む16日締めの期間を表示します)
+          期間を選んで確認(15日締め。その日を含む期間を表示します)
           <input
             type="date"
             value={viewPeriodStart}

@@ -15,7 +15,7 @@ export default function PayrollWorkspace() {
   return (
     <div className="flex flex-col gap-6">
       <label className="flex flex-col gap-1 text-sm">
-        対象期間の開始日(16日で締め)
+        対象期間の日付(15日締め。その日を含む期間になります)
         <input
           type="date"
           value={selectedDate}

@@ -51,7 +51,7 @@ export default function AdminTimeLogSection({
       <h3 className="text-sm font-semibold">受付(時給)の出退勤の代理入力</h3>
       <div className="flex flex-wrap items-end gap-2 text-sm">
         <label className="flex flex-col gap-1">
-          対象期間の開始日(16日締め)
+          対象期間の日付(15日締め。その日を含む期間になります)
           <input
             type="date"
             value={selectedDate}
@@ -68,7 +68,7 @@ export default function AdminTimeLogSection({
         </span>
       </div>
       <p className="text-xs text-neutral-400">
-        前の期間の入力漏れを直す場合は、その期間の開始日(例: 9/16)を選んでから入力してください。入力した日付が属する期間の実績に反映されます。
+        前の期間の入力漏れを直す場合は、その期間に含まれる日付(例: 9/15)を選んでから入力してください。入力した日付が属する期間の実績に反映されます。
       </p>
       {categories.map((c) => (
         <TimeLogForm
