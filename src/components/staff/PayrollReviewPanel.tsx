@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { deletePayslip, generatePayslip, getPayrollReviewList, type PayrollReviewItem } from "@/lib/payroll";
 
@@ -12,18 +12,26 @@ function formatDay(date: string): string {
   return `${Number(m)}/${Number(d)}(${dow})`;
 }
 
+type EnteredValues = Record<string, { commute: number; residentTax: number; days: number }>;
+
 function ReviewCard({
   item,
   periodStart,
   onChanged,
+  onValues,
 }: {
   item: PayrollReviewItem;
   periodStart: string;
   onChanged: () => void;
+  // 「全員まとめて確定」で、各カードに入力・修正済みの通勤費などをそのまま使えるよう、現在の値を親に渡す。
+  onValues: (staffId: string, values: EnteredValues[string]) => void;
 }) {
   const [commute, setCommute] = useState(item.defaultCommute);
   const [residentTax, setResidentTax] = useState(item.defaultResidentTax);
   const [days, setDays] = useState(item.daysWorked);
+  useEffect(() => {
+    onValues(item.staffId, { commute, residentTax, days });
+  }, [onValues, item.staffId, commute, residentTax, days]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -202,6 +210,47 @@ export default function PayrollReviewPanel({ periodStart }: { periodStart: strin
 
   const pendingCount = items?.filter((i) => i.status === "pending").length ?? 0;
 
+  // 全員まとめて確定(確認画面を出してから実行する)。
+  const [entered, setEntered] = useState<EnteredValues>({});
+  const handleValues = useCallback((staffId: string, values: EnteredValues[string]) => {
+    setEntered((prev) => {
+      const cur = prev[staffId];
+      if (cur && cur.commute === values.commute && cur.residentTax === values.residentTax && cur.days === values.days) return prev;
+      return { ...prev, [staffId]: values };
+    });
+  }, []);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMessage, setBulkMessage] = useState<string | null>(null);
+  const pendingItems = items?.filter((i) => i.status === "pending") ?? [];
+  const valuesFor = (item: PayrollReviewItem) =>
+    entered[item.staffId] ?? { commute: item.defaultCommute, residentTax: item.defaultResidentTax, days: item.daysWorked };
+
+  async function handleBulkConfirm() {
+    setBulkBusy(true);
+    setBulkMessage(null);
+    const failed: string[] = [];
+    let done = 0;
+    for (const item of pendingItems) {
+      const v = valuesFor(item);
+      const result = await generatePayslip(item.staffId, periodStart, {
+        commuteAllowance: v.commute,
+        residentTax: v.residentTax,
+        daysWorked: v.days,
+      });
+      if (result.ok) done += 1;
+      else failed.push(`${item.staffName}(${result.error})`);
+    }
+    setBulkBusy(false);
+    setBulkOpen(false);
+    setBulkMessage(
+      failed.length === 0
+        ? `${done}人分を確定しました。下の「② 全員分の確認とExcel出力」に進めます。`
+        : `${done}人分を確定しました。確定できなかった人: ${failed.join("、")}`,
+    );
+    await load();
+  }
+
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
       <h2 className="text-sm font-semibold">① スタッフごとに確認して確定する</h2>
@@ -225,9 +274,67 @@ export default function PayrollReviewPanel({ periodStart }: { periodStart: strin
                 ? "全員、確定済みです。"
                 : `未確定: ${pendingCount}人 / 全${items.length}人`}
           </p>
+          {bulkMessage && <p className="text-sm text-green-700 dark:text-green-400">{bulkMessage}</p>}
+          {pendingCount > 0 && !bulkOpen && (
+            <button
+              onClick={() => setBulkOpen(true)}
+              className="self-start rounded-lg bg-neutral-900 px-4 py-2 text-sm text-white dark:bg-white dark:text-black"
+            >
+              未確定の{pendingCount}人を、まとめて確定する
+            </button>
+          )}
+          {bulkOpen && (
+            <div className="flex flex-col gap-2 rounded-lg border border-amber-400 bg-amber-50 p-3 text-sm dark:border-amber-700 dark:bg-amber-950">
+              <p className="font-semibold">次の{pendingItems.length}人の給与明細を、この内容でまとめて作成します</p>
+              <p className="text-xs text-neutral-600 dark:text-neutral-400">
+                通勤費・住民税・出勤日数は、各カードに入っている値(変更していれば変更後の値)を使います。確定したあとで間違いに気づいたら、人ごとに「確定を取り消す」でやり直せます。
+              </p>
+              <ul className="flex flex-col gap-1">
+                {pendingItems.map((item) => {
+                  const v = valuesFor(item);
+                  const noRule = item.lessonGroups.some((g) => g.label === "該当ルールなし");
+                  return (
+                    <li key={item.staffId} className="flex flex-wrap gap-x-3 border-b border-amber-200 pb-1 dark:border-amber-900">
+                      <span className="w-28 shrink-0 font-semibold">{item.staffName}</span>
+                      <span>支給額計 {yen(item.grossAmount)}</span>
+                      <span>通勤費 {yen(v.commute)}</span>
+                      <span>住民税 {yen(v.residentTax)}</span>
+                      <span>出勤{v.days}日</span>
+                      {item.unapprovedLessons > 0 && (
+                        <span className="text-amber-700 dark:text-amber-400">未承認レッスン{item.unapprovedLessons}本</span>
+                      )}
+                      {noRule && <span className="text-red-600">単価ルールなしのレッスンあり(¥0)</span>}
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleBulkConfirm}
+                  disabled={bulkBusy}
+                  className="rounded-lg bg-neutral-900 px-4 py-2 text-sm text-white disabled:opacity-40 dark:bg-white dark:text-black"
+                >
+                  {bulkBusy ? "確定中..." : `この内容で${pendingItems.length}人を確定する`}
+                </button>
+                <button
+                  onClick={() => setBulkOpen(false)}
+                  disabled={bulkBusy}
+                  className="rounded-lg border border-neutral-300 px-4 py-2 text-sm dark:border-neutral-700"
+                >
+                  やめる
+                </button>
+              </div>
+            </div>
+          )}
           <div className="flex flex-col gap-3">
             {items.map((item) => (
-              <ReviewCard key={`${item.staffId}-${item.status}`} item={item} periodStart={periodStart} onChanged={load} />
+              <ReviewCard
+                key={`${item.staffId}-${item.status}`}
+                item={item}
+                periodStart={periodStart}
+                onChanged={load}
+                onValues={handleValues}
+              />
             ))}
           </div>
         </>
