@@ -13,7 +13,7 @@ import {
   type TodayShiftSummary,
 } from "@/lib/payroll";
 import { LESSON_NAMES } from "@/lib/types";
-import { payPeriodForDate, currentPayPeriod, payPeriodEnd } from "@/lib/date";
+import { payPeriodForDate, currentPayPeriod } from "@/lib/date";
 
 function toMinutes(time: string): number {
   const [h, m] = time.split(":").map(Number);
@@ -65,15 +65,22 @@ export default function TodaySummaryPanel({
   const displayShifts = viewingPeriod ? (viewData?.shifts ?? []) : shifts;
 
   async function handleShowPeriod() {
+    if (!viewPeriodStart) {
+      setError("日付を選んでください。");
+      return;
+    }
     setLoadingHistory(true);
     setError(null);
-    const periodEnd = payPeriodEnd(viewPeriodStart);
+    // どの日付が選ばれても、その日を含む16日締めの期間(16日〜翌月15日)として扱う。
+    // (16日以外の日付をそのまま期間の開始日にすると、例えば11/15を選ぶと「11/15〜12/15」になり、1日分しか出なかった)
+    const { periodStart, periodEnd } = payPeriodForDate(viewPeriodStart);
+    setViewPeriodStart(periodStart);
     const [data, categories] = await Promise.all([
-      getPeriodSummary(staffId, viewPeriodStart, periodEnd),
-      getPeriodCategorySummary(staffId, viewPeriodStart),
+      getPeriodSummary(staffId, periodStart, periodEnd),
+      getPeriodCategorySummary(staffId, periodStart),
     ]);
     setLoadingHistory(false);
-    setViewingPeriod({ periodStart: viewPeriodStart, periodEnd });
+    setViewingPeriod({ periodStart, periodEnd });
     setViewData(data);
     setCategoryData(categories);
   }
@@ -310,7 +317,7 @@ export default function TodaySummaryPanel({
 
       <div className="flex flex-wrap items-end gap-2 border-b border-neutral-100 pb-3 text-sm dark:border-neutral-900">
         <label className="flex flex-col gap-1">
-          期間を選んで確認(16日締め)
+          期間を選んで確認(その日を含む16日締めの期間を表示します)
           <input
             type="date"
             value={viewPeriodStart}

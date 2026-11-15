@@ -21,10 +21,15 @@ export default function MyPeriodReview({
   review,
   periodLabel,
   headcountMatters,
+  title = "今期の入力の確認",
+  closed = false,
 }: {
   review: PeriodReview;
   periodLabel: string;
   headcountMatters: boolean;
+  title?: string;
+  // 締め日を過ぎた前の期(まだ給与が決まっていない分)の表示かどうか。
+  closed?: boolean;
 }) {
   const { lessons, categories } = review;
   if (lessons.length === 0 && categories.length === 0) return null;
@@ -33,8 +38,8 @@ export default function MyPeriodReview({
   for (const l of lessons) lessonCountByName.set(l.lessonName, (lessonCountByName.get(l.lessonName) ?? 0) + 1);
 
   return (
-    <details open className="rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
-      <summary className="cursor-pointer text-lg font-semibold">今期の入力の確認({periodLabel})</summary>
+    <details open={!closed} className="rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
+      <summary className="cursor-pointer text-lg font-semibold">{title}({periodLabel})</summary>
       <div className="mt-3 flex flex-col gap-5">
         <p className="text-xs text-neutral-500">
           これまでに入力した内容の一覧です。間違いがないか確認してください(金額は表示されません)。直したい場合は、上の入力欄から直してください。提出済みの日や承認済みの分は、「訂正を依頼する」から管理者に連絡してください。

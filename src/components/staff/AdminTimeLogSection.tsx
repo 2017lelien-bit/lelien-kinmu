@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { getLeLienDeductionsByDate, getOwnTimeLogEntries } from "@/lib/time-log";
 import { payPeriodEnd } from "@/lib/date";
 import type { PayCategory, TimeLogEntry } from "@/lib/types";
@@ -28,14 +28,18 @@ export default function AdminTimeLogSection({
   const [data, setData] = useState<PeriodData>(initialData);
   const [loading, setLoading] = useState(false);
   const periodEnd = payPeriodEnd(periodStart);
+  // 日付を打ち込む途中の値(例: 0002-10-16)でも読み込みが走るため、最後に選んだ期間の結果だけを反映する。
+  const latestRequest = useRef(0);
 
   async function load(start: string) {
+    const requestId = ++latestRequest.current;
     setLoading(true);
     const end = payPeriodEnd(start);
     const [entries, deductions] = await Promise.all([
       Promise.all(categories.map(async (c) => [c.id, await getOwnTimeLogEntries(c.id, start, end, staffId)] as const)),
       Promise.all(categories.map(async (c) => [c.id, await getLeLienDeductionsByDate(c.id, start, end, staffId)] as const)),
     ]);
+    if (requestId !== latestRequest.current) return;
     setData({ entries: Object.fromEntries(entries), deductions: Object.fromEntries(deductions) });
     setLoading(false);
   }

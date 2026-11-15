@@ -13,7 +13,7 @@ import {
 import { getScheduleNotes } from "@/lib/schedule-notes";
 import { getOwnScheduleConfirmation } from "@/lib/schedule-confirmations";
 import { getOwnMusuhiShifts } from "@/lib/musuhi-schedule";
-import { currentPayPeriod, nextMonthStart, monthEnd } from "@/lib/date";
+import { currentPayPeriod, nextMonthStart, monthEnd, payPeriodForDate, addDaysToDateString } from "@/lib/date";
 import MyStaffProfileForm from "@/components/staff/MyStaffProfileForm";
 import MyScheduleConfirmPanel from "@/components/staff/MyScheduleConfirmPanel";
 import PayEntryForm from "@/components/staff/PayEntryForm";
@@ -33,6 +33,9 @@ export default async function StaffMyPage() {
 
   const { periodStart, periodEnd } = currentPayPeriod();
   const periodLabel = `${periodStart}〜${periodEnd}`;
+  // 16日を過ぎて「今期」が切り替わったあとも、前の期は給与明細ができるまで見直しや訂正が必要なため、あわせて表示する。
+  const prevPeriod = payPeriodForDate(addDaysToDateString(periodStart, -1));
+  const prevPeriodLabel = `${prevPeriod.periodStart}〜${prevPeriod.periodEnd}`;
   const scheduleMonthStart = nextMonthStart();
   const [
     payCategories,
@@ -51,6 +54,7 @@ export default async function StaffMyPage() {
     scheduleConfirmedAt,
     ownMusuhiShifts,
     periodReview,
+    prevPeriodReview,
   ] = await Promise.all([
     getOwnPayCategories(),
     getOwnPayEntries(periodStart),
@@ -68,7 +72,9 @@ export default async function StaffMyPage() {
     getOwnScheduleConfirmation(scheduleMonthStart),
     getOwnMusuhiShifts(scheduleMonthStart, monthEnd(scheduleMonthStart)),
     getOwnPeriodReview(periodStart, periodEnd),
+    getOwnPeriodReview(prevPeriod.periodStart, prevPeriod.periodEnd),
   ]);
+  const prevPeriodFinalized = payslips.some((p) => p.period_start === prevPeriod.periodStart);
   const hasEntryInput = payCategories.length > 0 || hasPayRateRules;
   const hourlyCategories = payCategories.filter((c) => c.unit_type === "hourly");
 
@@ -115,6 +121,16 @@ export default async function StaffMyPage() {
 
       {hasEntryInput && (
         <MyPeriodReview review={periodReview} periodLabel={periodLabel} headcountMatters={headcountMatters} />
+      )}
+
+      {hasEntryInput && !prevPeriodFinalized && (
+        <MyPeriodReview
+          review={prevPeriodReview}
+          periodLabel={prevPeriodLabel}
+          headcountMatters={headcountMatters}
+          title="前の期の入力の確認(給与の計算前)"
+          closed
+        />
       )}
 
       <MyScheduleConfirmPanel
