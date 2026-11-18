@@ -11,12 +11,13 @@ import PrintFitToPage from "@/components/staff/PrintFitToPage";
 import SaveImageButton from "@/components/staff/SaveImageButton";
 import { noteStyle } from "@/lib/color";
 
-const PRINT_TYPES = ["staff", "customer"] as const;
+const PRINT_TYPES = ["staff", "customer", "hp"] as const;
 type PrintType = (typeof PRINT_TYPES)[number];
 
 const TYPE_LABEL: Record<PrintType, string> = {
   staff: "スタッフ用(担当者と時間)",
   customer: "お客様用(営業時間)",
+  hp: "HP用(営業時間)",
 };
 
 function formatMonthLabel(monthStart: string): string {
@@ -157,7 +158,7 @@ export default async function MusuhiSchedulePrintPage({
                   )}
                   {hoursLabel === null ? (
                     <p className="text-neutral-400">休業</p>
-                  ) : type === "customer" ? (
+                  ) : type !== "staff" ? (
                     <div className="flex flex-col text-[11px] font-medium leading-tight">
                       {hoursLabel.split("、").map((w) => (
                         <p key={w}>{w}</p>

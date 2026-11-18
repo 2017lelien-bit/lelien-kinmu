@@ -35,6 +35,7 @@ export default function SchedulePrintLinks({ initialMonthStart }: { initialMonth
       {[
         { type: "staff", label: "スタッフ用(担当者と時間)" },
         { type: "customer", label: "お客様用(営業時間)" },
+        { type: "hp", label: "HP用(営業時間)" },
       ].map(({ type, label }) => (
         <Link
           key={type}
