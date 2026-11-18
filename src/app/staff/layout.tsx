@@ -36,6 +36,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
             {staff.role === "admin" && <Link href="/staff/admin/schedule">スケジュール管理</Link>}
             {staff.role === "admin" && <Link href="/staff/admin/export">給与データ出力</Link>}
             {staff.role === "admin" && <Link href="/staff/admin/instagram">Instagram</Link>}
+            {staff.role === "admin" && <Link href="/staff/admin/musuhi-visits">むすひ来店人数</Link>}
           </nav>
         </div>
         <div className="flex items-center gap-3 text-sm text-neutral-500">
